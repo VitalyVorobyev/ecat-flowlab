@@ -35,6 +35,7 @@ Only their provenance differs.
 | [`flowlab-study`](flowlab-study.md) | Parameter studies, Pareto frontier, calibration | sim, analysis |
 | [`flowlab-server`](server-cli.md) | Local HTTP API and static UI (axum) | all of the above |
 | [`flowlab-cli`](server-cli.md) | The `flowlab` binary | all of the above |
+| `xtask` (not published) | Developer commands behind the cargo aliases `cargo ui`, `ui-dev`, `ci`, `site` ([Contributing](contributing.md)) | std only |
 
 The [UI](ui.md) in `ui/` talks only to the server's API. Its TypeScript types are generated from
 the Rust result types by ts-rs.

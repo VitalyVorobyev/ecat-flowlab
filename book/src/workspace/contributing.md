@@ -3,16 +3,18 @@
 ## Setup
 
 ```bash
-cargo build                                   # Rust ≥ 1.88
-(cd ui && bun install)                        # Bun ≥ 1.4
+cargo build                                   # Rust ≥ 1.88; Bun ≥ 1.4 for the UI
+cargo ui-dev                                  # API on :7878 + Vite on :5173 with hot reload
 ```
 
-For UI work, run `cargo run -p flowlab-cli -- serve results/demo.pcapng` (API on :7878) and
-`bun run dev` in `ui/`. Vite proxies `/api` to the server and reloads on change.
+`cargo ui-dev` runs `flowlab serve` with the demo capture and Vite's dev server, which proxies
+`/api` to it; stopping one stops both. `cargo ui` serves the production build instead. The
+aliases live in `.cargo/config.toml` and run the `xtask` crate (`publish = false`).
 
 ## Before a pull request
 
 ```bash
+cargo ci                                       # all of the below except the site
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace
 cd ui && bun run fmt:check && bun run lint && bun run typecheck && bun run test:run && bun run build

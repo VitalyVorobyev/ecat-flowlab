@@ -1,0 +1,12 @@
+[package]
+name = "xtask"
+description = "Developer commands for the ECAT FlowLab workspace: `cargo ui`, `cargo ui-dev`, `cargo ci`, `cargo site`."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true

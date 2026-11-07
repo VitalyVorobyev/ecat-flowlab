@@ -7,6 +7,8 @@ lab-ui packages. Read `README.md`, then the book in `book/src/` (start with
 ## Commands
 
 ```bash
+cargo ci                                     # everything below that CI checks, in one go (xtask)
+cargo ui / cargo ui-dev                      # serve the built UI / Vite hot reload + API (demo capture by default)
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 cd ui && bun run lint && bun run typecheck && bun run test:run && bun run build && bun run fmt:check
 cargo run -p flowlab-cli -- synth configs/synth/demo.json -o results/demo.pcapng --truth results/demo.truth.json
