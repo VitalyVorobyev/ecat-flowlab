@@ -55,6 +55,19 @@ Architecture decisions, newest last. A decision is changed by a new entry that s
   (`scripts/crosscheck-tshark.py`). Ground truth checks the generator; Wireshark checks that
   generator and analyzer do not share a misreading of the specification.
 
+## 2026-11-07 — M4 simulator
+
+- **ADR-021 The simulator writes frames, not summaries.** Its pcapng goes through the capture
+  analysis like a measurement; its own result reports only what the analysis cannot see
+  (integrity, PDI load, ESC RAM, protocol-internal retries). Like-for-like comparison with lab
+  captures (ADR-010) follows.
+- **ADR-022 No default "one mailbox per cycle".** Policies are explicit spec choices (fixed
+  quota, round robin, opportunistic) and every result names its policy.
+- **ADR-023 References, not targets.** Each transfer reports the time the payload alone needs on
+  the link and a TCP-over-dedicated-Ethernet lower bound. Neither is a prediction for a device.
+- **ADR-024 PDI access is a parameter.** Whether a slave stack moves whole mailbox buffers or only
+  messages changes PDI-bound results severalfold; both are modelled and the spec says which.
+
 ## Open questions
 
 - Do TwinCAT / other masters' captures always show the ESC-set source-MAC bit, or are
@@ -73,4 +86,10 @@ Architecture decisions, newest last. A decision is changed by a new entry that s
   0x080D) instead of FPRD? Such polls are counted as process data today. *Test:* TwinCAT capture.
 - Is "counter equal to the previous" a reliable repeat test when a master resets counters
   after a state change? *Test:* captures across INIT → PREOP transitions on real slaves.
+- What are a LAN9252-class ESC's effective SPI read/write rates and per-access overhead from a
+  Linux userspace driver on the Verdin? The simulator's PDI-bound results hinge on them.
+  *Test:* timestamped SPI transactions or a capture of mailbox turnaround on the lab rig.
+- Which mailbox policy does each candidate master implement (EtherCrab, SOEM, IgH, TwinCAT), and
+  does it poll mailboxes every cycle? *Test:* captures of an FoE write per master; compare with
+  the policies' signatures (accesses per cycle, frames per cycle).
 

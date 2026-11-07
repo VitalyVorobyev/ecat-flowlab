@@ -6,8 +6,8 @@ in a browser UI or as a JSON report. Synthetic captures with known ground truth 
 so every number can be checked against what was put in. Simulation and transport studies
 (EoE, FoE, PDO bulk transfer) build on the same pipeline.
 
-**Status:** M0–M3 — capture analysis core, mailbox analysis, CLI, local server and UI. See
-[the roadmap](docs/roadmap.md).
+**Status:** M0–M4 — capture analysis, mailbox analysis, a discrete-event simulator, CLI,
+local server and UI. See [the roadmap](docs/roadmap.md).
 
 ## Quick start
 
@@ -61,6 +61,23 @@ a measurement of any device.
 When a capture starts after the mailboxes were configured, give their addresses with
 `--mailbox 0x1001=0x1000,0x1080` (repeatable; also on `flowlab serve`).
 
+## Simulation
+
+```bash
+cargo run --release -p flowlab-cli -- simulate configs/studies/bulk-transfer/*.json
+cargo run --release -p flowlab-cli -- simulate configs/sim/example.json -o results/sim.pcapng --result results/sim.json
+```
+
+`flowlab-sim` models a master, the link and each slave's ESC (mailbox and process-data
+SyncManagers, ESC RAM) and PDI (the slave application's access to the ESC, e.g. SPI), and runs
+bulk transfers over EoE, FoE, CoE or a process-data channel. For each transfer it reports time,
+goodput, the time the payload alone needs on the link, a plain-Ethernet TCP reference, the
+protocol work (messages, rejected writes, empty polls, resent chunks), PDI load and a SHA-256
+check. Its frames are written as a capture labelled **Simulated** and analysed like any other.
+In the UI: **Simulate** in the header, then the **Sim run** view. Every number is a model
+output that depends on the spec's parameters — PDI rate and overhead above all — until it is
+calibrated against measurements.
+
 ## What it analyses
 
 | View | From the capture |
@@ -69,6 +86,7 @@ When a capture starts after the mailboxes were configured, give their addresses 
 | **Timing** | Per cyclic stream: least-squares period, send-time jitter against the cycle grid, interval distribution, TX→RX round trip, gaps and missed cycles, working counters per datagram |
 | **Frames** | Every frame, filterable by direction, command, stream, station, mailbox protocol or problems; decoded datagrams (register names, AL states, mailbox messages) beside a hex view |
 | **Stations** | Configured station addresses, ring positions, reads/writes, no-response counts, AL state over time |
+| **Sim run** | For a simulated run: transfers with time, goodput, link bound, TCP reference and integrity; protocol work; PDI load and ESC RAM per slave; model assumptions |
 | **Mailbox** | Per-slave mailbox SyncManagers and their use (accepted/rejected writes, empty reads, polling cadence); traffic per protocol; CoE SDO transfers with outcome, abort codes and duration; emergencies; FoE transfers with goodput; EoE frames reassembled (downloadable as pcapng) |
 
 How each number is inferred — and what it assumes — is written into every report
@@ -91,10 +109,12 @@ crates/
   flowlab-capture/   pcap/pcapng reader + writer, indexed trace, direction inference
   flowlab-analysis/  streams, timing, WKC, utilization, stations; frame queries
   flowlab-synth/     deterministic synthetic captures with ground truth
+  flowlab-sim/       discrete-event simulator: master, link, ESC, PDI; bulk transfers
   flowlab-server/    local HTTP API + static UI (axum)
-  flowlab-cli/       `flowlab synth | analyze | serve | schema`
+  flowlab-cli/       `flowlab synth | analyze | simulate | serve | schema`
 ui/                  React 19 + Vite + Tailwind 4 on the @vitavision lab-ui packages
 configs/synth/       example generator specs
+configs/sim/         example simulator spec; configs/studies/: study scenarios
 docs/                architecture, roadmap, decisions, studies/
 ```
 

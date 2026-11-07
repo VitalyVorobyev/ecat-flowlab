@@ -7,6 +7,7 @@
     "bun.lock",
     "dist/**",
     "src/api/gen/**",
-    "src/test/report.fixture.json"
+    "src/test/report.fixture.json",
+    "src/test/sim.fixture.json"
   ]
 }

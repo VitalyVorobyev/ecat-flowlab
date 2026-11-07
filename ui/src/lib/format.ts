@@ -10,10 +10,15 @@ export function count(n: number | bigint): string {
 /** A duration given in ns, in the largest unit that keeps it ≥ 1: `1.000 ms`, `12.24 µs`. */
 export function ns(value: number, digits?: number): string {
   if (!Number.isFinite(value)) return "–";
-  const a = Math.abs(value);
-  if (a >= 1e9) return `${(value / 1e9).toFixed(digits ?? 3)} s`;
-  if (a >= 1e6) return `${(value / 1e6).toFixed(digits ?? 3)} ms`;
-  if (a >= 1e3) return `${(value / 1e3).toFixed(digits ?? 2)} µs`;
+  for (const { div, unit, d } of [
+    { div: 1e9, unit: "s", d: 3 },
+    { div: 1e6, unit: "ms", d: 3 },
+    { div: 1e3, unit: "µs", d: 2 },
+  ]) {
+    // Decide on the value as displayed, so 999,999.9 ns reads "1.000 ms", not "1000.00 µs".
+    const shown = (value / div).toFixed(digits ?? d);
+    if (Math.abs(Number(shown)) >= 1) return `${shown} ${unit}`;
+  }
   return `${value.toFixed(digits ?? 0)} ns`;
 }
 

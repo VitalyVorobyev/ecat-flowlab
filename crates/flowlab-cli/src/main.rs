@@ -10,6 +10,7 @@ use clap::{Parser, Subcommand};
 use flowlab_analysis::mailbox::{MailboxHint, write_eoe_pcapng};
 use flowlab_analysis::{AnalysisOptions, CaptureReport, Severity, analyze};
 use flowlab_capture::{CaptureFile, Trace};
+use flowlab_sim::{SimResult, SimSpec};
 use flowlab_synth::SynthSpec;
 
 #[derive(Parser)]
@@ -56,6 +57,17 @@ enum Cmd {
         #[arg(long, value_name = "PCAPNG")]
         eoe_out: Option<PathBuf>,
     },
+    /// Run the discrete-event simulator. With several specs, print a comparison table.
+    Simulate {
+        /// Spec files (see `flowlab schema sim`). Omit to use the built-in example.
+        specs: Vec<PathBuf>,
+        /// Write the simulated frames (one spec only).
+        #[arg(short, long)]
+        out: Option<PathBuf>,
+        /// Write the result JSON (one spec), or a JSON array of results (several).
+        #[arg(long)]
+        result: Option<PathBuf>,
+    },
     /// Serve the web UI and API on localhost.
     Serve {
         /// Captures to load at start.
@@ -81,7 +93,7 @@ enum Cmd {
     /// Print a JSON Schema.
     Schema {
         /// Which schema.
-        #[arg(value_parser = ["synth"])]
+        #[arg(value_parser = ["synth", "sim"])]
         which: String,
     },
 }
@@ -175,8 +187,48 @@ fn run(cli: Cli) -> Result<()> {
             tokio::runtime::Runtime::new()?.block_on(flowlab_server::serve(state, addr, ui))?;
         }
         Cmd::Schema { which } => {
-            debug_assert_eq!(which, "synth");
-            println!("{}", serde_json::to_string_pretty(&flowlab_synth::spec_schema())?);
+            let schema = if which == "sim" { flowlab_sim::spec_schema() } else { flowlab_synth::spec_schema() };
+            println!("{}", serde_json::to_string_pretty(&schema)?);
+        }
+        Cmd::Simulate { specs, out, result } => {
+            if specs.len() > 1 && out.is_some() {
+                return Err("--out takes one spec; run the specs separately to keep their captures".into());
+            }
+            let specs: Vec<(String, SimSpec)> = if specs.is_empty() {
+                vec![("example".into(), SimSpec::example())]
+            } else {
+                specs
+                    .iter()
+                    .map(|p| -> Result<(String, SimSpec)> {
+                        let f = File::open(p).map_err(|e| format!("{}: {e}", p.display()))?;
+                        let s = serde_json::from_reader(f).map_err(|e| format!("{}: {e}", p.display()))?;
+                        Ok((p.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), s))
+                    })
+                    .collect::<Result<_>>()?
+            };
+            let mut results = Vec::new();
+            for (name, spec) in &specs {
+                let r = match &out {
+                    Some(o) => {
+                        ensure_parent(o)?;
+                        flowlab_sim::simulate(spec, Some(BufWriter::new(File::create(o)?)))?
+                    }
+                    None => flowlab_sim::simulate(spec, None::<std::io::Sink>)?,
+                };
+                print_sim(name, &r);
+                results.push(r);
+            }
+            if let Some(p) = result {
+                ensure_parent(&p)?;
+                let w = BufWriter::new(File::create(&p)?);
+                match results.as_slice() {
+                    [one] => serde_json::to_writer_pretty(w, one)?,
+                    many => serde_json::to_writer_pretty(w, many)?,
+                }
+            }
+            if let Some(o) = &out {
+                eprintln!("wrote {} frames to {} (simulated)", results[0].capture_frames, o.display());
+            }
         }
     }
     Ok(())
@@ -295,5 +347,45 @@ fn print_summary(r: &CaptureReport) {
             Severity::Defect => "DEFECT",
         };
         println!("  [{tag}] {}", f.title);
+    }
+}
+
+fn rate(bps: f64) -> String {
+    if bps >= 1e6 { format!("{:.2} Mbit/s", bps / 1e6) } else { format!("{:.1} kbit/s", bps / 1e3) }
+}
+
+fn print_sim(name: &str, r: &SimResult) {
+    println!("{name}  [SIMULATED]  seed {}  {}", r.seed, r.description);
+    println!(
+        "  {} cycles of {}, {} frames, link {:.2} %, {}",
+        r.cycles,
+        ns(r.cycle_time_ns),
+        r.frames,
+        r.link_utilization_percent,
+        r.policy
+    );
+    println!(
+        "  {:<3} {:<12} {:<16} {:>12} {:>12} {:>14} {:>12} {:>12}  integrity",
+        "#", "protocol", "direction", "payload", "time", "goodput", "link bound", "TCP ref."
+    );
+    for t in &r.transfers {
+        println!(
+            "  {:<3} {:<12} {:<16} {:>10} B {:>12} {:>14} {:>12} {:>12}  {}",
+            t.index,
+            t.protocol,
+            t.direction.replace('_', " "),
+            t.payload_bytes,
+            t.duration_ns.map_or("unfinished".into(), ns),
+            t.goodput_bps.map_or("-".into(), rate),
+            ns(t.physical_bound_ns),
+            ns(t.ethernet_tcp_reference_ns),
+            if t.verified { "SHA-256 ok" } else { "NOT VERIFIED" }
+        );
+    }
+    for s in r.slaves.iter().filter(|s| s.pdi_busy_percent > 0.5) {
+        println!(
+            "  slave 0x{:04X} {}: PDI busy {:.1} %, ESC RAM {}/{} B",
+            s.station, s.name, s.pdi_busy_percent, s.dpram_used_bytes, s.dpram_bytes
+        );
     }
 }

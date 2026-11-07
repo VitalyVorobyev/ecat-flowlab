@@ -1,21 +1,39 @@
 import { Button, ErrorBox, Select, SkeletonRows, ThemeToggle, toast } from "@vitavision/ui";
 import { AppShell, FileDrop, NavRail, NavRailItem, StatusBar } from "@vitavision/workbench";
-import { Activity, FolderOpen, Gauge, Mail, Network, Rows3, Sparkles } from "lucide-react";
+import {
+  Activity,
+  FlaskConical,
+  FolderOpen,
+  Gauge,
+  Mail,
+  Network,
+  Rows3,
+  Sparkles,
+  Waypoints,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { api, type CaptureInfo, errorMessage, type FrameFilter, NO_FILTER } from "../api";
 import { ProvenanceBadge } from "../components/ProvenanceBadge";
-import { SynthDialog } from "../components/SynthDialog";
+import { SimulateDialog, SynthDialog } from "../components/SynthDialog";
 import { count, ns } from "../lib/format";
 import { useAsync } from "../lib/useAsync";
 import { CAPTURE_ACCEPT, Captures } from "../screens/Captures";
 import { Frames, type FramesTarget } from "../screens/Frames";
 import { Mailbox } from "../screens/Mailbox";
 import { Overview } from "../screens/Overview";
+import { Simulation } from "../screens/Simulation";
 import { Stations } from "../screens/Stations";
 import { Timing } from "../screens/Timing";
 
-export type View = "captures" | "overview" | "timing" | "frames" | "stations" | "mailbox";
+export type View =
+  | "captures"
+  | "overview"
+  | "timing"
+  | "frames"
+  | "stations"
+  | "mailbox"
+  | "simulation";
 
 const DIRECTIONS = {
   mac_local_bit: "directions: MAC bit",
@@ -29,6 +47,7 @@ export function App() {
   const [view, setView] = useState<View>("captures");
   const [busy, setBusy] = useState(false);
   const [synthOpen, setSynthOpen] = useState(false);
+  const [simOpen, setSimOpen] = useState(false);
   const [streamId, setStreamId] = useState(0);
   const [frameFilter, setFrameFilter] = useState<FrameFilter>(NO_FILTER);
   const [frameTarget, setFrameTarget] = useState<FramesTarget | null>(null);
@@ -58,6 +77,12 @@ export function App() {
     () => (selectedId === null ? Promise.resolve(null) : api.report(selectedId)),
     [selectedId],
   );
+  const hasSimulation = selected?.has_simulation ?? false;
+  const simulation = useAsync(
+    () =>
+      selectedId === null || !hasSimulation ? Promise.resolve(null) : api.simulation(selectedId),
+    [selectedId, hasSimulation],
+  );
 
   const select = useCallback((id: number) => {
     setSelectedId(id);
@@ -71,6 +96,7 @@ export function App() {
     (info: CaptureInfo) => {
       setCaptures((list) => [...list, info]);
       select(info.id);
+      if (info.has_simulation) setView("simulation");
       toast({
         tone: info.defects > 0 ? "warn" : "success",
         title: `Loaded ${info.name}`,
@@ -145,6 +171,15 @@ export function App() {
         <Button
           variant="ghost"
           size="sm"
+          icon={<FlaskConical className="size-4" />}
+          onClick={() => setSimOpen(true)}
+          disabled={busy}
+        >
+          Simulate
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
           icon={<Sparkles className="size-4" />}
           onClick={() => setSynthOpen(true)}
           disabled={busy}
@@ -173,6 +208,12 @@ export function App() {
       <NavRailItem value="frames" label="Frames" icon={<Rows3 />} disabled={!hasReport} />
       <NavRailItem value="stations" label="Stations" icon={<Network />} disabled={!hasReport} />
       <NavRailItem value="mailbox" label="Mailbox" icon={<Mail />} disabled={!hasReport} />
+      <NavRailItem
+        value="simulation"
+        label="Sim run"
+        icon={<Waypoints />}
+        disabled={!hasReport || !hasSimulation}
+      />
     </NavRail>
   );
 
@@ -224,6 +265,17 @@ export function App() {
         onFilterChange={setFrameFilter}
       />
     );
+  } else if (view === "simulation") {
+    main =
+      simulation.status === "error" ? (
+        <ErrorBox className="m-6">{simulation.error}</ErrorBox>
+      ) : simulation.data ? (
+        <Simulation result={simulation.data} />
+      ) : hasSimulation ? (
+        <SkeletonRows rows={10} className="m-6" />
+      ) : (
+        <ErrorBox className="m-6">This capture is not a simulation run.</ErrorBox>
+      );
   } else if (view === "mailbox") {
     main = <Mailbox captureId={selectedId} report={report.data} onOpenFrame={openFrame} />;
   } else {
@@ -255,6 +307,7 @@ export function App() {
         bottom={bottom}
       />
       <SynthDialog open={synthOpen} onOpenChange={setSynthOpen} onCreated={added} />
+      <SimulateDialog open={simOpen} onOpenChange={setSimOpen} onCreated={added} />
     </>
   );
 }

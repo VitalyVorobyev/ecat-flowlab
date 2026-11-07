@@ -1,5 +1,14 @@
 # Hardware-free simulation model
 
+> **Implemented in `flowlab-sim` (M4)** — engine with stable event order, link with full frame
+> serialization, ESC mailboxes (1-buffer) and process data (3-buffer), ESC RAM gating, PDI with
+> rates, per-access overhead and contention, master policies (fixed quota, round robin,
+> opportunistic), EoE (UDP-like), FoE, CoE segmented and a PDO channel with go-back-N, frame
+> loss, byte-for-byte and SHA-256 integrity, the physical bound and a TCP reference. **Not yet:**
+> TCP dynamics over EoE, VoE, priority/weighted policies, replayed service timestamps, the
+> application-level START/DATA/ACK session of `wire-protocol.md`, calibration. The validation
+> rules below are tests in `crates/flowlab-sim/src/tests.rs` where implemented.
+
 ## Engine
 
 A deterministic, single-process discrete-event simulator is the first deliverable. Use virtual monotonic time and a stable event ordering `(time_ns, priority, insertion_index)`. Seed pseudorandom fault/latency distributions. Avoid `sleep`, timers and platform performance assumptions.

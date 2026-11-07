@@ -30,6 +30,8 @@ jobs:
         run: |
           cargo run -q -p flowlab-cli -- synth configs/synth/demo.json -o results/demo.pcapng --truth results/truth.json
           cargo run -q -p flowlab-cli -- analyze results/demo.pcapng --out results/report.json
+      - name: Simulator runs the shipped scenarios
+        run: cargo run -q --release -p flowlab-cli -- simulate configs/sim/example.json configs/studies/bulk-transfer/*.json
 
   wireshark:
     name: Cross-check with Wireshark
@@ -50,6 +52,11 @@ jobs:
           cargo run -q -p flowlab-cli -- synth configs/synth/demo.json -o results/demo.pcapng
           cargo run -q -p flowlab-cli -- analyze results/demo.pcapng --out results/demo.json
           python3 scripts/crosscheck-tshark.py results/demo.pcapng results/demo.json
+      - name: Simulated frames match the EtherCAT dissector
+        run: |
+          cargo run -q -p flowlab-cli -- simulate configs/sim/example.json -o results/sim.pcapng
+          cargo run -q -p flowlab-cli -- analyze results/sim.pcapng --out results/sim.json
+          python3 scripts/crosscheck-tshark.py results/sim.pcapng results/sim.json
 
   ui:
     runs-on: ubuntu-latest

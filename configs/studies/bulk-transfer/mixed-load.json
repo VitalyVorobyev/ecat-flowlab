@@ -1,27 +1,58 @@
 {
-  "schema_version": 1,
-  "id": "mixed-load-synthetic",
-  "description": "Bulk and cyclic control load; model-only",
-  "mode": "simulation",
   "seed": 123,
-  "payload_bytes": 10000000,
-  "direction": "slave_to_master",
-  "transport": "synthetic_mailbox",
-  "ethercat": {
-    "link_bps": 100000000,
-    "cycle_time_us": 250,
-    "background_pdo_bytes_per_cycle": 768,
-    "mailbox_out_bytes": 522,
-    "mailbox_in_bytes": 522,
-    "mailbox_services_per_cycle": 0.5,
-    "scheduler": "fixed_quota_synthetic"
+  "description": "10,000,000 B slave\u2192master by EoE alongside 768 B of cyclic process data; 250 \u00b5s cycle, 522 B mailboxes. The starter's 0.5 mailbox services per cycle has no defined meaning; it is modelled as round robin over two mailbox slaves. Model only.",
+  "cycle_time_us": 250,
+  "slaves": [
+    {
+      "name": "coupler",
+      "outputs_bytes": 0,
+      "inputs_bytes": 0
+    },
+    {
+      "name": "bulk-endpoint",
+      "outputs_bytes": 384,
+      "inputs_bytes": 384,
+      "mailbox_out_bytes": 522,
+      "mailbox_in_bytes": 522,
+      "pdi": {
+        "read_bps": 20000000,
+        "write_bps": 20000000,
+        "access_overhead_ns": 5000
+      }
+    },
+    {
+      "name": "drive",
+      "outputs_bytes": 0,
+      "inputs_bytes": 0,
+      "mailbox_out_bytes": 128,
+      "mailbox_in_bytes": 128
+    }
+  ],
+  "mailbox_policy": {
+    "kind": "round_robin",
+    "slaves_per_cycle": 1
   },
-  "application": {
-    "chunk_bytes": 450,
-    "queue_depth": 16,
-    "verify_sha256": true
-  },
-  "faults": {
-    "frame_loss_probability": 0.0
+  "transfers": [
+    {
+      "slave": 1,
+      "direction": "slave_to_master",
+      "payload_bytes": 10000000,
+      "protocol": {
+        "kind": "eoe",
+        "mtu_bytes": 1500
+      }
+    },
+    {
+      "slave": 2,
+      "direction": "master_to_slave",
+      "payload_bytes": 4096,
+      "protocol": {
+        "kind": "coe_segmented"
+      }
+    }
+  ],
+  "max_duration_ms": 180000,
+  "capture": {
+    "enabled": false
   }
 }

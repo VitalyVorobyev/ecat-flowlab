@@ -1,0 +1,25 @@
+[package]
+name = "flowlab-sim"
+description = "Deterministic discrete-event EtherCAT simulator: master, link, ESC and PDI models emitting real frames."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ecat-wire.workspace = true
+flowlab-core.workspace = true
+flowlab-capture.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+schemars.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+ts-rs = "12"
+
+[dev-dependencies]
+flowlab-analysis.workspace = true
+
+[lints]
+workspace = true
