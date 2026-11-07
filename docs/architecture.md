@@ -54,6 +54,21 @@ simulator model (see `decisions.md`, ADR-010).
   binned over time against a configurable link rate (100 Mbit/s).
 - **Stations.** From FP* datagrams; ring positions from APWR to 0x0010; AL requests from
   writes to 0x0120 and reports from reads of 0x0130 (changes only).
+- **Mailbox channels.** Writes to the SyncManager registers (0x0800 + 8·n) in mailbox mode give
+  each station's "mailbox out" (ECAT writes) and "mailbox in" (ECAT reads) start address;
+  APWR-addressed configuration is mapped to stations through the APWR 0x0010 assignment.
+  Without configuration in the capture a user hint is used, else a heuristic (an accepted
+  FPWR at ≥ 0x1000 whose data parses as a mailbox header). The source is reported per station.
+- **Mailbox messages.** A write is accepted when it returns with WKC > 0 (WKC 0: mailbox full);
+  a read returns a message when WKC > 0 (WKC 0: empty). Messages are taken from returning
+  datagrams; a counter equal to the previous one marks a repeat, which is dropped. Datagrams
+  that access a mailbox are excluded from WKC verdicts, and frames made only of them are not
+  cyclic streams.
+- **Mailbox protocols.** CoE SDO transfers are followed per station as a state machine
+  (initiate → segments with alternating toggle → last segment, or abort); FoE per station
+  (request → DATA/ACK until a packet shorter than the mailbox); EoE per station and direction
+  (fragment 0 → consecutive fragments with matching frame number and offset → last). Durations
+  are measured at the capture point, between the frames that carried the first and last message.
 
 Capture timestamps are whatever the capture tool recorded. Host software timestamps add their
 own jitter; the UI and report say so rather than correcting for it.

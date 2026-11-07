@@ -37,9 +37,63 @@ pub struct SynthSpec {
     /// Unix time of the first frame, seconds.
     #[serde(default = "default_start")]
     pub start_unix_s: u64,
+    /// Mailbox traffic beyond the expedited SDO uploads.
+    #[serde(default)]
+    pub mailbox: MailboxSpec,
     /// Faults to inject.
     #[serde(default)]
     pub faults: FaultSpec,
+}
+
+/// Mailbox traffic. PREOP items run per mailbox slave during start-up; OP items run on the
+/// first (EoE, FoE) or last (emergencies) mailbox slave in an acyclic frame half a cycle
+/// after each cyclic frame, one mailbox access per slave per cycle.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct MailboxSpec {
+    /// Empty polls before a slave's response becomes readable.
+    #[serde(default = "default_response_delay")]
+    pub response_delay_polls: u32,
+    /// PREOP: upload of an object of this many bytes (normal, segmented beyond 112 B); 0 = none.
+    #[serde(default)]
+    pub segmented_upload_bytes: u32,
+    /// PREOP: download of this many bytes (expedited ≤ 4 B, else normal / segmented); 0 = none.
+    #[serde(default)]
+    pub download_bytes: u32,
+    /// PREOP: uploads of a missing object, which the slave aborts.
+    #[serde(default)]
+    pub aborted_uploads: u32,
+    /// OP: FoE write of this many bytes; 0 = none.
+    #[serde(default)]
+    pub foe_write_bytes: u32,
+    /// OP: Ethernet frames tunnelled by EoE to the slave.
+    #[serde(default)]
+    pub eoe_frames_to_slave: u32,
+    /// OP: Ethernet frames tunnelled by EoE from the slave.
+    #[serde(default)]
+    pub eoe_frames_from_slave: u32,
+    /// Size of each tunnelled Ethernet frame, bytes (60–1514).
+    #[serde(default = "default_eoe_bytes")]
+    pub eoe_frame_bytes: u32,
+    /// OP: CoE emergencies.
+    #[serde(default)]
+    pub emergencies: u32,
+}
+
+impl Default for MailboxSpec {
+    fn default() -> Self {
+        Self {
+            response_delay_polls: default_response_delay(),
+            segmented_upload_bytes: 0,
+            download_bytes: 0,
+            aborted_uploads: 0,
+            foe_write_bytes: 0,
+            eoe_frames_to_slave: 0,
+            eoe_frames_from_slave: 0,
+            eoe_frame_bytes: default_eoe_bytes(),
+            emergencies: 0,
+        }
+    }
 }
 
 /// One slave.
@@ -72,6 +126,9 @@ pub struct FaultSpec {
     /// The master skips a cycle entirely (no TX).
     #[serde(default)]
     pub skipped_cycle_probability: f64,
+    /// A mailbox write finds the mailbox still full (WKC 0) and is retried.
+    #[serde(default)]
+    pub mailbox_write_reject_probability: f64,
 }
 
 fn yes() -> bool {
@@ -82,6 +139,12 @@ fn default_slave_delay() -> u32 {
 }
 fn default_sdo() -> u32 {
     2
+}
+fn default_response_delay() -> u32 {
+    2
+}
+fn default_eoe_bytes() -> u32 {
+    590
 }
 fn default_start() -> u64 {
     1_767_225_600 // 2026-01-01T00:00:00Z
@@ -116,10 +179,21 @@ impl SynthSpec {
             sdo_uploads_per_slave: default_sdo(),
             distributed_clocks: true,
             start_unix_s: default_start(),
+            mailbox: MailboxSpec {
+                segmented_upload_bytes: 300,
+                download_bytes: 200,
+                aborted_uploads: 1,
+                foe_write_bytes: 4096,
+                eoe_frames_to_slave: 8,
+                eoe_frames_from_slave: 8,
+                emergencies: 1,
+                ..MailboxSpec::default()
+            },
             faults: FaultSpec {
                 lost_frame_probability: 0.002,
                 wkc_error_probability: 0.001,
                 skipped_cycle_probability: 0.001,
+                mailbox_write_reject_probability: 0.05,
             },
         }
     }
@@ -143,10 +217,26 @@ impl SynthSpec {
             ("lost_frame_probability", self.faults.lost_frame_probability),
             ("wkc_error_probability", self.faults.wkc_error_probability),
             ("skipped_cycle_probability", self.faults.skipped_cycle_probability),
+            ("mailbox_write_reject_probability", self.faults.mailbox_write_reject_probability),
         ] {
             if !(0.0..=1.0).contains(&p) {
                 return Err(format!("{name} must be within [0, 1]"));
             }
+        }
+        if self.faults.mailbox_write_reject_probability >= 1.0 {
+            return Err("mailbox_write_reject_probability must be < 1 (writes would never succeed)".into());
+        }
+        if !(60..=1514).contains(&self.mailbox.eoe_frame_bytes) {
+            return Err("eoe_frame_bytes must be within 60..=1514".into());
+        }
+        if self.mailbox.response_delay_polls > 1000 {
+            return Err("response_delay_polls must be ≤ 1000".into());
+        }
+        if self.mailbox.segmented_upload_bytes > 1_000_000 || self.mailbox.download_bytes > 1_000_000 {
+            return Err("SDO transfer sizes must be ≤ 1 MB".into());
+        }
+        if self.mailbox.foe_write_bytes > 16_000_000 {
+            return Err("foe_write_bytes must be ≤ 16 MB".into());
         }
         Ok(())
     }

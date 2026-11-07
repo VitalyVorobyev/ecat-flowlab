@@ -23,4 +23,9 @@ mismatches: number,
 /**
  * Returning frames with WKC 0.
  */
-zero: number, };
+zero: number, 
+/**
+ * The datagram accesses a mailbox; its WKC varies by design (0 = mailbox full/empty)
+ * and is not counted as a mismatch.
+ */
+mailbox: boolean, };

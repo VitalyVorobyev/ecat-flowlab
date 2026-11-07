@@ -12,6 +12,7 @@
 //! | GET | `/api/captures/{id}/report` | | `CaptureReport` |
 //! | GET | `/api/captures/{id}/frames` | `FrameFilter` + `offset`, `limit` | `FramePage` |
 //! | GET | `/api/captures/{id}/frames/{no}` | | `FrameDetail` |
+//! | GET | `/api/captures/{id}/eoe.pcapng` | | Ethernet frames reassembled from EoE (pcapng) |
 //! | GET | `/api/synth/schema` | | JSON Schema of `SynthSpec` |
 //! | GET | `/api/synth/example` | | `SynthSpec` |
 //! | POST | `/api/synth` | `SynthSpec` | `CaptureInfo` |
@@ -246,6 +247,7 @@ struct FramesQuery {
     problems_only: bool,
     #[serde(default)]
     include_other: bool,
+    mailbox: Option<String>,
 }
 
 impl FramesQuery {
@@ -257,6 +259,7 @@ impl FramesQuery {
             stream: self.stream,
             problems_only: self.problems_only,
             include_other: self.include_other,
+            mailbox: self.mailbox.clone().filter(|m| !m.is_empty()),
         }
     }
 }
@@ -281,6 +284,27 @@ async fn frame(State(s): State<AppState>, UrlPath((id, no)): UrlPath<(u32, u32)>
     let e = s.get(id)?;
     let d = detail(&e.trace, &e.analysis, no).ok_or_else(|| ApiError::not_found(format!("no frame {no}")))?;
     Ok(Json(d).into_response())
+}
+
+async fn eoe_pcapng(State(s): State<AppState>, UrlPath(id): UrlPath<u32>) -> Result<Response, ApiError> {
+    let e = s.get(id)?;
+    let stem = e.info.name.trim_end_matches(".pcapng").trim_end_matches(".pcap").to_owned();
+    let bytes = blocking(move || {
+        let mut out = Vec::new();
+        flowlab_analysis::mailbox::write_eoe_pcapng(&e.analysis.mailbox, e.trace.provenance, &e.info.name, &mut out)
+            .map_err(|err| ApiError::internal(err.to_string()))?;
+        Ok(out)
+    })
+    .await?;
+    let disposition = format!("attachment; filename=\"{}-eoe.pcapng\"", stem.replace(['"', '\\'], "_"));
+    Ok((
+        [
+            (axum::http::header::CONTENT_TYPE, "application/vnd.tcpdump.pcap".to_owned()),
+            (axum::http::header::CONTENT_DISPOSITION, disposition),
+        ],
+        bytes,
+    )
+        .into_response())
 }
 
 async fn synth_schema() -> Json<serde_json::Value> {
@@ -312,6 +336,7 @@ pub fn api(state: AppState) -> Router {
         .route("/api/captures/{id}/report", get(report))
         .route("/api/captures/{id}/frames", get(frames))
         .route("/api/captures/{id}/frames/{no}", get(frame))
+        .route("/api/captures/{id}/eoe.pcapng", get(eoe_pcapng))
         .route("/api/synth/schema", get(synth_schema))
         .route("/api/synth/example", get(synth_example))
         .route("/api/synth", post(synth))
@@ -404,6 +429,20 @@ mod tests {
         let (st, _) =
             call(&app, Request::get(format!("/api/captures/{id}/frames/0")).body(Body::empty()).unwrap()).await;
         assert_eq!(st, StatusCode::NOT_FOUND);
+
+        let uri = format!("/api/captures/{id}/frames?mailbox=eoe&limit=1");
+        let (st, page) = call(&app, Request::get(uri).body(Body::empty()).unwrap()).await;
+        assert_eq!(st, StatusCode::OK);
+        assert!(page["total"].as_u64().unwrap() > 0, "{page}");
+        let res = app
+            .clone()
+            .oneshot(Request::get(format!("/api/captures/{id}/eoe.pcapng")).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let bytes = res.into_body().collect().await.unwrap().to_bytes();
+        let eoe = CaptureFile::parse(bytes.to_vec()).unwrap();
+        assert_eq!(eoe.packets.len() as u64, report["mailbox"]["eoe"]["frames_total"].as_u64().unwrap());
         let (st, _) = call(&app, Request::delete(format!("/api/captures/{id}")).body(Body::empty()).unwrap()).await;
         assert_eq!(st, StatusCode::NO_CONTENT);
         let (st, _) = call(&app, Request::get(format!("/api/captures/{id}/report")).body(Body::empty()).unwrap()).await;

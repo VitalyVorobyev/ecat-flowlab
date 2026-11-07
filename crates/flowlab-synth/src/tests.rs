@@ -19,10 +19,12 @@ pub(crate) fn spec() -> SynthSpec {
         sdo_uploads_per_slave: 2,
         distributed_clocks: true,
         start_unix_s: 1_767_225_600,
+        mailbox: Default::default(),
         faults: FaultSpec {
             lost_frame_probability: 0.01,
             wkc_error_probability: 0.02,
             skipped_cycle_probability: 0.005,
+            mailbox_write_reject_probability: 0.0,
         },
     }
 }

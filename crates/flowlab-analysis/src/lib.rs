@@ -16,9 +16,13 @@
 //!   datagram position is the most frequent value seen on returning frames.
 //! * **Stations and AL states**: from configured-address datagrams, APWR to 0x0010, writes to
 //!   AL control (0x0120) and reads of AL status (0x0130).
+//! * **Mailbox**: SyncManager configuration writes give each slave's mailbox addresses;
+//!   returning datagrams there carry the messages, which [`mailbox`] follows as CoE SDO
+//!   transfers, FoE file transfers and EoE fragment streams.
 
 mod analyze;
 pub mod frames;
+pub mod mailbox;
 mod report;
 mod stats;
 

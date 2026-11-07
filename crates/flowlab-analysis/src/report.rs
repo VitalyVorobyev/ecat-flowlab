@@ -23,6 +23,8 @@ pub struct CaptureReport {
     pub stations: Vec<StationSummary>,
     /// AL state requests and reports, changes only.
     pub al_events: Vec<AlEvent>,
+    /// Mailbox channels, protocols and transfers.
+    pub mailbox: MailboxReport,
     /// Judgements against declared thresholds, and notes.
     pub findings: Vec<Finding>,
 }
@@ -88,6 +90,9 @@ pub struct WkcSlot {
     pub mismatches: u64,
     /// Returning frames with WKC 0.
     pub zero: u64,
+    /// The datagram accesses a mailbox; its WKC varies by design (0 = mailbox full/empty)
+    /// and is not counted as a mismatch.
+    pub mailbox: bool,
 }
 
 /// A point in time with a value.
@@ -262,4 +267,315 @@ pub struct Finding {
     pub title: String,
     /// The evidence and the threshold used.
     pub detail: String,
+}
+
+// ---------------------------------------------------------------------------------------------
+// Mailbox
+// ---------------------------------------------------------------------------------------------
+
+/// Direction of a mailbox message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum MailboxDirection {
+    /// Master → slave: written into the slave's "mailbox out" SyncManager.
+    ToSlave,
+    /// Slave → master: read from the slave's "mailbox in" SyncManager.
+    FromSlave,
+}
+
+/// Where the analysis learned a station's mailbox SyncManager addresses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum ChannelSource {
+    /// From SyncManager configuration writes in the capture.
+    SmConfig,
+    /// From a user-supplied hint.
+    Hint,
+    /// From datagrams whose data parses as a mailbox header (no configuration seen).
+    Heuristic,
+}
+
+/// One slave's mailbox and how it was used.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct MailboxChannel {
+    /// Configured station address.
+    pub station: u16,
+    /// How the SyncManager addresses were found.
+    pub source: ChannelSource,
+    /// Start of the master → slave mailbox ("mailbox out", usually SM0).
+    pub out_start: Option<u16>,
+    /// Its length, bytes.
+    pub out_len: Option<u16>,
+    /// Start of the slave → master mailbox ("mailbox in", usually SM1).
+    pub in_start: Option<u16>,
+    /// Its length, bytes.
+    pub in_len: Option<u16>,
+    /// Writes the slave accepted (returned with WKC > 0).
+    pub writes: u64,
+    /// Writes returned with WKC 0: the mailbox was still full.
+    pub writes_rejected: u64,
+    /// Reads that returned a message (WKC > 0).
+    pub reads: u64,
+    /// Reads returned with WKC 0: nothing to read.
+    pub empty_reads: u64,
+    /// Reads of the "mailbox in" SyncManager status register.
+    pub status_polls: u64,
+    /// Messages to the slave (excluding repeats).
+    pub messages_out: u64,
+    /// Messages from the slave (excluding repeats).
+    pub messages_in: u64,
+    /// Mailbox payload bytes to the slave (after the 6-byte header).
+    pub bytes_out: u64,
+    /// Mailbox payload bytes from the slave.
+    pub bytes_in: u64,
+    /// Messages whose counter repeated the previous one (dropped as repeats).
+    pub repeats: u64,
+    /// Interval between successive read attempts of the "mailbox in" buffer, ns.
+    pub poll_interval: Option<Distribution>,
+    /// Protocols seen on this channel.
+    pub protocols: Vec<String>,
+}
+
+/// Traffic per mailbox protocol.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct ProtocolStats {
+    /// `"CoE"`, `"FoE"`, `"EoE"`, `"SoE"`, `"VoE"`, `"AoE"`, `"Error"` or `"Reserved"`.
+    pub protocol: String,
+    /// Messages to slaves.
+    pub messages_out: u64,
+    /// Messages from slaves.
+    pub messages_in: u64,
+    /// Payload bytes to slaves (after the mailbox header).
+    pub bytes_out: u64,
+    /// Payload bytes from slaves.
+    pub bytes_in: u64,
+    /// First message, ns.
+    pub first_ns: f64,
+    /// Last message, ns.
+    pub last_ns: f64,
+}
+
+/// How an SDO transfer ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum SdoOutcome {
+    /// Completed.
+    Ok,
+    /// Aborted by master or slave.
+    Aborted,
+    /// A new transfer to the same station started before this one completed.
+    Superseded,
+    /// Still open when the capture ended.
+    Incomplete,
+    /// Sequence violated: toggle bit, size, or an unexpected response.
+    ProtocolError,
+}
+
+/// One CoE SDO upload or download, from the initiate request to the last response.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct SdoTransaction {
+    /// Station.
+    pub station: u16,
+    /// `"upload"` (read from slave) or `"download"` (write to slave).
+    pub kind: String,
+    /// Object index.
+    pub index: u16,
+    /// Subindex.
+    pub subindex: u8,
+    /// Complete access.
+    pub complete_access: bool,
+    /// `"expedited"`, `"normal"` (one message) or `"segmented"`.
+    pub transfer: String,
+    /// Size announced by the initiating side.
+    pub size: Option<u32>,
+    /// Data bytes transferred.
+    pub bytes: u64,
+    /// Segments after the initiate exchange.
+    pub segments: u32,
+    /// Time of the initiate request, ns.
+    pub start_ns: f64,
+    /// Time of the final message, ns.
+    pub end_ns: Option<f64>,
+    /// Frame carrying the initiate request.
+    pub first_frame: u32,
+    /// Frame carrying the final message.
+    pub last_frame: u32,
+    /// Outcome.
+    pub outcome: SdoOutcome,
+    /// Abort code, if aborted.
+    pub abort_code: Option<u32>,
+    /// Abort code text.
+    pub abort_text: Option<String>,
+    /// `"master"` or `"slave"`, if aborted.
+    pub aborted_by: Option<String>,
+    /// What went wrong for a protocol error.
+    pub note: Option<String>,
+}
+
+/// A CoE emergency message.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct EmergencyEvent {
+    /// Time, ns.
+    pub t_ns: f64,
+    /// Frame (1-based).
+    pub frame: u32,
+    /// Station.
+    pub station: u16,
+    /// CiA 301 error code.
+    pub error_code: u16,
+    /// Error register.
+    pub error_register: u8,
+    /// Manufacturer-specific bytes, hex.
+    pub data: String,
+}
+
+/// CoE results.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct CoeReport {
+    /// SDO transfers (first 2000).
+    pub transactions: Vec<SdoTransaction>,
+    /// All SDO transfers.
+    pub transactions_total: u64,
+    /// Completed.
+    pub ok: u64,
+    /// Aborted.
+    pub aborted: u64,
+    /// Superseded or incomplete.
+    pub unfinished: u64,
+    /// Protocol errors.
+    pub protocol_errors: u64,
+    /// Duration of completed transfers, ns.
+    pub duration: Option<Distribution>,
+    /// Emergencies (first 2000).
+    pub emergencies: Vec<EmergencyEvent>,
+    /// All emergencies.
+    pub emergencies_total: u64,
+    /// SDO Information messages.
+    pub sdo_info_messages: u64,
+}
+
+/// An FoE file read or write.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct FoeTransfer {
+    /// Station.
+    pub station: u16,
+    /// `"write"` (to slave) or `"read"` (from slave).
+    pub kind: String,
+    /// File name from the request.
+    pub file_name: String,
+    /// Data bytes.
+    pub bytes: u64,
+    /// Data packets.
+    pub packets: u32,
+    /// BUSY replies.
+    pub busy: u32,
+    /// Request time, ns.
+    pub start_ns: f64,
+    /// Final message time, ns.
+    pub end_ns: Option<f64>,
+    /// Data bytes · 8 / (end − start), bit/s.
+    pub goodput_bps: Option<f64>,
+    /// Request frame.
+    pub first_frame: u32,
+    /// Final frame.
+    pub last_frame: u32,
+    /// `"ok"`, `"error"`, `"incomplete"` or `"protocol_error"`.
+    pub outcome: String,
+    /// FoE error code.
+    pub error_code: Option<u32>,
+    /// Error text (from the table, else the message).
+    pub error_text: Option<String>,
+}
+
+/// An Ethernet frame reassembled from EoE fragments.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct EoeFrame {
+    /// Station.
+    pub station: u16,
+    /// Direction.
+    pub direction: MailboxDirection,
+    /// First fragment, ns.
+    pub start_ns: f64,
+    /// Last fragment, ns.
+    pub end_ns: f64,
+    /// Frame of the first fragment.
+    pub first_frame: u32,
+    /// Frame of the last fragment.
+    pub last_frame: u32,
+    /// Fragments.
+    pub fragments: u32,
+    /// Reassembled length, bytes.
+    pub bytes: u32,
+    /// Destination MAC of the tunnelled frame.
+    pub dst: Option<String>,
+    /// Source MAC.
+    pub src: Option<String>,
+    /// EtherType.
+    pub ethertype: Option<u16>,
+}
+
+/// EoE results.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct EoeReport {
+    /// Reassembled frames (first 2000).
+    pub frames: Vec<EoeFrame>,
+    /// All reassembled frames.
+    pub frames_total: u64,
+    /// Reassembled bytes to slaves.
+    pub bytes_to_slaves: u64,
+    /// Reassembled bytes from slaves.
+    pub bytes_from_slaves: u64,
+    /// Fragment sequences that broke off or arrived out of order.
+    pub reassembly_errors: u64,
+    /// Non-fragment EoE services (IP parameter, address filter, time stamp).
+    pub service_messages: u64,
+}
+
+/// A mailbox error reply from a slave.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct MailboxErrorEvent {
+    /// Time, ns.
+    pub t_ns: f64,
+    /// Frame.
+    pub frame: u32,
+    /// Station.
+    pub station: u16,
+    /// Detail code.
+    pub detail: u16,
+    /// Text.
+    pub text: String,
+}
+
+/// Mailbox analysis.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct MailboxReport {
+    /// Stations with a mailbox, by station address.
+    pub channels: Vec<MailboxChannel>,
+    /// Traffic per protocol.
+    pub protocols: Vec<ProtocolStats>,
+    /// CoE.
+    pub coe: CoeReport,
+    /// FoE transfers (first 2000).
+    pub foe: Vec<FoeTransfer>,
+    /// EoE.
+    pub eoe: EoeReport,
+    /// SoE messages with the error flag.
+    pub soe_errors: u64,
+    /// Mailbox error replies (first 2000).
+    pub errors: Vec<MailboxErrorEvent>,
+    /// Data at a mailbox address that is not a valid mailbox header.
+    pub malformed: u64,
 }

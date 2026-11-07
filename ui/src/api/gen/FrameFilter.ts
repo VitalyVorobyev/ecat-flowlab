@@ -27,4 +27,9 @@ problems_only: boolean,
 /**
  * Include non-EtherCAT frames.
  */
-include_other: boolean, };
+include_other: boolean, 
+/**
+ * `"any"`: a datagram accesses a mailbox; or a protocol (`"coe"`, `"foe"`, `"eoe"`,
+ * `"soe"`, `"voe"`, `"aoe"`, `"error"`): the frame carries a message of it.
+ */
+mailbox: string | null, };

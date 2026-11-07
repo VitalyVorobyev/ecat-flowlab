@@ -118,6 +118,79 @@ fn mailbox_and_sdo_round_trip() {
 }
 
 #[test]
+fn sync_manager_golden_and_slicing() {
+    // SM0: start 0x1000, 128 bytes, control 0x26 (mailbox, ECAT writes, interrupt), enabled.
+    let sm0 = [0x00, 0x10, 0x80, 0x00, 0x26, 0x00, 0x01, 0x00];
+    let c = SyncManagerConfig::parse(&sm0).unwrap();
+    assert_eq!((c.start, c.length), (0x1000, 128));
+    assert_eq!(c.mode(), SmMode::Mailbox);
+    assert_eq!(c.direction(), SmDirection::EcatWrite);
+    assert!(c.enabled());
+    assert_eq!(c.encode(), sm0);
+    // A 16-byte write at 0x0800 holds SM0 and SM1; one at 0x0804 holds neither fully but SM1.
+    let mut two = sm0.to_vec();
+    two.extend_from_slice(&[0x80, 0x10, 0x80, 0x00, 0x22, 0x00, 0x01, 0x00]);
+    let sms: Vec<_> = sync_managers_in(0x0800, &two).collect();
+    assert_eq!(sms.len(), 2);
+    assert_eq!(sms[1].0, 1);
+    assert_eq!(sms[1].1.direction(), SmDirection::EcatRead);
+    let shifted: Vec<_> = sync_managers_in(0x0804, &two[..12]).collect();
+    assert_eq!(shifted.len(), 1);
+    assert_eq!(shifted[0].0, 1);
+}
+
+#[test]
+fn sdo_command_golden() {
+    use SdoCommand::*;
+    assert_eq!(SdoCommand::decode(0x40, true), InitiateUploadRequest { complete_access: false });
+    assert_eq!(SdoCommand::decode(0x50, true), InitiateUploadRequest { complete_access: true });
+    assert_eq!(
+        SdoCommand::decode(0x43, false),
+        InitiateUploadResponse { complete_access: false, expedited: true, size_indicated: true, unused: 0 }
+    );
+    assert_eq!(
+        SdoCommand::decode(0x2F, true),
+        InitiateDownloadRequest { complete_access: false, expedited: true, size_indicated: true, unused: 3 }
+    );
+    assert_eq!(
+        SdoCommand::decode(0x21, true),
+        InitiateDownloadRequest { complete_access: false, expedited: false, size_indicated: true, unused: 0 }
+    );
+    assert_eq!(SdoCommand::decode(0x60, false), InitiateDownloadResponse);
+    assert_eq!(SdoCommand::decode(0x60, true), UploadSegmentRequest { toggle: false });
+    assert_eq!(SdoCommand::decode(0x70, true), UploadSegmentRequest { toggle: true });
+    assert_eq!(SdoCommand::decode(0x0B, false), UploadSegmentResponse { toggle: false, unused: 5, last: true });
+    assert_eq!(SdoCommand::decode(0x11, true), DownloadSegmentRequest { toggle: true, unused: 0, last: true });
+    assert_eq!(SdoCommand::decode(0x30, false), DownloadSegmentResponse { toggle: true });
+    assert_eq!(SdoCommand::decode(0x80, false), Abort);
+    assert_eq!(sdo_abort_text(0x0602_0000), Some("Object does not exist in the object dictionary"));
+    // Segment data: 7-byte segments declare unused bytes; longer ones use the mailbox length.
+    assert_eq!(segment_data_len(10, 5), 2);
+    assert_eq!(segment_data_len(122, 0), 119);
+}
+
+#[test]
+fn mailbox_protocol_headers_golden() {
+    // EoE: fragment, last, fragment 0, complete size 3 blocks, frame number 5.
+    let eoe = EoeHeader::parse(&[0x00, 0x01, 0xC0, 0x50]).unwrap();
+    assert_eq!(eoe.frame_type, EoeType::Fragment);
+    assert!(eoe.last_fragment && !eoe.time_appended);
+    assert_eq!((eoe.fragment, eoe.offset_blocks, eoe.frame_no), (0, 3, 5));
+    // FoE DATA packet 1.
+    let foe = FoeHeader::parse(&[0x03, 0x00, 0x01, 0x00, 0x00, 0x00]).unwrap();
+    assert_eq!((foe.opcode, foe.value), (FoeOpcode::Data, 1));
+    assert_eq!(foe_error_text(0x8001), Some("Not found"));
+    // SoE read request of IDN 1, value element.
+    let soe = SoeHeader::parse(&[0x01, 0x40, 0x01, 0x00]).unwrap();
+    assert_eq!((soe.opcode, soe.elements, soe.idn, soe.is_request()), (1, 0x40, 1, true));
+    // Emergency 0x8130 (life guard), error register 0x11.
+    let e = CoeEmergency::parse(&[0x30, 0x81, 0x11, 1, 2, 3, 4, 5]).unwrap();
+    assert_eq!((e.error_code, e.error_register, e.data), (0x8130, 0x11, [1, 2, 3, 4, 5]));
+    let err = MailboxErrorReply::parse(&[0x01, 0x00, 0x02, 0x00]).unwrap();
+    assert_eq!(err.detail_text(), "Mailbox protocol not supported");
+}
+
+#[test]
 fn wire_bytes_includes_overhead_and_padding() {
     assert_eq!(wire_bytes(30), 60 + 24);
     assert_eq!(wire_bytes(1514), 1514 + 24);
@@ -171,5 +244,46 @@ proptest! {
         if let Ok(Some(f)) = parse_frame(&bytes) {
             for d in f.pdu.datagrams() { let _ = d; }
         }
+    }
+
+    #[test]
+    fn sdo_command_decode_encode_is_canonical(byte in any::<u8>(), request in any::<bool>()) {
+        let c = SdoCommand::decode(byte, request);
+        prop_assert_eq!(SdoCommand::decode(c.encode(), request), c);
+    }
+
+    #[test]
+    fn mailbox_headers_round_trip(
+        len in any::<u16>(), addr in any::<u16>(), ch in 0u8..64, prio in 0u8..4, ty in 0u8..16, ctr in 0u8..8,
+        start in any::<u16>(), sm_len in any::<u16>(), ctrl in any::<u8>(), st in any::<u8>(), act in any::<u8>(), pdi in any::<u8>(),
+        v32 in any::<u32>(), v16 in any::<u16>(), b8 in any::<u8>(), flags in any::<[bool; 3]>(),
+        f6a in 0u8..64, f6b in 0u8..64, f4 in 0u8..16, f3 in 0u8..8, data5 in any::<[u8; 5]>(),
+    ) {
+        let mh = MailboxHeader { length: len, address: addr, channel: ch, priority: prio, mailbox_type: MailboxType::from_code(ty), counter: ctr };
+        prop_assert_eq!(MailboxHeader::parse(&mh.encode()).unwrap(), mh);
+        let sm = SyncManagerConfig { start, length: sm_len, control: ctrl, status: st, activate: act, pdi_control: pdi };
+        prop_assert_eq!(SyncManagerConfig::parse(&sm.encode()).unwrap(), sm);
+        let foe = FoeHeader { opcode: FoeOpcode::from_code(b8), value: v32 };
+        prop_assert_eq!(FoeHeader::parse(&foe.encode()).unwrap(), foe);
+        let eoe = EoeHeader {
+            frame_type: EoeType::from_code(f4), port: b8 & 0x0F, last_fragment: flags[0], time_appended: flags[1],
+            time_request: flags[2], fragment: f6a, offset_blocks: f6b, frame_no: f4,
+        };
+        prop_assert_eq!(EoeHeader::parse(&eoe.encode()).unwrap(), eoe);
+        let soe = SoeHeader { opcode: f3, incomplete: flags[0], error: flags[1], drive: b8 >> 5, elements: b8, idn: v16 };
+        prop_assert_eq!(SoeHeader::parse(&soe.encode()).unwrap(), soe);
+        let voe = VoeHeader { vendor_id: v32, vendor_type: v16 };
+        prop_assert_eq!(VoeHeader::parse(&voe.encode()).unwrap(), voe);
+        let em = CoeEmergency { error_code: v16, error_register: b8, data: data5 };
+        prop_assert_eq!(CoeEmergency::parse(&em.encode()).unwrap(), em);
+        let info = SdoInfoHeader { opcode: b8 & 0x7F, incomplete: flags[0], fragments_left: v16 };
+        prop_assert_eq!(SdoInfoHeader::parse(&info.encode()).unwrap(), info);
+        let err = MailboxErrorReply { service: v16, detail: len };
+        prop_assert_eq!(MailboxErrorReply::parse(&err.encode()).unwrap(), err);
+    }
+
+    #[test]
+    fn sm_slicing_never_panics(ado in 0x07F0u16..0x0890, data in prop::collection::vec(any::<u8>(), 0..160)) {
+        for (n, _) in sync_managers_in(ado, &data) { prop_assert!(n < 16); }
     }
 }

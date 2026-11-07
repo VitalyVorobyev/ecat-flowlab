@@ -3,7 +3,7 @@ import { Badge, Button, cn, ErrorBox } from "@vitavision/ui";
 import { ArrowRight } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import type { DatagramDetail, FrameDetail } from "../api";
+import type { DatagramDetail, FrameDetail, MailboxInfo } from "../api";
 import { HexView } from "../components/HexView";
 import { captureTime, hex, ns } from "../lib/format";
 
@@ -13,6 +13,52 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <dt className="text-fg-muted">{label}</dt>
       <dd className="min-w-0 truncate font-mono text-fg">{children}</dd>
     </>
+  );
+}
+
+const ROLE: Record<string, string> = {
+  write: "write accepted",
+  "write rejected": "write rejected: mailbox full",
+  "write attempt": "write (as sent)",
+  read: "read",
+  "empty read": "read: mailbox empty",
+  "read attempt": "read (as sent)",
+  "status poll": "status poll",
+};
+
+function MailboxPanel({ m }: { m: MailboxInfo }) {
+  const h = m.header;
+  return (
+    <div className="mt-2 rounded border border-line bg-raised p-2 text-xs">
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <span className="font-medium text-fg">Mailbox{h ? ` · ${h.protocol}` : ""}</span>
+        <span className="text-fg-muted">{ROLE[m.role] ?? m.role}</span>
+        {m.source === "heuristic" ? (
+          <span
+            className="text-fg-subtle"
+            title="The capture has no SyncManager configuration for this station; the mailbox address was inferred from the data layout."
+          >
+            (inferred address)
+          </span>
+        ) : m.source === "hint" ? (
+          <span className="text-fg-subtle">(address from hint)</span>
+        ) : null}
+        {m.repeat ? <Badge tone="neutral">repeat</Badge> : null}
+      </div>
+      {m.summary ? <div className="mb-1 font-mono text-fg">{m.summary}</div> : null}
+      {h ? (
+        <dl className="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-1">
+          <Field label="Header">
+            {h.length} B · counter {h.counter} · channel {h.channel} · priority {h.priority}
+          </Field>
+          {m.fields.map((f) => (
+            <Field key={f.name} label={f.name}>
+              {f.value}
+            </Field>
+          ))}
+        </dl>
+      ) : null}
+    </div>
   );
 }
 
@@ -63,38 +109,7 @@ function DatagramCard({
         {d.irq !== 0 ? <Field label="IRQ">{hex(d.irq)}</Field> : null}
         {d.al_state ? <Field label="AL state">{d.al_state}</Field> : null}
       </dl>
-      {d.mailbox ? (
-        <div className="mt-2 rounded border border-line bg-raised p-2 text-xs">
-          <div className="mb-1 flex items-center gap-2">
-            <span className="font-medium text-fg">Mailbox · {d.mailbox.protocol}</span>
-            <span
-              className="text-fg-subtle"
-              title="Recognized from the data layout, not from the SyncManager configuration."
-            >
-              (heuristic)
-            </span>
-          </div>
-          <dl className="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-3 gap-y-1">
-            <Field label="Length / cnt">
-              {d.mailbox.length} B · counter {d.mailbox.counter}
-            </Field>
-            {d.mailbox.coe ? (
-              <>
-                <Field label="CoE service">{d.mailbox.coe.service}</Field>
-                {d.mailbox.coe.index !== null ? (
-                  <Field label="Object">
-                    {hex(d.mailbox.coe.index)}:{d.mailbox.coe.subindex}
-                    {d.mailbox.coe.abort ? " · ABORT" : ""}
-                  </Field>
-                ) : null}
-                {d.mailbox.coe.data !== null ? (
-                  <Field label="Data">{hex(d.mailbox.coe.data, 8)}</Field>
-                ) : null}
-              </>
-            ) : null}
-          </dl>
-        </div>
-      ) : null}
+      {d.mailbox ? <MailboxPanel m={d.mailbox} /> : null}
     </div>
   );
 }

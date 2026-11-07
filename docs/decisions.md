@@ -41,12 +41,36 @@ Architecture decisions, newest last. A decision is changed by a new entry that s
 - **ADR-017 Licence: MIT OR Apache-2.0**, matching lab-ui. Dependencies must be compatible;
   GPL-only masters (e.g. SOEM) can only be optional, separately-licensed adapters.
 
+## 2026-11-07 — M3 mailbox analysis
+
+- **ADR-018 Mailbox messages come from returning datagrams.** The working counter of the
+  returning copy is the only evidence that a write was accepted or a read carried data.
+  With unknown directions, datagrams with WKC > 0 are used and rejected/empty counts are
+  not reported.
+- **ADR-019 Mailbox addresses from SyncManager configuration first.** A data-layout heuristic
+  is a fallback only, and every channel states its source, because process data can look
+  like a mailbox header by chance.
+- **ADR-020 Wireshark as an independent reference.** Generated captures are decoded by
+  Wireshark's EtherCAT dissector in CI and compared message for message with FlowLab's counts
+  (`scripts/crosscheck-tshark.py`). Ground truth checks the generator; Wireshark checks that
+  generator and analyzer do not share a misreading of the specification.
+
 ## Open questions
 
 - Do TwinCAT / other masters' captures always show the ESC-set source-MAC bit, or are
   captures taken behind a switch / with a tap different? *Test:* collect captures from at
   least two masters and a tap; check `direction_mode`.
 - Beckhoff ET2000-style capture probes add their own header and hardware timestamps. Worth
-  supporting before M3? *Test:* obtain a sample; measure share of user captures using it.
+  supporting before validating on real captures? *Test:* obtain a sample; measure the share
+  of user captures using it.
 - Is a 50 ms in-flight window right for "unanswered" at capture end on slow cycles
   (≥ 50 ms)? *Test:* synth with a 100 ms cycle and a truncated end.
+- Do masters mix mailbox datagrams into the cyclic frame (IgH packs datagrams of several
+  domains/slaves into one Ethernet frame)? Stream detection groups by full frame layout and
+  would then split one cycle into several layouts. *Test:* IgH capture; count streams vs
+  configured domains.
+- How common is mailbox status polling via a logically mapped SyncManager status bit (FMMU on
+  0x080D) instead of FPRD? Such polls are counted as process data today. *Test:* TwinCAT capture.
+- Is "counter equal to the previous" a reliable repeat test when a master resets counters
+  after a state change? *Test:* captures across INIT → PREOP transitions on real slaves.
+

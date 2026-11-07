@@ -16,7 +16,7 @@ import { SplitPane } from "@vitavision/workbench";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
-import { api, type CaptureReport, type FrameFilter, type FrameRow } from "../api";
+import { api, type CaptureReport, type FrameFilter, type FrameRow, MAILBOX_FILTERS } from "../api";
 import { captureTime, count, ns } from "../lib/format";
 import { useAsync } from "../lib/useAsync";
 import { FrameDetailView } from "./FrameDetailView";
@@ -158,6 +158,15 @@ export function Frames({
           { value: "65535", label: "Not cyclic" },
         ]}
         onValueChange={(v) => set({ stream: v === "" ? null : Number(v) })}
+      />
+      <Select
+        aria-label="Mailbox"
+        className="w-48"
+        value={filter.mailbox ?? ""}
+        placeholder="Any traffic"
+        unsetLabel="Any traffic"
+        options={MAILBOX_FILTERS.map((m) => ({ value: m.value, label: m.label }))}
+        onValueChange={(v) => set({ mailbox: v || null })}
       />
       <form
         className="flex items-center gap-1"

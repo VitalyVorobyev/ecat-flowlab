@@ -3,6 +3,7 @@ import type { AlEvent } from "./AlEvent";
 import type { CaptureSummary } from "./CaptureSummary";
 import type { CyclicStream } from "./CyclicStream";
 import type { Finding } from "./Finding";
+import type { MailboxReport } from "./MailboxReport";
 import type { ReportMeta } from "./ReportMeta";
 import type { StationSummary } from "./StationSummary";
 import type { Utilization } from "./Utilization";
@@ -35,6 +36,10 @@ stations: Array<StationSummary>,
  * AL state requests and reports, changes only.
  */
 al_events: Array<AlEvent>, 
+/**
+ * Mailbox channels, protocols and transfers.
+ */
+mailbox: MailboxReport, 
 /**
  * Judgements against declared thresholds, and notes.
  */
