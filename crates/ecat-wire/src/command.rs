@@ -1,3 +1,5 @@
+//! Datagram commands (NOP … FRMW) and how each one interprets its address field.
+
 /// EtherCAT datagram command (ETG.1000.4, table "EtherCAT command types").
 ///
 /// Serializes as its mnemonic string (`"LRW"`, or `"CMD15"` for unknown codes).
@@ -130,6 +132,28 @@ impl Command {
             Self::Brd | Self::Bwr | Self::Brw => AddressMode::Broadcast,
             Self::Lrd | Self::Lwr | Self::Lrw => AddressMode::Logical,
         }
+    }
+
+    /// Whether every slave increments the ADP field as the datagram passes: true for
+    /// position-addressed (`APxx`, `ARMW`) and broadcast (`Bxx`) commands.
+    pub const fn increments_adp(self) -> bool {
+        matches!(self.address_mode(), AddressMode::Position | AddressMode::Broadcast)
+    }
+
+    /// The raw 32-bit address field after the datagram passed `slaves` slaves: ADP grows by one
+    /// per slave for position and broadcast commands; other addresses are unchanged.
+    pub const fn address_after(self, address: u32, slaves: u16) -> u32 {
+        if self.increments_adp() {
+            (address & 0xFFFF_0000) | ((address as u16).wrapping_add(slaves) as u32)
+        } else {
+            address
+        }
+    }
+
+    /// The part of the address field that is the same on the way out and on the way back:
+    /// ADP is cleared for commands whose ADP the slaves increment.
+    pub const fn stable_address(self, address: u32) -> u32 {
+        if self.increments_adp() { address & 0xFFFF_0000 } else { address }
     }
 
     /// Whether the command reads slave memory (the returning frame carries slave data).

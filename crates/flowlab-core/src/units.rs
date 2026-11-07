@@ -13,7 +13,8 @@ pub const FAST_ETHERNET_BPS: u64 = 100_000_000;
 
 /// Time to serialize `bytes` at `bps`, in nanoseconds (rounded up).
 pub const fn serialization_ns(bytes: u64, bps: u64) -> u64 {
-    (bytes * 8 * NS_PER_S).div_ceil(bps)
+    // u128: 10^9 ns × 8 bits overflows u64 above ~2.3 GB.
+    ((bytes as u128 * 8 * NS_PER_S as u128).div_ceil(bps as u128)) as u64
 }
 
 #[cfg(test)]

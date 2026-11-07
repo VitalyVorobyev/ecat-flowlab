@@ -85,6 +85,30 @@ fn slower_pdi_never_speeds_a_transfer_up() {
     }
 }
 
+/// With an opportunistic master a poll can still be in flight when the next cycle starts; it
+/// must continue in that cycle's budget, or a faster PDI can lose whole cycles and look slower.
+#[test]
+fn faster_pdi_never_slows_an_opportunistic_master() {
+    for protocol in [TransferProtocol::Foe, TransferProtocol::Eoe { mtu_bytes: 1500 }] {
+        for rate in [20_000_000u64, 80_000_000] {
+            let mut last = 0.0;
+            for overhead in [1_000u32, 5_000, 20_000, 50_000] {
+                let mut s = one(protocol.clone(), TransferDirection::MasterToSlave, 300_000);
+                s.capture.enabled = false;
+                s.mailbox_policy = MailboxPolicy::Opportunistic { bus_budget_percent: 90.0, turnaround_ns: 10_000 };
+                s.slaves[2].mailbox_out_bytes = 1024;
+                s.slaves[2].mailbox_in_bytes = 1024;
+                s.slaves[2].pdi.read_bps = rate;
+                s.slaves[2].pdi.write_bps = rate;
+                s.slaves[2].pdi.access_overhead_ns = overhead;
+                let d = simulate(&s, None::<Vec<u8>>).unwrap().transfers[0].duration_ns.unwrap();
+                assert!(d >= last, "{protocol:?} at {rate} bit/s: overhead {overhead} ns gave {d} < {last}");
+                last = d;
+            }
+        }
+    }
+}
+
 #[test]
 fn mailbox_policy_matters_and_is_reported() {
     let foe = |policy: MailboxPolicy, slaves: usize| {
@@ -188,4 +212,13 @@ fn shipped_specs_parse_and_validate() {
         let spec: SimSpec = serde_json::from_str(&text).unwrap_or_else(|e| panic!("{name}: {e}"));
         spec.validate().unwrap_or_else(|e| panic!("{name}: {e}"));
     }
+}
+
+#[test]
+fn eoe_needs_room_for_one_fragment_block() {
+    let mut s = one(TransferProtocol::Eoe { mtu_bytes: 1500 }, TransferDirection::MasterToSlave, 1_000);
+    s.slaves[2].mailbox_out_bytes = 40;
+    s.slaves[2].mailbox_in_bytes = 40;
+    let err = simulate(&s, None::<Vec<u8>>).unwrap_err().to_string();
+    assert!(err.contains("≥ 42 bytes"), "{err}");
 }

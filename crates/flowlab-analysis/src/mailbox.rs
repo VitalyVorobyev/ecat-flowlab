@@ -1312,7 +1312,7 @@ pub(crate) fn findings(m: &MailboxReport, out: &mut Vec<Finding>) {
 
 pub(crate) fn assumptions(m: &MailboxReport) -> Vec<String> {
     let mut a = vec![
-        "Mailbox SyncManagers come from SyncManager configuration writes in the capture (mailbox mode); messages are taken from returning datagrams at their start address with WKC > 0.".to_owned(),
+        "Each station's mailbox SyncManagers come, in this order of preference, from SyncManager configuration writes in the capture (mailbox mode), the ENI, a user hint or a heuristic; the source is reported per channel. Messages are taken from returning datagrams at the mailbox start address with WKC > 0.".to_owned(),
         "Logically mapped mailbox access and the SyncManager repeat mechanism are not interpreted; a message whose counter equals the previous one is treated as a repeat.".into(),
     ];
     if m.channels.iter().any(|c| c.source == ChannelSource::Eni) {

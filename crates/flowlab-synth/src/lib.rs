@@ -119,10 +119,13 @@ impl<W: Write> Generator<W> {
     /// Write a TX frame at `t` and, when `rx` is set, the returned frame after the round trip.
     fn exchange(&mut self, t: u64, tx: &[Dg], rx: Option<&[Dg]>) -> Result<u64, SynthError> {
         let first_index = self.index;
+        let slaves = self.n;
         let build = |src: MacAddr, dgs: &[Dg], returning: bool| -> Result<Vec<u8>, SynthError> {
             let mut b = FrameBuilder::new(MacAddr([0xFF; 6]), src);
             for (i, d) in dgs.iter().enumerate() {
-                let spec = DatagramSpec::new(d.command, first_index.wrapping_add(i as u8), d.address, &d.data);
+                // Every slave increments the ADP of position and broadcast datagrams.
+                let address = if returning { d.command.address_after(d.address, slaves) } else { d.address };
+                let spec = DatagramSpec::new(d.command, first_index.wrapping_add(i as u8), address, &d.data);
                 b.push(spec.with_wkc(if returning { d.wkc } else { 0 }))?;
             }
             Ok(b.finish())
@@ -141,7 +144,7 @@ impl<W: Write> Generator<W> {
         Ok(rtt)
     }
 
-    /// TX and a healthy RX that is identical except for `wkc`/`data` from `rx_fill`.
+    /// TX and a healthy RX: `d` as sent with its working counter cleared, and `d` as returned.
     fn simple(&mut self, t: u64, d: Dg) -> Result<(), SynthError> {
         let tx = Dg { wkc: 0, ..d.clone() };
         self.exchange(t, &[tx], Some(&[d]))?;

@@ -1,5 +1,5 @@
 //! Local HTTP server: loads captures, runs analysis, answers the UI's queries and serves the
-//! built UI. Binds to loopback by default; it has no authentication and can read any file
+//! built UI. Binds to the address it is given (`flowlab serve` defaults to loopback); it has no authentication and can read any file
 //! the user can (`POST /api/captures/open`), so it must not be exposed to a network.
 //!
 //! | Method | Path | Body / query | Response |
@@ -135,10 +135,6 @@ impl AppState {
             .ok_or_else(|| ApiError::not_found(format!("no capture {id}")))
     }
 
-    fn options_with(&self, network: Option<NetworkConfig>) -> AnalysisOptions {
-        AnalysisOptions { network: network.or_else(|| self.options.network.clone()), ..(*self.options).clone() }
-    }
-
     fn insert(&self, trace: Trace, analysis: Analysis, simulation: Option<SimResult>) -> Result<CaptureInfo, ApiError> {
         let mut store = self.inner.write().map_err(|_| ApiError::internal("state lock poisoned"))?;
         store.next_id += 1;
@@ -180,7 +176,8 @@ impl AppState {
     /// Re-analyse capture `id` with `network` (or without, when `None`) and replace it.
     pub fn set_network(&self, id: u32, network: Option<NetworkConfig>) -> Result<CaptureInfo, ApiError> {
         let old = self.get(id)?;
-        let opts = self.options_with(network);
+        // Exactly this configuration: detaching analyses without any ENI, even with `--eni`.
+        let opts = AnalysisOptions { network, ..(*self.options).clone() };
         let analysis = analyze(&old.trace, &opts);
         let entry = Self::entry(id, old.trace.clone(), analysis, old.simulation.clone(), opts.network.as_ref());
         let info = entry.info.clone();

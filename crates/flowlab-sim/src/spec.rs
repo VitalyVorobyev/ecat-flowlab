@@ -1,3 +1,5 @@
+//! The simulator's input (`SimSpec`) and its validation against what the modelled devices support.
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -177,8 +179,9 @@ pub enum TransferProtocol {
         /// Chunks that may be unacknowledged.
         #[serde(default = "default_window")]
         window: u32,
-        /// Cycles without acknowledgement progress before resending from the first
-        /// unacknowledged chunk.
+        /// Chunk updates without acknowledgement progress before resending from the first
+        /// unacknowledged chunk: master cycles for master → slave, the slave application's
+        /// process-data updates for slave → master.
         #[serde(default = "default_retransmit")]
         retransmit_after_cycles: u32,
     },
@@ -377,13 +380,16 @@ impl SimSpec {
                     if s.mailbox_out_bytes == 0 {
                         return Err(format!("transfer {k}: slave {} ({}) has no mailbox", t.slave, s.name));
                     }
-                    if let TransferProtocol::Eoe { mtu_bytes } = other
-                        && !(68..=1500).contains(mtu_bytes)
-                    {
-                        return Err(format!("transfer {k}: mtu_bytes must be within 68..=1500"));
-                    }
-                    if matches!(other, TransferProtocol::CoeSegmented) && t.payload_bytes > u32::MAX as u64 {
-                        return Err(format!("transfer {k}: an SDO cannot carry more than 4 GiB"));
+                    if let TransferProtocol::Eoe { mtu_bytes } = other {
+                        if !(68..=1500).contains(mtu_bytes) {
+                            return Err(format!("transfer {k}: mtu_bytes must be within 68..=1500"));
+                        }
+                        // Mailbox header (6) + EoE header (4) + at least one 32-byte block.
+                        if s.mailbox_out_bytes.min(s.mailbox_in_bytes) < 42 {
+                            return Err(format!(
+                                "transfer {k}: EoE needs mailboxes of ≥ 42 bytes (one 32-byte fragment)"
+                            ));
+                        }
                     }
                 }
             }
