@@ -1,0 +1,19 @@
+[package]
+name = "flowlab-capture"
+description = "pcap/pcapng reading and writing, and an indexed EtherCAT trace store."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ecat-wire.workspace = true
+flowlab-core.workspace = true
+serde.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+ts-rs = "12"
+
+[lints]
+workspace = true

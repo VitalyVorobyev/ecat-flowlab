@@ -1,0 +1,15 @@
+[package]
+name = "flowlab-core"
+description = "Shared units, provenance and report envelope for ECAT FlowLab."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+ts-rs = { version = "12", features = ["serde-compat"] }
+
+[lints]
+workspace = true

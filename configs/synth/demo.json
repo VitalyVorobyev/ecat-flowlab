@@ -1,0 +1,20 @@
+{
+  "seed": 42,
+  "description": "Demo line: coupler, DI/DO terminals, servo drive; 1 ms cycle",
+  "slaves": [
+    { "name": "EK-coupler", "outputs_bytes": 0, "inputs_bytes": 0, "mailbox": false },
+    { "name": "DI-16", "outputs_bytes": 0, "inputs_bytes": 2, "mailbox": false },
+    { "name": "DO-16", "outputs_bytes": 2, "inputs_bytes": 0, "mailbox": false },
+    { "name": "AI-4", "outputs_bytes": 0, "inputs_bytes": 8, "mailbox": true },
+    { "name": "Servo-1", "outputs_bytes": 12, "inputs_bytes": 16, "mailbox": true },
+    { "name": "Servo-2", "outputs_bytes": 12, "inputs_bytes": 16, "mailbox": true }
+  ],
+  "cycle_time_us": 1000,
+  "cycles": 5000,
+  "tx_jitter_ns": 4000,
+  "faults": {
+    "lost_frame_probability": 0.002,
+    "wkc_error_probability": 0.001,
+    "skipped_cycle_probability": 0.001
+  }
+}

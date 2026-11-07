@@ -1,0 +1,21 @@
+{
+  "seed": 1,
+  "description": "Fault-free 250 us cycle with 12 compact I/O slaves",
+  "slaves": [
+    { "name": "coupler", "mailbox": false },
+    { "name": "di-1", "inputs_bytes": 2, "mailbox": false },
+    { "name": "di-2", "inputs_bytes": 2, "mailbox": false },
+    { "name": "di-3", "inputs_bytes": 2, "mailbox": false },
+    { "name": "do-1", "outputs_bytes": 2, "mailbox": false },
+    { "name": "do-2", "outputs_bytes": 2, "mailbox": false },
+    { "name": "do-3", "outputs_bytes": 2, "mailbox": false },
+    { "name": "ai-1", "inputs_bytes": 8 },
+    { "name": "ai-2", "inputs_bytes": 8 },
+    { "name": "ao-1", "outputs_bytes": 8 },
+    { "name": "enc-1", "inputs_bytes": 6, "outputs_bytes": 2 },
+    { "name": "drive", "inputs_bytes": 20, "outputs_bytes": 16 }
+  ],
+  "cycle_time_us": 250,
+  "cycles": 20000,
+  "tx_jitter_ns": 1500
+}

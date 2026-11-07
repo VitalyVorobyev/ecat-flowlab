@@ -1,0 +1,28 @@
+[package]
+name = "flowlab-server"
+description = "Local HTTP API and static UI host for ECAT FlowLab."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+flowlab-core.workspace = true
+flowlab-capture.workspace = true
+flowlab-analysis.workspace = true
+flowlab-synth.workspace = true
+axum.workspace = true
+tokio.workspace = true
+tower-http.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+ts-rs = "12"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+
+[lints]
+workspace = true

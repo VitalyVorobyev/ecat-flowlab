@@ -1,0 +1,13 @@
+{
+  "seed": 7,
+  "description": "Non-real-time master: 2 ms cycle with large send jitter and frequent overruns",
+  "slaves": [
+    { "name": "coupler", "mailbox": false },
+    { "name": "io", "inputs_bytes": 4, "outputs_bytes": 4, "mailbox": false },
+    { "name": "drive", "inputs_bytes": 16, "outputs_bytes": 12 }
+  ],
+  "cycle_time_us": 2000,
+  "cycles": 3000,
+  "tx_jitter_ns": 180000,
+  "faults": { "lost_frame_probability": 0.0005, "skipped_cycle_probability": 0.01 }
+}

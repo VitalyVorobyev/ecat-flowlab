@@ -1,0 +1,18 @@
+@import "tailwindcss";
+@import "@vitavision/ui/fonts.css";
+@import "@vitavision/ui/styles.css";
+@import "@vitavision/workbench/styles.css";
+@import "@vitavision/charts/styles.css";
+@import "@vitavision/forms/styles.css";
+
+@source "./";
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--ground);
+}

@@ -1,0 +1,5 @@
+[env]
+# `cargo test` exports the UI's API types (ts-rs) here.
+TS_RS_EXPORT_DIR = { value = "ui/src/api/gen", relative = true }
+# All u64/i64 values the API sends are below 2^53 (times are relative to capture start).
+TS_RS_LARGE_INT = "number"

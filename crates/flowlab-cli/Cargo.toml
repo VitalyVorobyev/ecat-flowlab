@@ -1,0 +1,28 @@
+[package]
+name = "flowlab-cli"
+description = "ECAT FlowLab command line: synth, analyze, serve."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "flowlab"
+path = "src/main.rs"
+
+[dependencies]
+flowlab-core.workspace = true
+flowlab-capture.workspace = true
+flowlab-analysis.workspace = true
+flowlab-synth.workspace = true
+flowlab-server.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+open.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,22 @@
+[package]
+name = "flowlab-analysis"
+description = "EtherCAT capture analysis: cyclic streams, timing, working counters, utilization, stations."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ecat-wire.workspace = true
+flowlab-core.workspace = true
+flowlab-capture.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ts-rs = "12"
+
+[dev-dependencies]
+flowlab-synth.workspace = true
+
+[lints]
+workspace = true
