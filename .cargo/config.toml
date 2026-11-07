@@ -3,3 +3,11 @@
 TS_RS_EXPORT_DIR = { value = "ui/src/api/gen", relative = true }
 # All u64/i64 values the API sends are below 2^53 (times are relative to capture start).
 TS_RS_LARGE_INT = "number"
+
+[alias]
+# Developer commands (xtask/): build and serve the UI, run the CI checks, build the site.
+xtask = "run --quiet -p xtask --"
+ui = "run --quiet -p xtask -- ui"
+ui-dev = "run --quiet -p xtask -- ui-dev"
+ci = "run --quiet -p xtask -- ci"
+site = "run --quiet -p xtask -- site"

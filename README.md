@@ -17,9 +17,10 @@ Requires Rust ≥ 1.88 and [Bun](https://bun.sh) ≥ 1.4. It needs no EtherCAT h
 or libpcap.
 
 ```bash
-(cd ui && bun install && bun run build)
-cargo run --release -p flowlab-cli -- synth configs/synth/demo.json -o results/demo.pcapng
-cargo run --release -p flowlab-cli -- serve results/demo.pcapng --open     # http://127.0.0.1:7878
+cargo ui                      # builds the UI if needed, serves a demo capture, opens http://127.0.0.1:7878
+cargo ui my-capture.pcapng    # …or your own captures
+cargo ui-dev                  # UI with hot reload (Vite on :5173) against the API
+cargo ci                      # the checks CI runs
 ```
 
 On the command line:

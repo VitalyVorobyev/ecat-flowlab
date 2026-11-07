@@ -13,13 +13,22 @@ No EtherCAT hardware, network adapter, root rights or libpcap are needed.
 ```bash
 git clone https://github.com/VitalyVorobyev/ecat-flowlab
 cd ecat-flowlab
-(cd ui && bun install && bun run build)          # once; the server serves ui/dist
-cargo run --release -p flowlab-cli -- synth configs/synth/demo.json -o results/demo.pcapng
-cargo run --release -p flowlab-cli -- serve results/demo.pcapng --open
+cargo ui
 ```
 
-The UI runs at <http://127.0.0.1:7878>. Drop a `.pcap` or `.pcapng` onto it, open a path on this
-machine, or generate a capture from the header. For a shorter command, install the binary:
+`cargo ui` installs the UI's dependencies and builds it when the sources changed, generates the
+synthetic demo capture on first use, and serves both on <http://127.0.0.1:7878>, opening a
+browser. Drop a `.pcap` or `.pcapng` onto it, open a path on this machine, or generate a capture
+from the header.
+
+| Command | Does |
+|---|---|
+| `cargo ui [--no-open] [CAPTURES…] [-- SERVE OPTIONS]` | build the UI if needed and serve it with the given captures (default: the demo), e.g. `cargo ui run.pcapng -- --eni network.xml --port 8080` |
+| `cargo ui-dev [--no-open] [CAPTURES…]` | the API server plus Vite's dev server on <http://localhost:5173>, reloading on UI changes |
+| `cargo ci` | the checks CI runs: rustfmt, clippy, tests, generated types, rustdoc, UI lint/types/tests/build, the book |
+| `cargo site` | the Pages site (start page, findings, book, API docs) in `_site/` |
+
+These are cargo aliases (`.cargo/config.toml`) for the workspace's `xtask` crate. For a shorter command, install the binary:
 `cargo install --path crates/flowlab-cli`, then use `flowlab …`.
 
 ## A first analysis
