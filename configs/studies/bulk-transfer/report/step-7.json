@@ -1,0 +1,84 @@
+{
+  "seed": 1,
+  "description": "7. PDO channel 1024 B per 500 µs cycle instead",
+  "link_bps": 100000000,
+  "cycle_time_us": 500,
+  "master_jitter_ns": 2000,
+  "slaves": [
+    {
+      "name": "coupler",
+      "outputs_bytes": 0,
+      "inputs_bytes": 0,
+      "forwarding_delay_ns": 700,
+      "mailbox_out_bytes": 0,
+      "mailbox_in_bytes": 0,
+      "dpram_bytes": 4096,
+      "pdi": {
+        "read_bps": 20000000,
+        "write_bps": 20000000,
+        "access_overhead_ns": 5000,
+        "mailbox_access": "whole_buffer"
+      },
+      "app_processing_ns": 20000
+    },
+    {
+      "name": "io",
+      "outputs_bytes": 8,
+      "inputs_bytes": 8,
+      "forwarding_delay_ns": 700,
+      "mailbox_out_bytes": 0,
+      "mailbox_in_bytes": 0,
+      "dpram_bytes": 4096,
+      "pdi": {
+        "read_bps": 20000000,
+        "write_bps": 20000000,
+        "access_overhead_ns": 5000,
+        "mailbox_access": "whole_buffer"
+      },
+      "app_processing_ns": 20000
+    },
+    {
+      "name": "bulk-endpoint",
+      "outputs_bytes": 8,
+      "inputs_bytes": 8,
+      "forwarding_delay_ns": 700,
+      "mailbox_out_bytes": 128,
+      "mailbox_in_bytes": 128,
+      "dpram_bytes": 4096,
+      "pdi": {
+        "read_bps": 20000000,
+        "write_bps": 20000000,
+        "access_overhead_ns": 5000,
+        "mailbox_access": "whole_buffer"
+      },
+      "app_processing_ns": 20000
+    }
+  ],
+  "mailbox_policy": {
+    "kind": "fixed_quota",
+    "accesses_per_cycle": 2
+  },
+  "transfers": [
+    {
+      "slave": 2,
+      "direction": "master_to_slave",
+      "payload_bytes": 10000000,
+      "protocol": {
+        "kind": "pdo_channel",
+        "bytes_per_cycle": 1024,
+        "window": 2,
+        "retransmit_after_cycles": 8
+      },
+      "start_ms": 0.0
+    }
+  ],
+  "max_duration_ms": 900000,
+  "faults": {
+    "frame_loss_probability": 0.0
+  },
+  "capture": {
+    "enabled": false,
+    "max_frames": 200000
+  },
+  "start_unix_s": 1767225600
+}

@@ -1,3 +1,5 @@
+//! SyncManager configuration registers (0x0800 + 8·n): start address, length, mode, direction.
+
 use crate::error::{WireError, le16, need};
 
 /// First SyncManager register (`SM0` start address).

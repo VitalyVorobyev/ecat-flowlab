@@ -2,7 +2,8 @@
 //!
 //! * [`CaptureFile::parse`] reads classic pcap (µs and ns) and pcapng (any `if_tsresol`,
 //!   `if_tsoffset`, multiple sections and interfaces) from memory. No libpcap.
-//! * [`PcapNgWriter`] writes pcapng with ns timestamps and a FlowLab provenance marker.
+//! * [`PcapNgWriter`] writes pcapng with ns timestamps and a section comment (where the
+//!   generators put the provenance marker).
 //! * [`Trace::build`] decodes every frame with `ecat-wire` once and keeps a compact
 //!   per-frame / per-datagram index that analysis and the server query.
 

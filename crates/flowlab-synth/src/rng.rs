@@ -1,3 +1,5 @@
+//! The generator's own PRNG, so captures stay byte-identical across dependency upgrades.
+
 /// xoshiro256** seeded by splitmix64. Implemented here so generated captures stay
 /// byte-identical across dependency upgrades.
 #[derive(Debug, Clone)]

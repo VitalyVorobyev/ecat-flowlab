@@ -84,7 +84,8 @@ pub struct WkcSlot {
     pub position: u16,
     /// Datagram label, e.g. `"LRW 0x00010000"`.
     pub label: String,
-    /// Expected value: the most frequent observed value (no configuration is known).
+    /// Expected value: the ENI's configured `Cnt` when `expected_from` is `"eni"`, else the most
+    /// frequent value on returning frames.
     pub expected: u16,
     /// Returning frames with a different value.
     pub mismatches: u64,

@@ -17,7 +17,7 @@ direction: string | null,
  */
 station: number | null, 
 /**
- * The frame belongs to this cyclic stream; `65535` = to none.
+ * The frame belongs to this cyclic stream; `65535` = in no stream.
  */
 stream: number | null, 
 /**

@@ -1,3 +1,5 @@
+//! Frame encoding: the inverse of [`crate::parse_frame`], used by the generator and the simulator.
+
 use crate::command::Command;
 use crate::datagram::{DATAGRAM_HEADER_LEN, ECAT_HEADER_LEN, EcatHeader, EcatPduType, WKC_LEN};
 use crate::error::WireError;

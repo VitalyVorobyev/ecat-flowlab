@@ -1,6 +1,6 @@
 [package]
 name = "flowlab-cli"
-description = "ECAT FlowLab command line: synth, analyze, serve."
+description = "ECAT FlowLab command line: analyze, synth, simulate, study, plan, esi, serve, schema."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -1,177 +1,57 @@
 # ECAT FlowLab
 
-An EtherCAT analysis workbench: load a capture of EtherCAT traffic, and see the cycle, the
-jitter, the round trip, the working counters, the bus load and the slaves' state machines —
-in a browser UI or as a JSON report. Synthetic captures with known ground truth come built in,
-so every number can be checked against what was put in. Simulation and transport studies
-(EoE, FoE, PDO bulk transfer) build on the same pipeline.
+An EtherCAT analysis workbench. Load a capture of EtherCAT traffic and see the cycle, jitter,
+round trips, working counters, bus load, the slaves' state machines and their mailbox
+conversations (CoE, FoE, EoE). It runs in a browser UI or as a JSON report. A discrete-event
+simulator, a capture generator with ground truth, a bus-budget planner and parameter studies
+build on the same decoder, so measured and simulated traffic compare like for like.
 
-**Status:** M0–M6 — capture analysis, mailbox analysis, a discrete-event simulator, ESI/ENI
-import, a bus-budget planner, parameter studies with calibration and side-by-side comparison;
-CLI, local server and UI. M7 (live capture, master adapters, lab) needs hardware. See
-[the roadmap](docs/roadmap.md).
+**Documentation:** <https://vitalyvorobyev.github.io/ecat-flowlab/> (source in [`book/`](book/src/SUMMARY.md)).
 
 ## Quick start
 
-Requirements: Rust ≥ 1.88 and [Bun](https://bun.sh) ≥ 1.4. No root, no network adapter, no
-libpcap, no EtherCAT hardware.
+Requires Rust ≥ 1.88 and [Bun](https://bun.sh) ≥ 1.4. It needs no EtherCAT hardware, root rights
+or libpcap.
 
 ```bash
-# Build the UI once, then serve it with a demo capture loaded
 (cd ui && bun install && bun run build)
 cargo run --release -p flowlab-cli -- synth configs/synth/demo.json -o results/demo.pcapng
-cargo run --release -p flowlab-cli -- serve results/demo.pcapng --open
+cargo run --release -p flowlab-cli -- serve results/demo.pcapng --open     # http://127.0.0.1:7878
 ```
 
-The UI runs at <http://127.0.0.1:7878>. Drop any `.pcap` / `.pcapng` onto it, open a path on
-this machine, or generate a synthetic capture from the header.
-
-The same analysis on the command line:
+On the command line:
 
 ```bash
-cargo run -p flowlab-cli -- analyze results/demo.pcapng --out results/demo.json
+flowlab analyze capture.pcapng --out report.json [--eni network.xml]
+flowlab simulate configs/sim/example.json -o sim.pcapng --result sim.json
+flowlab study configs/studies/bulk-transfer/foe-sweep.json
+flowlab plan
 ```
 
-```text
-demo.pcapng  [SYNTHETIC]  sha256 8adbd44c3ea96bc3
-  10859 frames (10859 EtherCAT, 0 other, 0 malformed), 30823 datagrams over 5.035 s
-  directions: MacLocalBit; 5433 TX, 5426 RX, 5426 paired, 7 unanswered; slaves responding: 6
-  utilization TX mean 1.33 %, peak 7.20 % (bins of 10.000 ms)
-  stream 0: FRMW 0x1001:0x0910 · LRW 0x00010000 · BRD 0x0130
-    4994 frames, period 1.000 ms, |jitter| p99 10.15 µs, missed 6, unanswered 7, rtt p50 16.52 µs
-  stations: 0x1001 0x1002 0x1003 0x1004 0x1005 0x1006
-  mailbox: 3 stations; messages CoE 24↓/25↑, EoE 56↓/56↑, FoE 37↓/37↑
-    SDO: 15 transfers, 12 ok, 3 aborted, 0 unfinished, 0 protocol errors; duration p50 3.000 ms
-    FoE write 'firmware.bin' station 0x1004: 4096 B in 36 packets, ok, 219.9 kbit/s
-    EoE: 16 frames reassembled (4720 B to slaves, 4720 B from slaves), 0 errors
-  [DEFECT] Stream 0 (1.000 ms): 7 frames did not return
-  [DEFECT] Stream 0 (1.000 ms): 5 working-counter mismatches
-  [WARN] Stream 0 (1.000 ms): 6 missed cycles
-  [info] Synthetic capture
-  [WARN] 3 SDO transfers aborted
-  [WARN] 1 CoE emergency
-  [info] 5 mailbox writes rejected
-```
-
-The generator's ground truth for that file (`--truth`) is 7 lost frames, 5 WKC errors,
-6 skipped cycles, 12 completed and 3 aborted SDO transfers, one 4096-byte FoE write, 16 EoE
-frames and 5 rejected mailbox writes. The FoE goodput is a property of the generator's
-polling model (one mailbox access per slave per 1 ms cycle, response after two polls), not
-a measurement of any device.
-
-`--eoe-out eoe.pcapng` writes the Ethernet frames tunnelled by EoE as their own capture.
-When a capture starts after the mailboxes were configured, give their addresses with
-`--mailbox 0x1001=0x1000,0x1080` (repeatable; also on `flowlab serve`).
-
-## Network configuration and planning
-
-```bash
-# Judge working counters against the master's configuration instead of the most frequent value
-cargo run -p flowlab-cli -- analyze capture.pcapng --eni network.xml
-cargo run -p flowlab-cli -- esi vendor-devices.xml          # what the devices declare
-cargo run -p flowlab-cli -- plan                            # frame layout and budget of a network
-```
-
-With an ENI (ETG.2100, e.g. exported from TwinCAT), each cyclic datagram it lists is judged
-against its configured working counter, stations get their names, and mailboxes missing from
-the capture's SyncManager writes are known. In the UI: **Attach ENI…** on the Overview, and
-the **Planner** view, which imports ESI files (ETG.2000) and lays out the cyclic frames with
-their wire time, idle time, mailbox headroom and capability checks.
-
-## Simulation
-
-```bash
-cargo run --release -p flowlab-cli -- simulate configs/studies/bulk-transfer/{smoke,large-payload,mixed-load}.json
-cargo run --release -p flowlab-cli -- simulate configs/sim/example.json -o results/sim.pcapng --result results/sim.json
-```
-
-`flowlab-sim` models a master, the link and each slave's ESC (mailbox and process-data
-SyncManagers, ESC RAM) and PDI (the slave application's access to the ESC, e.g. SPI), and runs
-bulk transfers over EoE, FoE, CoE or a process-data channel. For each transfer it reports time,
-goodput, the time the payload alone needs on the link, a plain-Ethernet TCP reference, the
-protocol work (messages, rejected writes, empty polls, resent chunks), PDI load and a SHA-256
-check. Its frames are written as a capture labelled **Simulated** and analysed like any other.
-In the UI: **Simulate** in the header, then the **Sim run** view. Every number is a model
-output that depends on the spec's parameters — PDI rate and overhead above all — until it is
-calibrated against measurements.
-
-## Studies and calibration
-
-```bash
-cargo run --release -p flowlab-cli -- study configs/studies/bulk-transfer/foe-sweep.json
-cargo run --release -p flowlab-cli -- study calibrate.json --capture lab.pcapng --result fit.json
-```
-
-A study varies fields of a simulator spec (JSON pointers; grid or Latin hypercube), checks
-constraints and reports the Pareto frontier of its objectives. With targets — values measured
-directly or read from an analysed capture (FoE/SDO durations, EoE frame times, cycle period) —
-it is a calibration: the best run and its residuals. In the UI: the **Study** view (scatter of
-the runs, *Simulate this run*) and **Compare**, which puts two captures — say a lab measurement
-and a simulation of it — side by side, each column with its provenance.
-
-## What it analyses
-
-| View | From the capture |
-|---|---|
-| **Overview** | Headline numbers, findings against declared thresholds, link load over time, datagrams by command |
-| **Timing** | Per cyclic stream: least-squares period, send-time jitter against the cycle grid, interval distribution, TX→RX round trip, gaps and missed cycles, working counters per datagram |
-| **Frames** | Every frame, filterable by direction, command, stream, station, mailbox protocol or problems; decoded datagrams (register names, AL states, mailbox messages) beside a hex view |
-| **Stations** | Configured station addresses, ring positions, reads/writes, no-response counts, AL state over time |
-| **Planner** | Frame layout, wire time, ring delay, idle time and bus-side mailbox headroom of a network; ESC RAM, mailbox size and protocol checks; devices imported from ESI |
-| **Study** | Runs of a parameter study: Pareto frontier scatter, all runs with objectives and reasons for rejection, calibration residuals |
-| **Compare** | Two captures side by side: timing, losses, WKC, load, mailbox and transfer quantities, ratio B/A |
-| **Sim run** | For a simulated run: transfers with time, goodput, link bound, TCP reference and integrity; protocol work; PDI load and ESC RAM per slave; model assumptions |
-| **Mailbox** | Per-slave mailbox SyncManagers and their use (accepted/rejected writes, empty reads, polling cadence); traffic per protocol; CoE SDO transfers with outcome, abort codes and duration; emergencies; FoE transfers with goodput; EoE frames reassembled (downloadable as pcapng) |
-
-How each number is inferred — and what it assumes — is written into every report
-(`meta.assumptions`) and shown in the UI. Notably: expected working counters are the most
-frequent observed value unless an ENI is given, and TX/RX are told apart by the
-locally-administered bit ESCs set in the source MAC of returning frames.
+(`cargo install --path crates/flowlab-cli` installs `flowlab`.)
 
 ## Provenance
 
-Every result says where its data came from: **Measured** (a capture file), **Simulated**
-(the model) or **Synthetic** (`flowlab synth`). They are never mixed into one number.
-FlowLab writes the marker into the pcapng section comment of everything it generates.
-
-## Repository
-
-```text
-crates/
-  ecat-wire/         EtherCAT codec: frames, datagrams, mailbox, CoE, registers. No I/O.
-  flowlab-core/      provenance, report metadata, units
-  flowlab-capture/   pcap/pcapng reader + writer, indexed trace, direction inference
-  flowlab-analysis/  streams, timing, WKC, utilization, stations; frame queries
-  flowlab-synth/     deterministic synthetic captures with ground truth
-  flowlab-sim/       discrete-event simulator: master, link, ESC, PDI; bulk transfers
-  flowlab-devices/   ESI/ENI readers, ENI writer, bus-budget planner
-  flowlab-study/     parameter studies: sweeps, Pareto frontier, calibration
-  flowlab-server/    local HTTP API + static UI (axum)
-  flowlab-cli/       `flowlab synth | analyze | simulate | study | plan | esi | serve | schema`
-ui/                  React 19 + Vite + Tailwind 4 on the @vitavision lab-ui packages
-configs/synth/       example generator specs
-configs/sim/         example simulator spec; configs/studies/: study scenarios
-docs/                architecture, roadmap, decisions, studies/
-```
-
-## Development
-
-```bash
-cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
-cd ui && bun run lint && bun run typecheck && bun run test:run && bun run build
-```
-
-`cargo test` also regenerates the UI's API types in `ui/src/api/gen/` (ts-rs). With Wireshark's
-`tshark` installed, `scripts/crosscheck-tshark.py CAPTURE REPORT.json` compares FlowLab's mailbox
-decoding with Wireshark's EtherCAT dissector (CI runs it on the demo capture). For UI work,
-run `flowlab serve` on :7878 and `bun run dev` in `ui/` (Vite proxies `/api`).
+Every result is labelled **Measured** (a capture file), **Simulated** (the model) or
+**Synthetic** (the generator), and the kinds are never mixed into one number. Every inference
+is listed in the report's assumptions.
 
 ## Safety
 
-FlowLab only *reads* captures. Future live-capture and master backends will require explicit
-opt-in, an isolated network and an interface name — never a second master on a running
-production segment. `flowlab serve` binds to loopback: it can read any file you can and has
-no authentication.
+FlowLab reads files and never sends frames. `flowlab serve` has no authentication and can read
+any file you can, so keep it on loopback.
+
+## Repository
+
+| Path | Content |
+|---|---|
+| `crates/` | `ecat-wire` (codec), `flowlab-core`, `-capture`, `-analysis`, `-synth`, `-sim`, `-devices`, `-study`, `-server`, `-cli` |
+| `ui/` | React UI on the `@vitavision` lab-ui packages |
+| `configs/` | Example generator, simulator and study specs |
+| `book/` | The documentation (mdBook) |
+| `scripts/` | Wireshark cross-check, study report generator |
+
+Contributing: see [the book's chapter](book/src/workspace/contributing.md).
 
 ## License
 

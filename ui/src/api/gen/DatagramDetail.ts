@@ -55,6 +55,6 @@ expected_wkc: number | null,
  */
 al_state: string | null, 
 /**
- * Mailbox content, if the data looks like a mailbox.
+ * Mailbox content, if the datagram accesses a known mailbox channel.
  */
 mailbox: MailboxInfo | null, };

@@ -1,21 +1,19 @@
-Simulator specs (`SimSpec`, see `flowlab schema sim`) for the
-[bulk-transfer study](../../../docs/studies/bulk-transfer/README.md). Run them side by side:
+Simulator and study specs for the
+[bulk-transfer study](https://vitalyvorobyev.github.io/ecat-flowlab/studies/bulk-transfer/index.html)
+(`book/src/studies/bulk-transfer/`). Results are simulated, never measured.
 
-```bash
-cargo run --release -p flowlab-cli -- simulate configs/studies/bulk-transfer/{smoke,large-payload,mixed-load}.json
-```
-
-| Spec | What it compares |
+| Spec | What it runs |
 |---|---|
 | `smoke.json` | 65,536 B master → slave by EoE, FoE, CoE and a 256 B/cycle PDO channel at 1 ms |
-| `large-payload.json` | 10,000,000 B master → slave by FoE, then EoE, at 500 µs (no capture written) |
-| `foe-sweep.json` | A study (`flowlab study`): mailbox size × PDI rate × policy for a 100 kB FoE write; Pareto frontier of time vs link load |
+| `large-payload.json` | 10,000,000 B master → slave by FoE, then EoE, at 500 µs |
 | `mixed-load.json` | 10,000,000 B slave → master by EoE next to 768 B of cyclic process data at 250 µs |
+| `foe-sweep.json` | A study: mailbox size × PDI rate × policy for a 100 kB FoE write; Pareto frontier of time vs link load |
+| `report/` | The report's sweeps and steps, written by `scripts/bulk-transfer-report.py` — do not edit by hand |
 
-They replace the starter design's scenario files (kept verbatim in
-`docs/studies/bulk-transfer/archive/configs/`). Changes in the migration: the abstract
-`synthetic_mailbox` transport became explicit protocols; `mode` was dropped (provenance is a
-property of results, not inputs); `mailbox_services_per_cycle: 0.5` had no defined meaning and is
-modelled as a round-robin policy; the ESC now has RAM and a PDI. Every parameter — especially the
-PDI rate and overhead, which dominate several results — is an assumption until calibrated
-against a lab capture. Results are simulated, not measured.
+```bash
+flowlab simulate configs/studies/bulk-transfer/{smoke,large-payload,mixed-load}.json
+flowlab study configs/studies/bulk-transfer/foe-sweep.json
+```
+
+Every parameter, above all the PDI rate and per-access overhead, is an assumption until it is
+calibrated against a capture of the real system.

@@ -70,7 +70,8 @@ pub struct StudyResult {
     pub feasible: u32,
     /// Indices of the Pareto-optimal runs.
     pub pareto: Vec<u32>,
-    /// Best run: smallest fit error for a calibration, else the best on the first objective.
+    /// Best run, chosen among the Pareto-optimal runs: smallest fit error for a calibration, else
+    /// the best on the first objective. `None` without objectives and targets.
     pub best: Option<u32>,
     /// Calibration residuals at the best run.
     pub residuals: Vec<Residual>,

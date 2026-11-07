@@ -1,3 +1,5 @@
+//! CANopen over EtherCAT: the CoE header and the SDO header that follows it.
+
 use crate::error::{WireError, le16, le32, need};
 
 /// CoE service (upper 4 bits of the CoE header).

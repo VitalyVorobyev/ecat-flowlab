@@ -1,0 +1,20 @@
+[book]
+title = "ECAT FlowLab"
+description = "EtherCAT capture analysis, simulation and transport studies"
+authors = ["Vitaly Vorobyev"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "build"
+create-missing = false
+
+[output.html]
+git-repository-url = "https://github.com/VitalyVorobyev/ecat-flowlab"
+edit-url-template = "https://github.com/VitalyVorobyev/ecat-flowlab/edit/main/book/{path}"
+site-url = "/ecat-flowlab/"
+no-section-label = false
+
+[output.html.fold]
+enable = true
+level = 1

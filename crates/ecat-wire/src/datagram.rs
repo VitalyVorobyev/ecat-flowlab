@@ -1,3 +1,5 @@
+//! The EtherCAT header and the chain of datagrams it carries, parsed without allocation.
+
 use crate::command::{AddressMode, Command};
 use crate::error::{WireError, le16, le32, need};
 

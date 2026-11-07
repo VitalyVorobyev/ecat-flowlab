@@ -8,6 +8,17 @@
 //!
 //! Every number is a simulation result; a calibration says how well the model can reproduce
 //! a measurement, not that its parameters are the physical ones.
+//!
+//! ```no_run
+//! use flowlab_study::{StudySpec, run_study};
+//!
+//! // Mailbox size × PDI rate × master policy for a 100 kB FoE write (24 simulations).
+//! let result = run_study(&StudySpec::example(), None).unwrap();
+//! for &i in &result.pareto {
+//!     let run = &result.runs[i as usize];
+//!     println!("{:?} → {:?}", run.values, run.objectives);
+//! }
+//! ```
 
 mod run;
 mod spec;

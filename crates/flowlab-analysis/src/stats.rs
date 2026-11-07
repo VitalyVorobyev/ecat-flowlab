@@ -1,3 +1,5 @@
+//! Distributions (percentiles, mean, σ) and fixed-width histograms of samples.
+
 use serde::Serialize;
 use ts_rs::TS;
 

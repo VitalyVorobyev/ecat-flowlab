@@ -1,3 +1,5 @@
+//! Application-layer (AL) states and the AL control / status byte.
+
 /// Application-layer state of an EtherCAT slave.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
