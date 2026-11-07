@@ -65,6 +65,9 @@ From the module documentation of `crates/flowlab-server/src/lib.rs`:
 | GET | `/api/sim/schema` | | JSON Schema of `SimSpec` |
 | GET | `/api/sim/example` | | `SimSpec` |
 | POST | `/api/simulate` | `SimSpec` | `CaptureInfo` (capture of the run; result via `/simulation`) |
+| GET | `/api/sim/presets` | | `SimPreset[]` |
+| POST | `/api/sim/run` | `SimSpec` | `SimResult` (no capture is kept) |
+| POST | `/api/sim/what-if` | `SimSpec` | `WhatIfResult` |
 
 Handler errors are `{ "error": "…" }` with status 400 (bad input, including a spec the simulator
 or study rejects), 404 (unknown capture or frame) or 500. Requests axum rejects before a handler

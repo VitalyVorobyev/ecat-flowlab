@@ -18,21 +18,24 @@ import { useCallback, useEffect, useState } from "react";
 
 import { api, type CaptureInfo, errorMessage, type FrameFilter, NO_FILTER } from "../api";
 import { ProvenanceBadge } from "../components/ProvenanceBadge";
-import { SimulateDialog, SynthDialog } from "../components/SynthDialog";
+import { SynthDialog } from "../components/SynthDialog";
 import { count, ns } from "../lib/format";
 import { useAsync } from "../lib/useAsync";
+import { useScenario } from "../scenario/useScenario";
 import { CAPTURE_ACCEPT, Captures } from "../screens/Captures";
 import { Compare } from "../screens/Compare";
 import { Frames, type FramesTarget } from "../screens/Frames";
 import { Mailbox } from "../screens/Mailbox";
 import { Overview } from "../screens/Overview";
 import { Planner } from "../screens/Planner";
+import { Scenario } from "../screens/Scenario";
 import { Simulation } from "../screens/Simulation";
 import { Stations } from "../screens/Stations";
 import { Study } from "../screens/Study";
 import { Timing } from "../screens/Timing";
 
 export type View =
+  | "simulate"
   | "captures"
   | "overview"
   | "timing"
@@ -44,6 +47,34 @@ export type View =
   | "study"
   | "compare";
 
+const VIEWS: readonly View[] = [
+  "simulate",
+  "captures",
+  "overview",
+  "timing",
+  "frames",
+  "stations",
+  "mailbox",
+  "simulation",
+  "planner",
+  "study",
+  "compare",
+];
+/** Views that need a selected capture. */
+const CAPTURE_VIEWS: readonly View[] = [
+  "overview",
+  "timing",
+  "frames",
+  "stations",
+  "mailbox",
+  "simulation",
+];
+
+function viewFromHash(): View | null {
+  const v = window.location.hash.replace(/^#\/?/, "") as View;
+  return VIEWS.includes(v) ? v : null;
+}
+
 const DIRECTIONS = {
   mac_local_bit: "directions: MAC bit",
   wkc_heuristic: "directions: WKC heuristic",
@@ -53,15 +84,24 @@ const DIRECTIONS = {
 export function App() {
   const [captures, setCaptures] = useState<CaptureInfo[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [view, setView] = useState<View>("captures");
+  const [view, setViewState] = useState<View>(() => viewFromHash() ?? "simulate");
   const [busy, setBusy] = useState(false);
   const [synthOpen, setSynthOpen] = useState(false);
-  const [simOpen, setSimOpen] = useState(false);
+  const scenario = useScenario();
   const [streamId, setStreamId] = useState(0);
   const [frameFilter, setFrameFilter] = useState<FrameFilter>(NO_FILTER);
   const [frameTarget, setFrameTarget] = useState<FramesTarget | null>(null);
   const [version, setVersion] = useState<string | null>(null);
   const [reloads, setReloads] = useState(0);
+
+  const setView = useCallback((v: View) => {
+    setViewState(v);
+    try {
+      window.history.replaceState(null, "", `#${v}`);
+    } catch {
+      // Not allowed here (a sandboxed frame): the view is not kept in the URL.
+    }
+  }, []);
 
   useEffect(() => {
     api.health().then(
@@ -75,12 +115,13 @@ export function App() {
         const last = list[list.length - 1];
         if (last) {
           setSelectedId(last.id);
-          setView("overview");
+          const asked = viewFromHash();
+          if (!asked || CAPTURE_VIEWS.includes(asked)) setView(asked ?? "overview");
         }
       },
       () => undefined,
     );
-  }, []);
+  }, [setView]);
 
   const selected = captures.find((c) => c.id === selectedId) ?? null;
   const report = useAsync(
@@ -94,13 +135,16 @@ export function App() {
     [selectedId, hasSimulation],
   );
 
-  const select = useCallback((id: number) => {
-    setSelectedId(id);
-    setStreamId(0);
-    setFrameFilter(NO_FILTER);
-    setFrameTarget(null);
-    setView("overview");
-  }, []);
+  const select = useCallback(
+    (id: number) => {
+      setSelectedId(id);
+      setStreamId(0);
+      setFrameFilter(NO_FILTER);
+      setFrameTarget(null);
+      setView("overview");
+    },
+    [setView],
+  );
 
   const added = useCallback(
     (info: CaptureInfo) => {
@@ -113,7 +157,7 @@ export function App() {
         description: `${count(info.frames)} frames · ${info.streams} cyclic streams · ${info.defects} defects`,
       });
     },
-    [select],
+    [select, setView],
   );
 
   const run = async (title: string, work: () => Promise<CaptureInfo>) => {
@@ -210,15 +254,6 @@ export function App() {
         <Button
           variant="ghost"
           size="sm"
-          icon={<FlaskConical className="size-4" />}
-          onClick={() => setSimOpen(true)}
-          disabled={busy}
-        >
-          Simulate
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
           icon={<Sparkles className="size-4" />}
           onClick={() => setSynthOpen(true)}
           disabled={busy}
@@ -241,14 +276,15 @@ export function App() {
   const hasReport = selectedId !== null;
   const rail = (
     <NavRail value={view} onValueChange={(v) => setView(v as View)} labels="visible">
+      <NavRailItem value="simulate" label="Simulate" icon={<FlaskConical />} />
+      <NavRailItem value="study" label="Study" icon={<ChartScatter />} />
+      <NavRailItem value="planner" label="Planner" icon={<Ruler />} />
       <NavRailItem value="captures" label="Captures" icon={<FolderOpen />} />
       <NavRailItem value="overview" label="Overview" icon={<Gauge />} disabled={!hasReport} />
       <NavRailItem value="timing" label="Timing" icon={<Activity />} disabled={!hasReport} />
       <NavRailItem value="frames" label="Frames" icon={<Rows3 />} disabled={!hasReport} />
       <NavRailItem value="stations" label="Stations" icon={<Network />} disabled={!hasReport} />
       <NavRailItem value="mailbox" label="Mailbox" icon={<Mail />} disabled={!hasReport} />
-      <NavRailItem value="planner" label="Planner" icon={<Ruler />} />
-      <NavRailItem value="study" label="Study" icon={<ChartScatter />} />
       <NavRailItem
         value="compare"
         label="Compare"
@@ -265,7 +301,9 @@ export function App() {
   );
 
   let main;
-  if (view === "planner") {
+  if (view === "simulate") {
+    main = <Scenario scenario={scenario} onCreated={added} />;
+  } else if (view === "planner") {
     main = <Planner />;
   } else if (view === "study") {
     main = <Study captures={captures} onCreated={added} />;
@@ -326,7 +364,13 @@ export function App() {
       simulation.status === "error" ? (
         <ErrorBox className="m-6">{simulation.error}</ErrorBox>
       ) : simulation.data ? (
-        <Simulation result={simulation.data} />
+        <Simulation
+          result={simulation.data}
+          onEdit={(spec) => {
+            scenario.setSpec(spec);
+            setView("simulate");
+          }}
+        />
       ) : hasSimulation ? (
         <SkeletonRows rows={10} className="m-6" />
       ) : (
@@ -363,7 +407,6 @@ export function App() {
         bottom={bottom}
       />
       <SynthDialog open={synthOpen} onOpenChange={setSynthOpen} onCreated={added} />
-      <SimulateDialog open={simOpen} onOpenChange={setSimOpen} onCreated={added} />
     </>
   );
 }

@@ -15,6 +15,7 @@ whenever `cargo test` runs.
 | Ground truth | `flowlab synth SPEC -o CAPTURE --truth FILE` | `flowlab_synth::GroundTruth` | synthetic (no `meta`) | not exported |
 | Simulation result | `flowlab simulate SPEC --result FILE` (an array for several specs); `GET /api/captures/{id}/simulation` | `flowlab_sim::SimResult` | `meta.source`: `simulated` | `SimResult.ts` |
 | Plan result | `flowlab plan [SPEC] --json`; `POST /api/plan` | `flowlab_devices::PlanResult` | arithmetic on the spec (no `meta`) | `PlanResult.ts` |
+| What-if result | `flowlab what-if SPEC --result FILE`; `POST /api/sim/what-if` | `flowlab_study::WhatIfResult` | `meta.source`: `simulated` | `WhatIfResult.ts` |
 | Study result | `flowlab study SPEC --result FILE`; `POST /api/study` | `flowlab_study::StudyResult` | `meta.source`: `simulated` | `StudyResult.ts` |
 | ESI summary | `flowlab esi FILE --json`; `POST /api/esi` (as `EsiImport`) | `flowlab_devices::EsiFile` | device description, not a result | `EsiFile.ts`, `EsiImport.ts` |
 | PDI fit | `flowlab pdi-fit SAMPLES --result FILE` | `flowlab_study::PdiFit` | `meta.source`: `measured` | not exported |
@@ -223,6 +224,7 @@ spec files, `--result` writes a JSON array of them. In the server, a run started
 | `transfers[]` | `TransferResult`, below |
 | `slaves[]` | `SlaveResult`: `station`, `name`, `pdi_busy_percent`, `dpram_used_bytes`, `dpram_bytes` |
 | `capture_frames`, `capture_truncated` | frames written (TX + RX); whether `capture.max_frames` stopped the capture |
+| `spec` | the `SimSpec` that was simulated, so the result says what it is a result of |
 
 `TransferResult`:
 
@@ -267,6 +269,27 @@ fields left out:
 ```
 
 These are simulated figures of a model with the example's parameters, not measurements.
+
+## WhatIfResult
+
+The scenario rerun with one change at a time, and with pairs of changes
+([Simulation § The Simulate view](../guide/simulation.md#the-simulate-view)).
+
+| Field | Meaning |
+|---|---|
+| `meta` | provenance `simulated`, hash of the scenario, the method's assumptions |
+| `base` | `WhatIfRun` of the scenario as given |
+| `changes[]` | `WhatIf`: feasible first, by when the last transfer finished |
+
+`WhatIf`: `label` (what changes, old → new), `lever` (`master`, `mailbox_policy`, `pdi`,
+`mailbox`, `application`, `protocol`, or `combined` for a pair), `slave` and `transfer` (indices
+it touches, or `null`), `edits[]` (`{ path, value }`: JSON pointers into the spec and the values
+they get; applying them reproduces the run), `parts[]` (for a pair, the labels of its two
+changes), `run`.
+
+`WhatIfRun`: `feasible` and `reason` (an invalid spec, or a transfer that did not finish
+verified), `transfer_ns[]` (duration per transfer), `finish_ns` (when the last transfer
+finished), `link_utilization_percent`, `pdi_busy_percent_max`, `dpram_used_percent_max`.
 
 ## PlanResult
 

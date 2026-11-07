@@ -16,7 +16,7 @@ serde_json.workspace = true
 schemars.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
-ts-rs = "12"
+ts-rs = { version = "12", features = ["no-serde-warnings"] }
 
 [dev-dependencies]
 flowlab-analysis.workspace = true

@@ -1,13 +1,14 @@
 //! Developer commands for the workspace, run through the cargo aliases in `.cargo/config.toml`:
 //!
 //! ```text
-//! cargo ui [--no-open] [CAPTURES…] [-- SERVE OPTIONS]   build the UI if needed, serve it with the API
-//! cargo ui-dev [--no-open] [CAPTURES…]      API server + Vite dev server with hot reload
+//! cargo ui [--no-open] [--demo] [CAPTURES…] [-- SERVE OPTIONS]   build the UI if needed, serve it
+//! cargo ui-dev [--no-open] [--demo] [CAPTURES…]      API server + Vite dev server with hot reload
 //! cargo ci                                  the checks CI runs (Rust, UI, docs)
 //! cargo site                                build the Pages site into _site/
 //! ```
 //!
-//! Without captures, `ui` and `ui-dev` generate and load the synthetic demo capture.
+//! The UI opens on the Simulate view, or on the analysis of the captures given. `--demo`
+//! generates and loads the synthetic demo capture.
 //! Needs Bun for the UI; `ci` also uses mdBook when it is installed.
 
 use std::path::{Path, PathBuf};
@@ -17,8 +18,9 @@ use std::time::SystemTime;
 type Result<T = ()> = std::result::Result<T, String>;
 
 const HELP: &str = "\
-cargo ui [--no-open] [CAPTURES…] [-- SERVE OPTIONS]   build the UI if needed, serve it with the API, open it
-cargo ui-dev [--no-open] [CAPTURES…]      API server + Vite dev server with hot reload
+cargo ui [--no-open] [--demo] [CAPTURES…] [-- SERVE OPTIONS]   build the UI if needed, serve it, open it
+cargo ui-dev [--no-open] [--demo] [CAPTURES…]      API server + Vite dev server with hot reload
+  --demo   also load a synthetic demo capture (generated once into results/demo.pcapng)
 cargo ci                                  the checks CI runs (Rust, UI, docs)
 cargo site                                build the Pages site into _site/";
 
@@ -121,11 +123,19 @@ fn ensure_ui_built() -> Result {
     Ok(())
 }
 
-/// Captures from the arguments, or the demo capture (generated once).
-fn captures(args: &[String]) -> Result<Vec<String>> {
-    if !args.is_empty() {
-        return Ok(args.to_vec());
+/// Flags `--no-open` and `--demo` taken out of `args`: (open, captures).
+fn flags(args: &[String]) -> Result<(bool, Vec<String>)> {
+    let open = !args.iter().any(|a| a == "--no-open");
+    let demo = args.iter().any(|a| a == "--demo");
+    let mut caps: Vec<String> = args.iter().filter(|a| *a != "--no-open" && *a != "--demo").cloned().collect();
+    if demo {
+        caps.push(demo_capture()?);
     }
+    Ok((open, caps))
+}
+
+/// The demo capture, generated once.
+fn demo_capture() -> Result<String> {
     if !root().join(DEMO_CAPTURE).is_file() {
         eprintln!("xtask: generating the demo capture {DEMO_CAPTURE}");
         run(cargo().args([
@@ -141,16 +151,14 @@ fn captures(args: &[String]) -> Result<Vec<String>> {
             DEMO_CAPTURE,
         ]))?;
     }
-    Ok(vec![DEMO_CAPTURE.into()])
+    Ok(DEMO_CAPTURE.into())
 }
 
 fn ui(args: &[String]) -> Result {
     let split = args.iter().position(|a| a == "--").unwrap_or(args.len());
     let (caps, extra) = (&args[..split], args.get(split + 1..).unwrap_or_default());
-    let open = !caps.iter().any(|a| a == "--no-open");
-    let caps: Vec<String> = caps.iter().filter(|a| *a != "--no-open").cloned().collect();
     ensure_ui_built()?;
-    let caps = captures(&caps)?;
+    let (open, caps) = flags(caps)?;
     let mut c = cargo();
     c.args(["run", "--quiet", "--release", "-p", "flowlab-cli", "--", "serve"]).args(&caps).args(extra);
     if open {
@@ -160,10 +168,8 @@ fn ui(args: &[String]) -> Result {
 }
 
 fn ui_dev(args: &[String]) -> Result {
-    let open = !args.iter().any(|a| a == "--no-open");
-    let args: Vec<String> = args.iter().filter(|a| *a != "--no-open").cloned().collect();
     ensure_bun_deps()?;
-    let caps = captures(&args)?;
+    let (open, caps) = flags(args)?;
     // Build the server first so Vite does not proxy to a port that is still compiling.
     run(cargo().args(["build", "--quiet", "-p", "flowlab-cli"]))?;
     let mut server = cargo()

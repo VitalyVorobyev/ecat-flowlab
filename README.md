@@ -17,8 +17,8 @@ Requires Rust ≥ 1.88 and [Bun](https://bun.sh) ≥ 1.4. It needs no EtherCAT h
 or libpcap.
 
 ```bash
-cargo ui                      # builds the UI if needed, serves a demo capture, opens http://127.0.0.1:7878
-cargo ui my-capture.pcapng    # …or your own captures
+cargo ui                      # builds the UI if needed, opens http://127.0.0.1:7878 on Simulate
+cargo ui my-capture.pcapng    # …with your captures loaded (--demo: a synthetic one)
 cargo ui-dev                  # UI with hot reload (Vite on :5173) against the API
 cargo ci                      # the checks CI runs
 ```
@@ -28,6 +28,7 @@ On the command line:
 ```bash
 flowlab analyze capture.pcapng --out report.json [--eni network.xml]
 flowlab simulate configs/sim/example.json -o sim.pcapng --result sim.json
+flowlab what-if configs/studies/bulk-transfer/large-payload.json   # which change helps most
 flowlab study configs/studies/bulk-transfer/foe-sweep.json
 flowlab plan
 ```

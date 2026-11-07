@@ -15,7 +15,7 @@ source: [crates/flowlab-sim](https://github.com/VitalyVorobyev/ecat-flowlab/blob
 |---|---|
 | Depends on | `ecat-wire` (frame building, mailbox/CoE/FoE/EoE headers), `flowlab-core` (`Provenance`, `ReportMeta`), `flowlab-capture` (`PcapNgWriter`) |
 | Dev-depends on | `flowlab-analysis` (to analyse its own captures in tests) |
-| Used by | `flowlab-study` (runs without frames), `flowlab-server` (`POST /api/simulate`), `flowlab-cli` (`flowlab simulate`) |
+| Used by | `flowlab-study` (studies and what-if, without frames), `flowlab-server` (`POST /api/simulate`, `/api/sim/run`), `flowlab-cli` (`flowlab simulate`) |
 
 ## Main types and functions
 
@@ -151,8 +151,9 @@ parallel. Receivers check every byte against `payload_bytes` and hash it with SH
 
 `SimResult` carries `meta` (provenance `simulated`, the spec's SHA-256, the assumptions), the
 policy as text, cycle time, link rate, `virtual_time_ns`, `cycles`, `frames`, `wire_bytes`,
-`link_utilization_percent`, `all_completed`, the transfers, the slaves, `capture_frames` and
-`capture_truncated`. Per transfer, `TransferResult` reports:
+`link_utilization_percent`, `all_completed`, the transfers, the slaves, `capture_frames`,
+`capture_truncated`, and the `spec` itself, so a result file says what it is a result of. The
+spec types derive `TS` as well; the UI edits `SimSpec` directly. Per transfer, `TransferResult` reports:
 
 | Field | Meaning |
 |---|---|
@@ -172,7 +173,7 @@ with preamble, FCS, padding and gap and loss before the first slave; 1-buffer ma
 3-buffer process data; the PDI access model and `mailbox_access`; a cycle-driven master that
 retries on WKC 0 and has no CPU or OS delays beyond the configured jitter; EoE as a UDP/IPv4
 tunnel; byte-for-byte and SHA-256 checking; the TCP reference's definition. The UI shows them on
-the *Sim run* page.
+the *Simulate* and *Sim run* views.
 
 ## Invariants and boundaries
 

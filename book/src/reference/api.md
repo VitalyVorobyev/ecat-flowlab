@@ -56,6 +56,9 @@ checked against its router:
 | GET | `/api/sim/schema` | | JSON Schema of `SimSpec` |
 | GET | `/api/sim/example` | | `SimSpec` |
 | POST | `/api/simulate` | `SimSpec` | `CaptureInfo` of the run's capture; the result via `/simulation` |
+| GET | `/api/sim/presets` | | `SimPreset[]`: `{ id, title, spec }`, the scenarios the Simulate view starts from |
+| POST | `/api/sim/run` | `SimSpec` | `SimResult`, without a capture or a capture entry |
+| POST | `/api/sim/what-if` | `SimSpec` | `WhatIfResult`: the scenario with one change at a time, and pairs, best first |
 
 The request and response types are described in [Input files](specs.md) and
 [Report and result files](reports.md); their TypeScript definitions are generated into

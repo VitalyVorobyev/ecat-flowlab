@@ -2,12 +2,14 @@
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 /// Input of `flowlab simulate`: a line of slaves, a master, and transfers to run.
 ///
 /// Every value is a model parameter, chosen or calibrated, never a measurement; results are
 /// labelled `simulated`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
 #[serde(deny_unknown_fields)]
 pub struct SimSpec {
     /// Seed for frame loss and master jitter. Same spec ⇒ identical capture and result.
@@ -45,7 +47,8 @@ pub struct SimSpec {
 }
 
 /// One slave: its process data, ESC memory, mailbox and PDI.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
 #[serde(deny_unknown_fields)]
 pub struct SimSlave {
     /// Display name.
@@ -77,7 +80,8 @@ pub struct SimSlave {
 }
 
 /// Process data interface between ESC and slave application (e.g. SPI).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
 #[serde(deny_unknown_fields)]
 pub struct PdiSpec {
     /// Effective read rate (ESC → application), bit/s.
@@ -104,7 +108,8 @@ impl Default for PdiSpec {
 
 /// How the slave application reads and writes its mailbox SyncManagers. The ESC releases a
 /// mailbox when its last byte is read and marks it full when its last byte is written.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum MailboxAccess {
     /// One access over the whole SyncManager buffer.
@@ -117,7 +122,8 @@ pub enum MailboxAccess {
 
 /// How the master decides which mailbox datagrams go on the wire. None of these is what every
 /// master does; compare them.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum MailboxPolicy {
     /// Up to `accesses_per_cycle` mailbox datagrams (writes and reads together) per cycle,
@@ -148,7 +154,8 @@ impl Default for MailboxPolicy {
 }
 
 /// Direction of a transfer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum TransferDirection {
     /// Master → slave.
@@ -158,7 +165,8 @@ pub enum TransferDirection {
 }
 
 /// How the payload crosses the bus.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum TransferProtocol {
     /// Ethernet over EtherCAT carrying UDP/IPv4 datagrams (a simplified tunnel: no TCP).
@@ -188,7 +196,8 @@ pub enum TransferProtocol {
 }
 
 /// One transfer of an opaque payload.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
 #[serde(deny_unknown_fields)]
 pub struct TransferSpec {
     /// Index of the slave in `slaves`.
@@ -205,7 +214,8 @@ pub struct TransferSpec {
 }
 
 /// Fault injection.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
 #[serde(deny_unknown_fields)]
 pub struct SimFaults {
     /// A frame is lost before the first slave (it occupies the link but never returns).
@@ -214,7 +224,8 @@ pub struct SimFaults {
 }
 
 /// Capture output.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
+#[ts(export)]
 #[serde(deny_unknown_fields)]
 pub struct CaptureSpec {
     /// Write frames at all.
@@ -264,6 +275,9 @@ fn default_retransmit() -> u32 {
 fn default_max_frames() -> u64 {
     200_000
 }
+
+/// Largest mailbox SyncManager the model accepts: one datagram in one Ethernet frame.
+pub const MAX_MAILBOX_BYTES: u16 = 1484;
 
 /// Bytes of the PDO channel chunk header: sequence (u32), length (u16), reserved (u16).
 pub const PDO_CHUNK_HEADER: usize = 8;
@@ -332,8 +346,11 @@ impl SimSpec {
             if has_mbx && (s.mailbox_out_bytes < 32 || s.mailbox_in_bytes < 32) {
                 return Err(format!("slave {i} ({}): mailboxes need ≥ 32 bytes in both directions", s.name));
             }
-            if s.mailbox_out_bytes > 1484 || s.mailbox_in_bytes > 1484 {
-                return Err(format!("slave {i} ({}): a mailbox must fit one frame (≤ 1484 bytes)", s.name));
+            if s.mailbox_out_bytes > MAX_MAILBOX_BYTES || s.mailbox_in_bytes > MAX_MAILBOX_BYTES {
+                return Err(format!(
+                    "slave {i} ({}): a mailbox must fit one frame (≤ {MAX_MAILBOX_BYTES} bytes)",
+                    s.name
+                ));
             }
             if s.pdi.read_bps == 0 || s.pdi.write_bps == 0 {
                 return Err(format!("slave {i} ({}): PDI rates must be > 0", s.name));

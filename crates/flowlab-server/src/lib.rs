@@ -29,6 +29,9 @@
 //! | GET | `/api/sim/schema` | | JSON Schema of `SimSpec` |
 //! | GET | `/api/sim/example` | | `SimSpec` |
 //! | POST | `/api/simulate` | `SimSpec` | `CaptureInfo` (capture of the run; result via `/simulation`) |
+//! | GET | `/api/sim/presets` | | `SimPreset[]`: scenarios to start from |
+//! | POST | `/api/sim/run` | `SimSpec` | `SimResult` (no capture is kept) |
+//! | POST | `/api/sim/what-if` | `SimSpec` | `WhatIfResult`: one-change variants, best first |
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -475,6 +478,69 @@ async fn simulate(State(s): State<AppState>, Json(spec): Json<SimSpec>) -> Resul
     Ok(Json(blocking(move || s.load_simulation(spec)).await?))
 }
 
+/// A scenario to start from in the UI.
+#[derive(Debug, Clone, Serialize, ts_rs::TS)]
+#[ts(export)]
+pub struct SimPreset {
+    /// Stable identifier.
+    pub id: String,
+    /// What the scenario is, in one line.
+    pub title: String,
+    /// The scenario.
+    pub spec: SimSpec,
+}
+
+/// The shipped scenarios: the bulk-transfer study's specs and the built-in example.
+pub fn presets() -> Vec<SimPreset> {
+    const SHIPPED: [(&str, &str, &str); 3] = [
+        (
+            "download-10mb",
+            "10 MB download over SPI: FoE, then EoE",
+            include_str!("../../../configs/studies/bulk-transfer/large-payload.json"),
+        ),
+        (
+            "upload-beside-io",
+            "10 MB upload by EoE beside cyclic I/O",
+            include_str!("../../../configs/studies/bulk-transfer/mixed-load.json"),
+        ),
+        (
+            "four-protocols",
+            "64 KiB by each protocol, 1 ms cycle",
+            include_str!("../../../configs/studies/bulk-transfer/smoke.json"),
+        ),
+    ];
+    let mut out: Vec<SimPreset> = SHIPPED
+        .iter()
+        .filter_map(|(id, title, json)| {
+            let mut spec: SimSpec = serde_json::from_str(json).ok()?;
+            spec.description = (*title).to_owned();
+            Some(SimPreset { id: (*id).to_owned(), title: (*title).to_owned(), spec })
+        })
+        .collect();
+    let mut example = SimSpec::example();
+    example.description = "256 kB by each protocol, three slaves".into();
+    out.push(SimPreset { id: "example".into(), title: example.description.clone(), spec: example });
+    out
+}
+
+async fn sim_presets() -> Json<Vec<SimPreset>> {
+    Json(presets())
+}
+
+async fn sim_run(Json(mut spec): Json<SimSpec>) -> Result<Json<flowlab_sim::SimResult>, ApiError> {
+    spec.capture.enabled = false;
+    let r = blocking(move || {
+        flowlab_sim::simulate(&spec, None::<std::io::Sink>).map_err(|e| ApiError::bad_request(e.to_string()))
+    })
+    .await?;
+    Ok(Json(r))
+}
+
+async fn sim_what_if(Json(spec): Json<SimSpec>) -> Result<Json<flowlab_study::WhatIfResult>, ApiError> {
+    let r = blocking(move || flowlab_study::what_if(&spec).map_err(|e| ApiError::bad_request(e.to_string()))).await?;
+    Ok(Json(r))
+}
+
 async fn synth_schema() -> Json<serde_json::Value> {
     Json(flowlab_synth::spec_schema())
 }
@@ -512,6 +578,9 @@ pub fn api(state: AppState) -> Router {
         .route("/api/sim/schema", get(sim_schema))
         .route("/api/sim/example", get(sim_example))
         .route("/api/simulate", post(simulate))
+        .route("/api/sim/presets", get(sim_presets))
+        .route("/api/sim/run", post(sim_run))
+        .route("/api/sim/what-if", post(sim_what_if))
         .route("/api/captures/{id}/eni", post(attach_eni).delete(detach_eni))
         .route("/api/esi", post(esi))
         .route("/api/plan/schema", get(plan_schema))
@@ -636,6 +705,38 @@ mod tests {
         assert_eq!(st, StatusCode::NO_CONTENT);
         let (st, _) = call(&app, Request::get(format!("/api/captures/{id}/report")).body(Body::empty()).unwrap()).await;
         assert_eq!(st, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn presets_run_and_what_if() {
+        let ps = presets();
+        assert_eq!(ps.len(), 4, "every shipped scenario parses");
+        assert!(ps.iter().all(|p| p.spec.validate().is_ok()), "every preset is valid");
+        let app = api(AppState::default());
+        let (st, list) = call(&app, Request::get("/api/sim/presets").body(Body::empty()).unwrap()).await;
+        assert_eq!(st, StatusCode::OK);
+        assert_eq!(list.as_array().unwrap().len(), 4);
+
+        let mut spec = SimSpec::example();
+        spec.transfers.truncate(1);
+        spec.transfers[0].payload_bytes = 20_000;
+        let (st, r) = call(&app, json_post("/api/sim/run", &spec)).await;
+        assert_eq!(st, StatusCode::OK, "{r}");
+        assert_eq!(r["meta"]["source"], "simulated");
+        assert_eq!(r["capture_frames"], 0, "a quick run keeps no capture");
+        assert_eq!(r["spec"]["transfers"][0]["payload_bytes"], 20_000);
+        let (_, list) = call(&app, Request::get("/api/captures").body(Body::empty()).unwrap()).await;
+        assert_eq!(list.as_array().unwrap().len(), 0, "nor a capture entry");
+
+        let (st, w) = call(&app, json_post("/api/sim/what-if", &spec)).await;
+        assert_eq!(st, StatusCode::OK, "{w}");
+        assert_eq!(w["base"]["feasible"], true);
+        assert!(!w["changes"].as_array().unwrap().is_empty());
+
+        spec.cycle_time_us = 0;
+        let (st, err) = call(&app, json_post("/api/sim/run", &spec)).await;
+        assert_eq!(st, StatusCode::BAD_REQUEST);
+        assert!(err["error"].as_str().unwrap().contains("cycle_time_us"), "{err}");
     }
 
     #[tokio::test]

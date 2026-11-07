@@ -6,7 +6,10 @@ import type { FrameFilter } from "./gen/FrameFilter";
 import type { FramePage } from "./gen/FramePage";
 import type { EsiImport } from "./gen/EsiImport";
 import type { PlanResult } from "./gen/PlanResult";
+import type { SimPreset } from "./gen/SimPreset";
 import type { SimResult } from "./gen/SimResult";
+import type { SimSpec } from "./gen/SimSpec";
+import type { WhatIfResult } from "./gen/WhatIfResult";
 import type { StudyResult } from "./gen/StudyResult";
 
 export type { CaptureInfo } from "./gen/CaptureInfo";
@@ -44,6 +47,21 @@ export type { SdoTransaction } from "./gen/SdoTransaction";
 export type { SimResult } from "./gen/SimResult";
 export type { SlaveResult } from "./gen/SlaveResult";
 export type { TransferResult } from "./gen/TransferResult";
+export type { CaptureSpec } from "./gen/CaptureSpec";
+export type { Lever } from "./gen/Lever";
+export type { MailboxAccess } from "./gen/MailboxAccess";
+export type { MailboxPolicy } from "./gen/MailboxPolicy";
+export type { PdiSpec } from "./gen/PdiSpec";
+export type { SimPreset } from "./gen/SimPreset";
+export type { SimSlave } from "./gen/SimSlave";
+export type { SimSpec } from "./gen/SimSpec";
+export type { SpecEdit } from "./gen/SpecEdit";
+export type { TransferDirection } from "./gen/TransferDirection";
+export type { TransferProtocol } from "./gen/TransferProtocol";
+export type { TransferSpec } from "./gen/TransferSpec";
+export type { WhatIf } from "./gen/WhatIf";
+export type { WhatIfResult } from "./gen/WhatIfResult";
+export type { WhatIfRun } from "./gen/WhatIfRun";
 export type { DeviceDescription } from "./gen/DeviceDescription";
 export type { EsiImport } from "./gen/EsiImport";
 export type { PlanCheck } from "./gen/PlanCheck";
@@ -155,6 +173,13 @@ export const api = {
   simExample: () => request<Record<string, unknown>>("/api/sim/example"),
   simulate: (spec: unknown) => request<CaptureInfo>("/api/simulate", json("POST", spec)),
   simulation: (id: number) => request<SimResult>(`/api/captures/${id}/simulation`),
+  simPresets: () => request<SimPreset[]>("/api/sim/presets"),
+  /** Simulate without keeping a capture. */
+  simRun: (spec: SimSpec, signal?: AbortSignal) =>
+    request<SimResult>("/api/sim/run", { ...json("POST", spec), signal: signal ?? null }),
+  /** The scenario with one change at a time, best first. */
+  whatIf: (spec: SimSpec, signal?: AbortSignal) =>
+    request<WhatIfResult>("/api/sim/what-if", { ...json("POST", spec), signal: signal ?? null }),
   attachEni: (id: number, file: File) =>
     request<CaptureInfo>(`/api/captures/${id}/eni`, {
       method: "POST",

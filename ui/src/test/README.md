@@ -14,6 +14,12 @@ python3 -c "import json; s=json.load(open('configs/sim/example.json')); [t.updat
 cargo run -p flowlab-cli -- simulate results/sim-fixture-spec.json --result ui/src/test/sim.fixture.json
 ```
 
+`whatif.fixture.json` is `flowlab what-if` of the same spec:
+
+```bash
+cargo run --release -p flowlab-cli -- what-if results/sim-fixture-spec.json --result ui/src/test/whatif.fixture.json
+```
+
 `plan.fixture.json` is `flowlab plan --json` (the built-in example).
 
 `study.fixture.json` is `flowlab study` output for `configs/studies/bulk-transfer/foe-sweep.json`

@@ -5,7 +5,8 @@
 frames, checks constraints and finds the Pareto frontier of the objectives. With measured targets
 — given as numbers, or read from an analysed capture — the same study is a calibration: the best
 run is the one whose simulated values come closest, and the residuals are reported. Every number
-in a study result is `simulated`.
+in a study result is `simulated`. `what_if` answers a narrower question without a study spec:
+which single change (or pair) to one scenario shortens its transfers most.
 
 API: [`flowlab_study`](../../api/flowlab_study/index.html) ·
 source: [crates/flowlab-study](https://github.com/VitalyVorobyev/ecat-flowlab/blob/main/crates/flowlab-study)
@@ -16,13 +17,15 @@ source: [crates/flowlab-study](https://github.com/VitalyVorobyev/ecat-flowlab/bl
 |---|---|
 | Depends on | `flowlab-sim` (`simulate`, `SimSpec`, `SimResult`), `flowlab-analysis` (`CaptureReport` for capture targets), `flowlab-core` |
 | Dev-depends on | `flowlab-capture` (the calibration test builds a capture) |
-| Used by | `flowlab-server` (`POST /api/study`), `flowlab-cli` (`flowlab study`) |
+| Used by | `flowlab-server` (`POST /api/study`, `POST /api/sim/what-if`), `flowlab-cli` (`flowlab study`, `flowlab what-if`) |
 
 ## Main types and functions
 
 | Item | What it is |
 |---|---|
 | `run_study(&StudySpec, Option<&CaptureReport>) -> Result<StudyResult, StudyError>` | Draw, run and judge every run |
+| `what_if(&SimSpec) -> Result<WhatIfResult, StudyError>` | The scenario and its one-change and two-change variants, best first |
+| `WhatIfResult`, `WhatIf`, `WhatIfRun`, `SpecEdit`, `Lever` | Serialized what-if results, exported to TypeScript |
 | `StudySpec` | `description`, `base: SimSpec`, `parameters`, `sampling`, `objectives`, `constraints`, `targets`, `max_runs` (default 400) |
 | `Parameter` | `path` (JSON pointer), `also`, `values`, `min`, `max`, `steps`, `integer`, `log` |
 | `Sampling` | `grid` (default) or `latin_hypercube { samples, seed }` |
@@ -134,6 +137,24 @@ contiguous chunks. Runs are independent and deterministic and keep their order, 
 does not depend on the thread count. `meta` has provenance `simulated`, the study spec's SHA-256
 and the assumptions.
 
+## What-if
+
+`what_if` derives its variants from the scenario, so it needs no study spec. For the master: the
+cycle halved, and the mailbox policy's parameter doubled or a switch to the opportunistic
+policy (60 % of the cycle, 10 µs turnaround). For each slave that carries a transfer: PDI read
+and write rate doubled, overhead per access halved, message-only mailbox access, mailboxes
+doubled (capped at `MAX_MAILBOX_BYTES`, one frame), application time halved. For each transfer:
+every other protocol (a PDO channel at 256 B per cycle), EoE MTU 1500 B, PDO channel bytes per
+cycle and window doubled. Pairs of the first eight changes that are not protocol switches and
+set different values are run too, because two limits can coincide: then neither change helps
+alone and the pair does.
+
+Every variant is a `SpecEdit` list (JSON pointer + value) applied to the scenario as JSON, run
+on the same thread pool as a study, and summarised as a `WhatIfRun`: feasibility with its
+reason (an invalid spec, or a transfer not finished verified), duration per transfer, when the
+last finished, link load, busiest PDI and fullest ESC RAM. Feasible variants come first, by
+finish time. The edits are what the UI applies, so applying them reproduces the run.
+
 ## Invariants and boundaries
 
 - Runs simulate without captures.
@@ -152,6 +173,8 @@ and the assumptions.
 | `sampling_rules` | `max_runs` refusal; Latin hypercube uses each value once and is deterministic; unknown pointer refused; log/integer range gives 10⁶, 10⁷, 10⁸ |
 | `calibration_recovers_hidden_pdi_parameters_from_a_capture` | A "measurement" simulated with hidden PDI rate and overhead, analysed as a capture; the grid's best run recovers both, fit error and residuals < 10⁻⁹, `calibrated_against` is the capture |
 | `shipped_study_is_the_example` | `foe-sweep.json` equals `StudySpec::example()` |
+| `what_if_ranks_one_change_runs_and_its_edits_reproduce_them` | Feasible variants first, by finish; the best one is faster than the scenario and its edits alone reproduce its run; every lever is tried; slaves without transfers are left alone |
+| `what_if_reports_why_a_change_does_not_fit` | Doubled mailboxes that overflow the ESC RAM are an infeasible variant with the reason |
 | `analysis_reads_the_master_policy_back_from_a_simulated_capture` | A simulated FoE transfer with `fixed_quota` 2, then with `opportunistic` 60 % / 10 µs, captured and analysed: the service pattern gives back fixed quota 2, and back-to-back polling with a budget of 50–60 % and a 10 µs turnaround |
 | `lab::tests::fit_recovers_rate_and_overhead_despite_outliers` | Samples on known lines with spread and one preempted and one early call per size: rates and costs recovered exactly; combined cost is the access-weighted mean |
 | `lab::tests::bad_samples_are_rejected_with_their_line`, `lab_inputs_replace_placeholders` | Header, column and direction errors name the line; one size cannot be fitted; `apply` sets the slave's PDI, application time and the policy |

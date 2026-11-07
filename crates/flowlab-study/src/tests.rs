@@ -219,3 +219,48 @@ fn analysis_reads_the_master_policy_back_from_a_simulated_capture() {
     assert!((50.0..=60.0).contains(&bus_budget_percent), "{bus_budget_percent}");
     assert!((turnaround_ns - 10_000.0).abs() < 1.0, "{turnaround_ns}");
 }
+
+fn edited(spec: &SimSpec, change: &WhatIf) -> SimSpec {
+    let mut v = serde_json::to_value(spec).unwrap();
+    for e in &change.edits {
+        *v.pointer_mut(&e.path).unwrap() = e.value.clone();
+    }
+    serde_json::from_value(v).unwrap()
+}
+
+#[test]
+fn what_if_ranks_one_change_runs_and_its_edits_reproduce_them() {
+    let mut spec = SimSpec::example();
+    spec.transfers.truncate(1);
+    spec.transfers[0].payload_bytes = 64_000;
+    let r = what_if(&spec).unwrap();
+    assert!(r.base.feasible, "{:?}", r.base.reason);
+    assert!(!r.changes.is_empty());
+    // Feasible first, earliest finish first.
+    let finishes: Vec<f64> = r.changes.iter().map_while(|c| c.run.finish_ns).collect();
+    assert!(finishes.windows(2).all(|w| w[0] <= w[1]));
+    assert!(r.changes[finishes.len()..].iter().all(|c| !c.run.feasible && c.run.reason.is_some()));
+    // The best change helps, and its edits alone reproduce its run.
+    let best = &r.changes[0];
+    assert!(best.run.finish_ns.unwrap() < r.base.finish_ns.unwrap(), "{}", best.label);
+    let again = flowlab_sim::simulate(&edited(&spec, best), None::<std::io::Sink>).unwrap();
+    assert_eq!(again.transfers[0].duration_ns, best.run.transfer_ns[0]);
+    // Every lever the scenario has is tried: PDI, mailbox, policy, protocol, master.
+    for lever in [Lever::Pdi, Lever::Mailbox, Lever::MailboxPolicy, Lever::Protocol, Lever::Master] {
+        assert!(r.changes.iter().any(|c| c.lever == lever), "{lever:?} not tried");
+    }
+    // Slaves without transfers are left alone.
+    assert!(r.changes.iter().all(|c| c.slave.is_none_or(|s| s == 2)));
+}
+
+#[test]
+fn what_if_reports_why_a_change_does_not_fit() {
+    let mut spec = SimSpec::example();
+    spec.transfers.truncate(2);
+    spec.slaves[2].dpram_bytes = 1200; // 2 × 512 B mailboxes + process data fit; doubled they do not
+    let r = what_if(&spec).unwrap();
+    let mbx = r.changes.iter().find(|c| c.lever == Lever::Mailbox).unwrap();
+    assert!(!mbx.run.feasible);
+    assert!(mbx.run.reason.as_deref().unwrap().contains("RAM"), "{:?}", mbx.run.reason);
+    assert!(mbx.run.finish_ns.is_none());
+}

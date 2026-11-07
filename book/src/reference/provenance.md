@@ -9,7 +9,7 @@ labels:
 |---|---|---|
 | `measured` | a capture file from a real network | — (any file without a FlowLab marker) |
 | `simulated` | the discrete-event simulator | `flowlab simulate`, Simulate… |
-| `synthetic` | the capture generator, with ground truth | `flowlab synth`, Synthesize… |
+| `synthetic` | the capture generator, with ground truth | `flowlab synth`, Generate |
 
 FlowLab writes the label into the pcapng section comment of every capture it generates, and
 reads it back when the file is loaded. A file without the marker is taken as measured. The

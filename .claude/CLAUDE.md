@@ -8,7 +8,7 @@ lab-ui packages. Read `README.md`, then the book in `book/src/` (start with
 
 ```bash
 cargo ci                                     # everything below that CI checks, in one go (xtask)
-cargo ui / cargo ui-dev                      # serve the built UI / Vite hot reload + API (demo capture by default)
+cargo ui / cargo ui-dev [--demo]             # serve the built UI / Vite hot reload + API; opens on Simulate
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 cd ui && bun run lint && bun run typecheck && bun run test:run && bun run build && bun run fmt:check
 cargo run -p flowlab-cli -- synth configs/synth/demo.json -o results/demo.pcapng --truth results/demo.truth.json
@@ -16,6 +16,7 @@ cargo run -p flowlab-cli -- analyze results/demo.pcapng --out results/demo.json
 cargo run --release -p flowlab-cli -- simulate configs/studies/bulk-transfer/{smoke,large-payload,mixed-load}.json
 cargo run -p flowlab-cli -- plan                     # bus budget; `esi FILE` summarizes an ESI
 cargo run --release -p flowlab-cli -- study configs/studies/bulk-transfer/foe-sweep.json
+cargo run --release -p flowlab-cli -- what-if configs/studies/bulk-transfer/large-payload.json  # what limits it
 cargo run -p flowlab-cli -- serve results/demo.pcapng      # UI from ui/dist on :7878
 python3 scripts/crosscheck-tshark.py results/demo.pcapng results/demo.json   # needs tshark
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace && mdbook build book
