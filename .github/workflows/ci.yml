@@ -49,7 +49,6 @@ jobs:
           mkdir -p results
           cargo run -q -p flowlab-cli -- synth configs/synth/demo.json -o results/demo.pcapng
           cargo run -q -p flowlab-cli -- analyze results/demo.pcapng --out results/demo.json
-          test -z "$(tshark -r results/demo.pcapng -Y '_ws.malformed || _ws.expert.severity >= warning')"
           python3 scripts/crosscheck-tshark.py results/demo.pcapng results/demo.json
 
   ui:

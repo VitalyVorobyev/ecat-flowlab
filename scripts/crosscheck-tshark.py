@@ -3,7 +3,8 @@
 
 Usage: crosscheck-tshark.py CAPTURE REPORT.json
 
-REPORT.json is `flowlab analyze CAPTURE --out REPORT.json`. Wireshark (tshark) decodes every
+REPORT.json is `flowlab analyze CAPTURE --out REPORT.json`. First, no frame may be malformed or
+carry a Wireshark expert warning. Then Wireshark (tshark) decodes every
 mailbox datagram independently of FlowLab; this script counts what it decodes in *returning*
 datagrams with WKC > 0 (the messages that actually went through) and compares the counts with
 the report. Exits 1 on any mismatch.
@@ -34,13 +35,22 @@ def flat(o, acc):
     return acc
 
 
+def tshark(capture, *args):
+    """Run tshark on `capture` fed through stdin (some distributions confine tshark's file
+    access with AppArmor) and return stdout; any tshark failure raises."""
+    with open(capture, "rb") as f:
+        return subprocess.run(
+            ["tshark", "-r", "-", *args], stdin=f, check=True, capture_output=True, text=True
+        ).stdout
+
+
+def tshark_problems(capture):
+    """Frames Wireshark marks malformed or flags with an expert warning or error."""
+    return tshark(capture, "-Y", "_ws.malformed || _ws.expert.severity >= warning").strip()
+
+
 def tshark_counts(capture):
-    out = subprocess.run(
-        ["tshark", "-r", capture, "-Y", "ecat_mailbox", "-T", "json"],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
+    out = tshark(capture, "-Y", "ecat_mailbox", "-T", "json")
     c = Counter()
     for pkt in json.loads(out or "[]"):
         layers = pkt["_source"]["layers"]
@@ -94,6 +104,11 @@ def main():
     if len(sys.argv) != 3:
         print(__doc__)
         return 2
+    problems = tshark_problems(sys.argv[1])
+    if problems:
+        print("Wireshark reports malformed frames or expert warnings:")
+        print(problems[:4000])
+        return 1
     ws = tshark_counts(sys.argv[1])
     fl, repeats = report_counts(sys.argv[2])
     keys = sorted(set(ws) | set(fl), key=str)
