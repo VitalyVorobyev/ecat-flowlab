@@ -1,0 +1,2595 @@
+{
+ "source": "simulated",
+ "generator": "scripts/bulk-transfer-report.py",
+ "payload_bytes": 10000000,
+ "studies": {
+  "01-protocol-policy": {
+   "description": "Protocol × master mailbox policy, 512 B mailboxes, 1 ms cycle",
+   "spec": "configs/studies/bulk-transfer/report/01-protocol-policy.json",
+   "parameters": [
+    "protocol",
+    "master policy"
+   ],
+   "objectives": [
+    "10 MB transfer time, s",
+    "link utilization, %",
+    "PDI busy, %"
+   ],
+   "runs": [
+    {
+     "labels": [
+      "FoE",
+      "fixed, 1/cycle"
+     ],
+     "numeric": [
+      null,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      40.0,
+      5.2959,
+      22.619
+     ]
+    },
+    {
+     "labels": [
+      "FoE",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      null,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      40.0,
+      7.3918,
+      22.619
+     ]
+    },
+    {
+     "labels": [
+      "FoE",
+      "fixed, 4/cycle"
+     ],
+     "numeric": [
+      null,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      40.0,
+      7.3918,
+      22.619
+     ]
+    },
+    {
+     "labels": [
+      "FoE",
+      "idle time ≤ 60 %"
+     ],
+     "numeric": [
+      null,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      13.333,
+      52.184,
+      64.569
+     ]
+    },
+    {
+     "labels": [
+      "FoE",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      null,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      10.887,
+      77.559,
+      78.709
+     ]
+    },
+    {
+     "labels": [
+      "EoE",
+      "fixed, 1/cycle"
+     ],
+     "numeric": [
+      null,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      27.173,
+      5.2959,
+      22.618
+     ]
+    },
+    {
+     "labels": [
+      "EoE",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      null,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      27.173,
+      5.2959,
+      22.618
+     ]
+    },
+    {
+     "labels": [
+      "EoE",
+      "fixed, 4/cycle"
+     ],
+     "numeric": [
+      null,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      27.173,
+      5.2959,
+      22.618
+     ]
+    },
+    {
+     "labels": [
+      "EoE",
+      "idle time ≤ 60 %"
+     ],
+     "numeric": [
+      null,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      9.0577,
+      50.405,
+      64.566
+     ]
+    },
+    {
+     "labels": [
+      "EoE",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      null,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      6.7935,
+      72.948,
+      85.529
+     ]
+    },
+    {
+     "labels": [
+      "CoE segmented",
+      "fixed, 1/cycle"
+     ],
+     "numeric": [
+      null,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      39.76,
+      5.2959,
+      22.619
+     ]
+    },
+    {
+     "labels": [
+      "CoE segmented",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      null,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      39.76,
+      7.3918,
+      22.619
+     ]
+    },
+    {
+     "labels": [
+      "CoE segmented",
+      "fixed, 4/cycle"
+     ],
+     "numeric": [
+      null,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      39.76,
+      7.3918,
+      22.619
+     ]
+    },
+    {
+     "labels": [
+      "CoE segmented",
+      "idle time ≤ 60 %"
+     ],
+     "numeric": [
+      null,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      13.253,
+      52.185,
+      64.57
+     ]
+    },
+    {
+     "labels": [
+      "CoE segmented",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      null,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      10.821,
+      77.561,
+      78.71
+     ]
+    }
+   ]
+  },
+  "02-mailbox-foe": {
+   "description": "FoE write: mailbox size × master policy, 1 ms cycle",
+   "spec": "configs/studies/bulk-transfer/report/02-mailbox-foe.json",
+   "parameters": [
+    "mailbox",
+    "master policy"
+   ],
+   "objectives": [
+    "10 MB transfer time, s",
+    "link utilization, %",
+    "PDI busy, %"
+   ],
+   "runs": [
+    {
+     "labels": [
+      "128 B",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      128.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      172.41,
+      2.784,
+      7.2599
+     ]
+    },
+    {
+     "labels": [
+      "128 B",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      128.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      14.368,
+      55.013,
+      69.066
+     ]
+    },
+    {
+     "labels": [
+      "256 B",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      256.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      81.968,
+      4.32,
+      12.38
+     ]
+    },
+    {
+     "labels": [
+      "256 B",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      256.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      11.71,
+      66.176,
+      76.8
+     ]
+    },
+    {
+     "labels": [
+      "512 B",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      512.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      40.0,
+      7.3918,
+      22.619
+     ]
+    },
+    {
+     "labels": [
+      "512 B",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      512.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      10.887,
+      77.559,
+      78.709
+     ]
+    },
+    {
+     "labels": [
+      "522 B",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      522.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      39.216,
+      7.5118,
+      23.019
+     ]
+    },
+    {
+     "labels": [
+      "522 B",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      522.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      11.179,
+      77.14,
+      76.625
+     ]
+    },
+    {
+     "labels": [
+      "778 B",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      778.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      26.11,
+      10.743,
+      33.257
+     ]
+    },
+    {
+     "labels": [
+      "778 B",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      778.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      10.154,
+      81.395,
+      82.93
+     ]
+    },
+    {
+     "labels": [
+      "1024 B",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      1024.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      19.765,
+      13.695,
+      43.096
+     ]
+    },
+    {
+     "labels": [
+      "1024 B",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      1024.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      9.8825,
+      86.847,
+      84.543
+     ]
+    },
+    {
+     "labels": [
+      "1484 B",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      1484.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      20.383,
+      17.167,
+      41.543
+     ]
+    },
+    {
+     "labels": [
+      "1484 B",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      1484.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      9.7064,
+      88.004,
+      85.419
+     ]
+    }
+   ]
+  },
+  "03-mailbox-eoe": {
+   "description": "EoE (UDP-like, 1500 B MTU): mailbox size × master policy, 1 ms cycle",
+   "spec": "configs/studies/bulk-transfer/report/03-mailbox-eoe.json",
+   "parameters": [
+    "mailbox",
+    "master policy"
+   ],
+   "objectives": [
+    "10 MB transfer time, s",
+    "link utilization, %",
+    "PDI busy, %"
+   ],
+   "runs": [
+    {
+     "labels": [
+      "128 B",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      128.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      108.7,
+      2.224,
+      7.2599
+     ]
+    },
+    {
+     "labels": [
+      "128 B",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      128.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      9.058,
+      51.174,
+      69.065
+     ]
+    },
+    {
+     "labels": [
+      "256 B",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      256.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      47.554,
+      3.248,
+      12.379
+     ]
+    },
+    {
+     "labels": [
+      "256 B",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      256.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      6.7936,
+      62.362,
+      76.793
+     ]
+    },
+    {
+     "labels": [
+      "512 B",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      512.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      27.173,
+      5.2959,
+      22.618
+     ]
+    },
+    {
+     "labels": [
+      "512 B",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      512.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      6.7935,
+      72.948,
+      85.529
+     ]
+    },
+    {
+     "labels": [
+      "522 B",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      522.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      20.38,
+      5.3758,
+      23.018
+     ]
+    },
+    {
+     "labels": [
+      "522 B",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      522.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      5.0953,
+      74.215,
+      87.113
+     ]
+    },
+    {
+     "labels": [
+      "778 B",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      778.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      13.586,
+      7.4235,
+      33.255
+     ]
+    },
+    {
+     "labels": [
+      "778 B",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      778.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      5.4348,
+      80.428,
+      80.657
+     ]
+    },
+    {
+     "labels": [
+      "1024 B",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      1024.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      13.587,
+      9.3912,
+      43.094
+     ]
+    },
+    {
+     "labels": [
+      "1024 B",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      1024.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      6.7935,
+      86.828,
+      84.529
+     ]
+    },
+    {
+     "labels": [
+      "1484 B",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      1484.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      13.587,
+      13.071,
+      61.491
+     ]
+    },
+    {
+     "labels": [
+      "1484 B",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      1484.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      9.2726,
+      86.773,
+      89.329
+     ]
+    }
+   ]
+  },
+  "04-cycle": {
+   "description": "FoE write, 1024 B mailboxes: cycle time × master policy",
+   "spec": "configs/studies/bulk-transfer/report/04-cycle.json",
+   "parameters": [
+    "cycle",
+    "master policy"
+   ],
+   "objectives": [
+    "10 MB transfer time, s",
+    "link utilization, %",
+    "PDI busy, %"
+   ],
+   "runs": [
+    {
+     "labels": [
+      "250 µs",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      250.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      12.353,
+      44.451,
+      71.931
+     ]
+    },
+    {
+     "labels": [
+      "250 µs",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      250.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      9.8839,
+      89.218,
+      87.188
+     ]
+    },
+    {
+     "labels": [
+      "500 µs",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      500.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      14.824,
+      24.521,
+      58.554
+     ]
+    },
+    {
+     "labels": [
+      "500 µs",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      500.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      9.8825,
+      87.635,
+      86.187
+     ]
+    },
+    {
+     "labels": [
+      "1000 µs",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      1000.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      19.765,
+      13.695,
+      43.096
+     ]
+    },
+    {
+     "labels": [
+      "1000 µs",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      1000.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      9.8825,
+      86.847,
+      84.543
+     ]
+    },
+    {
+     "labels": [
+      "2000 µs",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      2000.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      39.529,
+      6.8475,
+      21.548
+     ]
+    },
+    {
+     "labels": [
+      "2000 µs",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      2000.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      9.8826,
+      82.129,
+      83.698
+     ]
+    },
+    {
+     "labels": [
+      "4000 µs",
+      "fixed, 2/cycle"
+     ],
+     "numeric": [
+      4000.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      79.057,
+      3.4237,
+      10.774
+     ]
+    },
+    {
+     "labels": [
+      "4000 µs",
+      "idle time ≤ 90 %"
+     ],
+     "numeric": [
+      4000.0,
+      null
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      9.8825,
+      81.9,
+      83.254
+     ]
+    }
+   ]
+  },
+  "05-pdi-whole-buffer": {
+   "description": "FoE write, 1024 B mailboxes, opportunistic master: PDI rate × per-access overhead (whole_buffer)",
+   "spec": "configs/studies/bulk-transfer/report/05-pdi-whole-buffer.json",
+   "parameters": [
+    "PDI rate",
+    "PDI overhead per access"
+   ],
+   "objectives": [
+    "10 MB transfer time, s",
+    "link utilization, %",
+    "PDI busy, %"
+   ],
+   "runs": [
+    {
+     "labels": [
+      "2.5 Mbit/s",
+      "1 µs"
+     ],
+     "numeric": [
+      2500000.0,
+      1000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      66.392,
+      86.861,
+      99.283
+     ]
+    },
+    {
+     "labels": [
+      "2.5 Mbit/s",
+      "5 µs"
+     ],
+     "numeric": [
+      2500000.0,
+      5000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      66.707,
+      86.86,
+      99.231
+     ]
+    },
+    {
+     "labels": [
+      "2.5 Mbit/s",
+      "20 µs"
+     ],
+     "numeric": [
+      2500000.0,
+      20000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      67.201,
+      86.861,
+      99.643
+     ]
+    },
+    {
+     "labels": [
+      "2.5 Mbit/s",
+      "50 µs"
+     ],
+     "numeric": [
+      2500000.0,
+      50000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      68.372,
+      86.861,
+      99.805
+     ]
+    },
+    {
+     "labels": [
+      "2.5 Mbit/s",
+      "100 µs"
+     ],
+     "numeric": [
+      2500000.0,
+      100000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      70.11,
+      86.861,
+      99.904
+     ]
+    },
+    {
+     "labels": [
+      "5 Mbit/s",
+      "1 µs"
+     ],
+     "numeric": [
+      5000000.0,
+      1000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      34.589,
+      86.858,
+      95.645
+     ]
+    },
+    {
+     "labels": [
+      "5 Mbit/s",
+      "5 µs"
+     ],
+     "numeric": [
+      5000000.0,
+      5000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      34.589,
+      86.858,
+      96.445
+     ]
+    },
+    {
+     "labels": [
+      "5 Mbit/s",
+      "20 µs"
+     ],
+     "numeric": [
+      5000000.0,
+      20000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      34.589,
+      86.858,
+      98.508
+     ]
+    },
+    {
+     "labels": [
+      "5 Mbit/s",
+      "50 µs"
+     ],
+     "numeric": [
+      5000000.0,
+      50000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      35.876,
+      86.859,
+      99.51
+     ]
+    },
+    {
+     "labels": [
+      "5 Mbit/s",
+      "100 µs"
+     ],
+     "numeric": [
+      5000000.0,
+      100000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      37.575,
+      86.859,
+      99.781
+     ]
+    },
+    {
+     "labels": [
+      "10 Mbit/s",
+      "1 µs"
+     ],
+     "numeric": [
+      10000000.0,
+      1000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      17.795,
+      86.851,
+      92.564
+     ]
+    },
+    {
+     "labels": [
+      "10 Mbit/s",
+      "5 µs"
+     ],
+     "numeric": [
+      10000000.0,
+      5000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      18.118,
+      86.854,
+      92.182
+     ]
+    },
+    {
+     "labels": [
+      "10 Mbit/s",
+      "20 µs"
+     ],
+     "numeric": [
+      10000000.0,
+      20000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      18.223,
+      86.852,
+      96.285
+     ]
+    },
+    {
+     "labels": [
+      "10 Mbit/s",
+      "50 µs"
+     ],
+     "numeric": [
+      10000000.0,
+      50000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      19.765,
+      86.856,
+      98.19
+     ]
+    },
+    {
+     "labels": [
+      "10 Mbit/s",
+      "100 µs"
+     ],
+     "numeric": [
+      10000000.0,
+      100000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      21.32,
+      86.854,
+      99.566
+     ]
+    },
+    {
+     "labels": [
+      "20 Mbit/s",
+      "1 µs"
+     ],
+     "numeric": [
+      20000000.0,
+      1000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      9.8825,
+      86.847,
+      82.943
+     ]
+    },
+    {
+     "labels": [
+      "20 Mbit/s",
+      "5 µs"
+     ],
+     "numeric": [
+      20000000.0,
+      5000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      9.8825,
+      86.847,
+      84.543
+     ]
+    },
+    {
+     "labels": [
+      "20 Mbit/s",
+      "20 µs"
+     ],
+     "numeric": [
+      20000000.0,
+      20000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      9.8826,
+      86.839,
+      90.533
+     ]
+    },
+    {
+     "labels": [
+      "20 Mbit/s",
+      "50 µs"
+     ],
+     "numeric": [
+      20000000.0,
+      50000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      10.98,
+      86.842,
+      93.344
+     ]
+    },
+    {
+     "labels": [
+      "20 Mbit/s",
+      "100 µs"
+     ],
+     "numeric": [
+      20000000.0,
+      100000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      12.853,
+      86.847,
+      98.987
+     ]
+    },
+    {
+     "labels": [
+      "40 Mbit/s",
+      "1 µs"
+     ],
+     "numeric": [
+      40000000.0,
+      1000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      5.9108,
+      86.823,
+      69.303
+     ]
+    },
+    {
+     "labels": [
+      "40 Mbit/s",
+      "5 µs"
+     ],
+     "numeric": [
+      40000000.0,
+      5000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      5.9295,
+      86.833,
+      71.227
+     ]
+    },
+    {
+     "labels": [
+      "40 Mbit/s",
+      "20 µs"
+     ],
+     "numeric": [
+      40000000.0,
+      20000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      5.9295,
+      86.833,
+      79.224
+     ]
+    },
+    {
+     "labels": [
+      "40 Mbit/s",
+      "50 µs"
+     ],
+     "numeric": [
+      40000000.0,
+      50000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      6.5886,
+      86.837,
+      86.73
+     ]
+    },
+    {
+     "labels": [
+      "40 Mbit/s",
+      "100 µs"
+     ],
+     "numeric": [
+      40000000.0,
+      100000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      8.462,
+      86.838,
+      91.487
+     ]
+    },
+    {
+     "labels": [
+      "80 Mbit/s",
+      "1 µs"
+     ],
+     "numeric": [
+      80000000.0,
+      1000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      3.7248,
+      89.455,
+      55.198
+     ]
+    },
+    {
+     "labels": [
+      "80 Mbit/s",
+      "5 µs"
+     ],
+     "numeric": [
+      80000000.0,
+      5000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      3.725,
+      89.431,
+      58.103
+     ]
+    },
+    {
+     "labels": [
+      "80 Mbit/s",
+      "20 µs"
+     ],
+     "numeric": [
+      80000000.0,
+      20000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      3.953,
+      86.805,
+      65.315
+     ]
+    },
+    {
+     "labels": [
+      "80 Mbit/s",
+      "50 µs"
+     ],
+     "numeric": [
+      80000000.0,
+      50000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      4.9413,
+      86.822,
+      71.085
+     ]
+    },
+    {
+     "labels": [
+      "80 Mbit/s",
+      "100 µs"
+     ],
+     "numeric": [
+      80000000.0,
+      100000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      6.1766,
+      86.836,
+      84.899
+     ]
+    }
+   ]
+  },
+  "06-pdi-message-only": {
+   "description": "FoE write, 1024 B mailboxes, opportunistic master: PDI rate × per-access overhead (message_only)",
+   "spec": "configs/studies/bulk-transfer/report/06-pdi-message-only.json",
+   "parameters": [
+    "PDI rate",
+    "PDI overhead per access"
+   ],
+   "objectives": [
+    "10 MB transfer time, s",
+    "link utilization, %",
+    "PDI busy, %"
+   ],
+   "runs": [
+    {
+     "labels": [
+      "2.5 Mbit/s",
+      "1 µs"
+     ],
+     "numeric": [
+      2500000.0,
+      1000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      34.585,
+      86.858,
+      96.467
+     ]
+    },
+    {
+     "labels": [
+      "2.5 Mbit/s",
+      "5 µs"
+     ],
+     "numeric": [
+      2500000.0,
+      5000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      34.585,
+      86.858,
+      97.267
+     ]
+    },
+    {
+     "labels": [
+      "2.5 Mbit/s",
+      "20 µs"
+     ],
+     "numeric": [
+      2500000.0,
+      20000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      35.574,
+      86.859,
+      97.989
+     ]
+    },
+    {
+     "labels": [
+      "2.5 Mbit/s",
+      "50 µs"
+     ],
+     "numeric": [
+      2500000.0,
+      50000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      37.996,
+      86.858,
+      98.503
+     ]
+    },
+    {
+     "labels": [
+      "2.5 Mbit/s",
+      "100 µs"
+     ],
+     "numeric": [
+      2500000.0,
+      100000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      41.174,
+      86.86,
+      99.675
+     ]
+    },
+    {
+     "labels": [
+      "5 Mbit/s",
+      "1 µs"
+     ],
+     "numeric": [
+      5000000.0,
+      1000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      18.698,
+      86.852,
+      89.693
+     ]
+    },
+    {
+     "labels": [
+      "5 Mbit/s",
+      "5 µs"
+     ],
+     "numeric": [
+      5000000.0,
+      5000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      18.775,
+      86.851,
+      90.875
+     ]
+    },
+    {
+     "labels": [
+      "5 Mbit/s",
+      "20 µs"
+     ],
+     "numeric": [
+      5000000.0,
+      20000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      19.763,
+      86.852,
+      94.506
+     ]
+    },
+    {
+     "labels": [
+      "5 Mbit/s",
+      "50 µs"
+     ],
+     "numeric": [
+      5000000.0,
+      50000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      20.999,
+      86.856,
+      97.222
+     ]
+    },
+    {
+     "labels": [
+      "5 Mbit/s",
+      "100 µs"
+     ],
+     "numeric": [
+      5000000.0,
+      100000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      24.39,
+      86.854,
+      99.713
+     ]
+    },
+    {
+     "labels": [
+      "10 Mbit/s",
+      "1 µs"
+     ],
+     "numeric": [
+      10000000.0,
+      1000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      9.8817,
+      86.845,
+      84.918
+     ]
+    },
+    {
+     "labels": [
+      "10 Mbit/s",
+      "5 µs"
+     ],
+     "numeric": [
+      10000000.0,
+      5000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      9.9198,
+      86.846,
+      87.391
+     ]
+    },
+    {
+     "labels": [
+      "10 Mbit/s",
+      "20 µs"
+     ],
+     "numeric": [
+      10000000.0,
+      20000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      10.87,
+      86.842,
+      89.763
+     ]
+    },
+    {
+     "labels": [
+      "10 Mbit/s",
+      "50 µs"
+     ],
+     "numeric": [
+      10000000.0,
+      50000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      12.846,
+      86.848,
+      94.307
+     ]
+    },
+    {
+     "labels": [
+      "10 Mbit/s",
+      "100 µs"
+     ],
+     "numeric": [
+      10000000.0,
+      100000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      16.261,
+      86.851,
+      99.241
+     ]
+    },
+    {
+     "labels": [
+      "20 Mbit/s",
+      "1 µs"
+     ],
+     "numeric": [
+      20000000.0,
+      1000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      5.9291,
+      86.823,
+      70.77
+     ]
+    },
+    {
+     "labels": [
+      "20 Mbit/s",
+      "5 µs"
+     ],
+     "numeric": [
+      20000000.0,
+      5000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      5.9291,
+      86.824,
+      74.902
+     ]
+    },
+    {
+     "labels": [
+      "20 Mbit/s",
+      "20 µs"
+     ],
+     "numeric": [
+      20000000.0,
+      20000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      6.5882,
+      86.831,
+      81.822
+     ]
+    },
+    {
+     "labels": [
+      "20 Mbit/s",
+      "50 µs"
+     ],
+     "numeric": [
+      20000000.0,
+      50000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      8.6465,
+      86.842,
+      86.595
+     ]
+    },
+    {
+     "labels": [
+      "20 Mbit/s",
+      "100 µs"
+     ],
+     "numeric": [
+      20000000.0,
+      100000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      11.859,
+      86.85,
+      96.856
+     ]
+    },
+    {
+     "labels": [
+      "40 Mbit/s",
+      "1 µs"
+     ],
+     "numeric": [
+      40000000.0,
+      1000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      3.7261,
+      89.416,
+      56.804
+     ]
+    },
+    {
+     "labels": [
+      "40 Mbit/s",
+      "5 µs"
+     ],
+     "numeric": [
+      40000000.0,
+      5000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      3.9528,
+      86.82,
+      59.385
+     ]
+    },
+    {
+     "labels": [
+      "40 Mbit/s",
+      "20 µs"
+     ],
+     "numeric": [
+      40000000.0,
+      20000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      4.9408,
+      86.83,
+      65.773
+     ]
+    },
+    {
+     "labels": [
+      "40 Mbit/s",
+      "50 µs"
+     ],
+     "numeric": [
+      40000000.0,
+      50000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      6.5881,
+      86.83,
+      78.898
+     ]
+    },
+    {
+     "labels": [
+      "40 Mbit/s",
+      "100 µs"
+     ],
+     "numeric": [
+      40000000.0,
+      100000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      9.8815,
+      86.846,
+      91.046
+     ]
+    },
+    {
+     "labels": [
+      "80 Mbit/s",
+      "1 µs"
+     ],
+     "numeric": [
+      80000000.0,
+      1000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      2.8236,
+      91.091,
+      38.368
+     ]
+    },
+    {
+     "labels": [
+      "80 Mbit/s",
+      "5 µs"
+     ],
+     "numeric": [
+      80000000.0,
+      5000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      2.8236,
+      91.094,
+      46.162
+     ]
+    },
+    {
+     "labels": [
+      "80 Mbit/s",
+      "20 µs"
+     ],
+     "numeric": [
+      80000000.0,
+      20000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      3.7248,
+      89.452,
+      58.169
+     ]
+    },
+    {
+     "labels": [
+      "80 Mbit/s",
+      "50 µs"
+     ],
+     "numeric": [
+      80000000.0,
+      50000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      4.9414,
+      86.823,
+      80.857
+     ]
+    },
+    {
+     "labels": [
+      "80 Mbit/s",
+      "100 µs"
+     ],
+     "numeric": [
+      80000000.0,
+      100000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      8.2613,
+      86.841,
+      92.35
+     ]
+    }
+   ]
+  },
+  "07-pdo-size": {
+   "description": "PDO channel (window 2), 128 B mailboxes: bytes per cycle × cycle time",
+   "spec": "configs/studies/bulk-transfer/report/07-pdo-size.json",
+   "parameters": [
+    "protocol",
+    "cycle"
+   ],
+   "objectives": [
+    "10 MB transfer time, s",
+    "link utilization, %",
+    "PDI busy, %"
+   ],
+   "runs": [
+    {
+     "labels": [
+      "256 B, window 2",
+      "250 µs"
+     ],
+     "numeric": [
+      null,
+      250.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      10.081,
+      11.456,
+      48.155
+     ]
+    },
+    {
+     "labels": [
+      "256 B, window 2",
+      "500 µs"
+     ],
+     "numeric": [
+      null,
+      500.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      20.161,
+      5.7279,
+      24.078
+     ]
+    },
+    {
+     "labels": [
+      "256 B, window 2",
+      "1000 µs"
+     ],
+     "numeric": [
+      null,
+      1000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      40.322,
+      2.864,
+      12.039
+     ]
+    },
+    {
+     "labels": [
+      "512 B, window 2",
+      "250 µs"
+     ],
+     "numeric": [
+      null,
+      250.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      4.9935,
+      19.645,
+      89.101
+     ]
+    },
+    {
+     "labels": [
+      "512 B, window 2",
+      "500 µs"
+     ],
+     "numeric": [
+      null,
+      500.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      9.9208,
+      9.8233,
+      44.553
+     ]
+    },
+    {
+     "labels": [
+      "512 B, window 2",
+      "1000 µs"
+     ],
+     "numeric": [
+      null,
+      1000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      19.841,
+      4.9119,
+      22.278
+     ]
+    },
+    {
+     "labels": [
+      "1024 B, window 2",
+      "250 µs"
+     ],
+     "numeric": [
+      null,
+      250.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      11.866,
+      36.028,
+      95.523
+     ]
+    },
+    {
+     "labels": [
+      "1024 B, window 2",
+      "500 µs"
+     ],
+     "numeric": [
+      null,
+      500.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      4.9215,
+      18.012,
+      85.493
+     ]
+    },
+    {
+     "labels": [
+      "1024 B, window 2",
+      "1000 µs"
+     ],
+     "numeric": [
+      null,
+      1000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      9.8425,
+      9.0069,
+      42.751
+     ]
+    },
+    {
+     "labels": [
+      "1260 B, window 2",
+      "250 µs"
+     ],
+     "numeric": [
+      null,
+      250.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      4.3296,
+      43.566,
+      96.285
+     ]
+    },
+    {
+     "labels": [
+      "1260 B, window 2",
+      "500 µs"
+     ],
+     "numeric": [
+      null,
+      500.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      10.526,
+      21.789,
+      96.295
+     ]
+    },
+    {
+     "labels": [
+      "1260 B, window 2",
+      "1000 µs"
+     ],
+     "numeric": [
+      null,
+      1000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      7.9876,
+      10.894,
+      52.187
+     ]
+    },
+    {
+     "labels": [
+      "1270 B, window 2",
+      "250 µs"
+     ],
+     "numeric": [
+      null,
+      250.0
+     ],
+     "feasible": false,
+     "reason": "invalid spec: slave 2 (bulk-endpoint): SyncManagers need 4126 bytes of ESC RAM (mailboxes + 3 × process data), only 4096 available",
+     "objectives": null
+    },
+    {
+     "labels": [
+      "1270 B, window 2",
+      "500 µs"
+     ],
+     "numeric": [
+      null,
+      500.0
+     ],
+     "feasible": false,
+     "reason": "invalid spec: slave 2 (bulk-endpoint): SyncManagers need 4126 bytes of ESC RAM (mailboxes + 3 × process data), only 4096 available",
+     "objectives": null
+    },
+    {
+     "labels": [
+      "1270 B, window 2",
+      "1000 µs"
+     ],
+     "numeric": [
+      null,
+      1000.0
+     ],
+     "feasible": false,
+     "reason": "invalid spec: slave 2 (bulk-endpoint): SyncManagers need 4126 bytes of ESC RAM (mailboxes + 3 × process data), only 4096 available",
+     "objectives": null
+    }
+   ]
+  },
+  "08-pdo-pdi": {
+   "description": "PDO channel 1024 B/cycle at 250 µs, 128 B mailboxes: window × PDI rate",
+   "spec": "configs/studies/bulk-transfer/report/08-pdo-pdi.json",
+   "parameters": [
+    "protocol",
+    "PDI rate"
+   ],
+   "objectives": [
+    "10 MB transfer time, s",
+    "link utilization, %",
+    "PDI busy, %"
+   ],
+   "runs": [
+    {
+     "labels": [
+      "1024 B, window 1",
+      "10 Mbit/s"
+     ],
+     "numeric": [
+      null,
+      10000000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      17.032,
+      36.027,
+      97.682
+     ]
+    },
+    {
+     "labels": [
+      "1024 B, window 1",
+      "20 Mbit/s"
+     ],
+     "numeric": [
+      null,
+      20000000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      10.509,
+      36.028,
+      95.522
+     ]
+    },
+    {
+     "labels": [
+      "1024 B, window 1",
+      "40 Mbit/s"
+     ],
+     "numeric": [
+      null,
+      40000000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      4.9213,
+      36.026,
+      87.501
+     ]
+    },
+    {
+     "labels": [
+      "1024 B, window 1",
+      "80 Mbit/s"
+     ],
+     "numeric": [
+      null,
+      80000000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      4.9212,
+      36.026,
+      45.751
+     ]
+    },
+    {
+     "labels": [
+      "1024 B, window 2",
+      "10 Mbit/s"
+     ],
+     "numeric": [
+      null,
+      10000000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      8.5162,
+      36.022,
+      97.676
+     ]
+    },
+    {
+     "labels": [
+      "1024 B, window 2",
+      "20 Mbit/s"
+     ],
+     "numeric": [
+      null,
+      20000000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      11.866,
+      36.028,
+      95.523
+     ]
+    },
+    {
+     "labels": [
+      "1024 B, window 2",
+      "40 Mbit/s"
+     ],
+     "numeric": [
+      null,
+      40000000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      2.4608,
+      36.019,
+      87.482
+     ]
+    },
+    {
+     "labels": [
+      "1024 B, window 2",
+      "80 Mbit/s"
+     ],
+     "numeric": [
+      null,
+      80000000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      2.4607,
+      36.02,
+      45.741
+     ]
+    },
+    {
+     "labels": [
+      "1024 B, window 4",
+      "10 Mbit/s"
+     ],
+     "numeric": [
+      null,
+      10000000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      75.479,
+      36.031,
+      97.687
+     ]
+    },
+    {
+     "labels": [
+      "1024 B, window 4",
+      "20 Mbit/s"
+     ],
+     "numeric": [
+      null,
+      20000000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      38.781,
+      36.031,
+      95.529
+     ]
+    },
+    {
+     "labels": [
+      "1024 B, window 4",
+      "40 Mbit/s"
+     ],
+     "numeric": [
+      null,
+      40000000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      2.4608,
+      36.019,
+      87.482
+     ]
+    },
+    {
+     "labels": [
+      "1024 B, window 4",
+      "80 Mbit/s"
+     ],
+     "numeric": [
+      null,
+      80000000.0
+     ],
+     "feasible": true,
+     "reason": null,
+     "objectives": [
+      2.4607,
+      36.02,
+      45.741
+     ]
+    }
+   ]
+  }
+ },
+ "physical_bound_s": 0.8,
+ "tcp_reference_s": 0.84282,
+ "steps": [
+  {
+   "step": 1,
+   "description": "1. FoE, 128 B mailboxes, master serves 2 mailbox datagrams per 1 ms cycle",
+   "spec": "configs/studies/bulk-transfer/report/step-1.json",
+   "protocol": "FoE",
+   "duration_s": 172.41,
+   "goodput_mbps": 0.464,
+   "link_percent": 2.784,
+   "pdi_busy_percent": 7.2599,
+   "messages": 172416,
+   "retransmitted_chunks": 0
+  },
+  {
+   "step": 2,
+   "description": "2. … 1024 B mailboxes",
+   "spec": "configs/studies/bulk-transfer/report/step-2.json",
+   "protocol": "FoE",
+   "duration_s": 19.765,
+   "goodput_mbps": 4.0477,
+   "link_percent": 13.695,
+   "pdi_busy_percent": 43.096,
+   "messages": 19766,
+   "retransmitted_chunks": 0
+  },
+  {
+   "step": 3,
+   "description": "3. … 250 µs cycle",
+   "spec": "configs/studies/bulk-transfer/report/step-3.json",
+   "protocol": "FoE",
+   "duration_s": 12.353,
+   "goodput_mbps": 6.4761,
+   "link_percent": 44.451,
+   "pdi_busy_percent": 71.931,
+   "messages": 19766,
+   "retransmitted_chunks": 0
+  },
+  {
+   "step": 4,
+   "description": "4. 1 ms cycle, master polls in idle time (≤ 90 %)",
+   "spec": "configs/studies/bulk-transfer/report/step-4.json",
+   "protocol": "FoE",
+   "duration_s": 9.8825,
+   "goodput_mbps": 8.0951,
+   "link_percent": 86.847,
+   "pdi_busy_percent": 84.543,
+   "messages": 19766,
+   "retransmitted_chunks": 0
+  },
+  {
+   "step": 5,
+   "description": "5. … PDI moves only the message",
+   "spec": "configs/studies/bulk-transfer/report/step-5.json",
+   "protocol": "FoE",
+   "duration_s": 5.9291,
+   "goodput_mbps": 13.493,
+   "link_percent": 86.824,
+   "pdi_busy_percent": 74.902,
+   "messages": 19766,
+   "retransmitted_chunks": 0
+  },
+  {
+   "step": 6,
+   "description": "6. … PDI at 80 Mbit/s effective",
+   "spec": "configs/studies/bulk-transfer/report/step-6.json",
+   "protocol": "FoE",
+   "duration_s": 2.8236,
+   "goodput_mbps": 28.333,
+   "link_percent": 91.094,
+   "pdi_busy_percent": 46.162,
+   "messages": 19766,
+   "retransmitted_chunks": 0
+  },
+  {
+   "step": 7,
+   "description": "7. PDO channel 1024 B per 500 µs cycle instead",
+   "spec": "configs/studies/bulk-transfer/report/step-7.json",
+   "protocol": "PDO channel",
+   "duration_s": 4.9215,
+   "goodput_mbps": 16.255,
+   "link_percent": 18.012,
+   "pdi_busy_percent": 85.493,
+   "messages": 0,
+   "retransmitted_chunks": 0
+  },
+  {
+   "step": 8,
+   "description": "8. … 250 µs cycle, PDI at 40 Mbit/s effective",
+   "spec": "configs/studies/bulk-transfer/report/step-8.json",
+   "protocol": "PDO channel",
+   "duration_s": 2.4608,
+   "goodput_mbps": 32.51,
+   "link_percent": 36.019,
+   "pdi_busy_percent": 87.482,
+   "messages": 0,
+   "retransmitted_chunks": 0
+  }
+ ]
+}

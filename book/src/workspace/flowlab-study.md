@@ -7,7 +7,7 @@ frames, checks constraints and finds the Pareto frontier of the objectives. With
 run is the one whose simulated values come closest, and the residuals are reported. Every number
 in a study result is `simulated`.
 
-API: [`flowlab_study`](../api/flowlab_study/index.html) ·
+API: [`flowlab_study`](../../api/flowlab_study/index.html) ·
 source: [crates/flowlab-study](https://github.com/VitalyVorobyev/ecat-flowlab/blob/main/crates/flowlab-study)
 
 ## Position in the pipeline

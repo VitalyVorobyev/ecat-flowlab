@@ -9,3 +9,4 @@ ui/playwright-report/
 *.pcapng
 !fixtures/**/*.pcapng
 /book/build
+/_site

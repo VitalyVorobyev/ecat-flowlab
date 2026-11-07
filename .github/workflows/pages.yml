@@ -1,6 +1,7 @@
 name: Pages
 
-# Publishes the book with the Rust API docs under /api.
+# Publishes the site: start page and findings page from site/, the book under /book, the rustdoc
+# under /api (scripts/build-site.sh).
 on:
   push:
     branches: [main]
@@ -25,17 +26,11 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: mdbook@0.4
-      - run: mdbook build book
-      - run: cargo doc --no-deps --workspace
-      - name: Assemble site
-        run: |
-          mkdir -p site
-          cp -r book/build/. site/
-          cp -r target/doc site/api
+      - run: scripts/build-site.sh
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: _site
 
   deploy:
     needs: build

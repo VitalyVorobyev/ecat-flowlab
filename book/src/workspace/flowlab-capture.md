@@ -4,7 +4,7 @@
 decoded once with `ecat-wire`, with frame directions (TX/RX) inferred. It owns pcap and pcapng
 reading and writing; there is no libpcap dependency.
 
-API reference: [`flowlab_capture`](../api/flowlab_capture/index.html) ·
+API reference: [`flowlab_capture`](../../api/flowlab_capture/index.html) ·
 source: [`crates/flowlab-capture`](https://github.com/VitalyVorobyev/ecat-flowlab/blob/main/crates/flowlab-capture)
 
 ## Position in the pipeline

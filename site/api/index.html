@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FlowLab API reference</title>
+    <meta name="description" content="Rustdoc of the ECAT FlowLab workspace crates." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../assets/site.css" />
+    <link rel="icon" href="../assets/logo.svg" type="image/svg+xml" />
+    <script src="../assets/theme.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="wrap">
+        <a class="brand" href="../"><img src="../assets/logo.svg" width="24" height="24" alt="" />ECAT FlowLab</a>
+        <nav class="topnav" aria-label="Site">
+          <a href="../book/">Book</a>
+          <a href="../findings/">Findings</a>
+          <a href="./" aria-current="page">API</a>
+          <a class="wide" href="https://github.com/VitalyVorobyev/ecat-flowlab">GitHub</a>
+        </nav>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle colour theme">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5a6.5 6.5 0 1 0 0 13z" fill="currentColor" /><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.2" /></svg>
+        </button>
+      </div>
+    </header>
+    <main class="wrap">
+      <section>
+        <p class="eyebrow">Rustdoc · main branch</p>
+        <h1>API reference</h1>
+        <p class="lede">
+          One entry per workspace crate, in dependency order. How the crates fit together is in the
+          book's <a href="../book/workspace/overview.html">workspace overview</a>.
+        </p>
+      </section>
+      <section>
+        <ul class="linklist">
+          <li>
+            <a href="ecat_wire/index.html"><code>ecat-wire</code></a>
+            <span class="muted">Zero-copy EtherCAT frame, datagram and mailbox codec: parse and encode, no I/O.</span>
+          </li>
+          <li>
+            <a href="flowlab_core/index.html"><code>flowlab-core</code></a>
+            <span class="muted">Units, provenance and the report envelope shared by every result.</span>
+          </li>
+          <li>
+            <a href="flowlab_capture/index.html"><code>flowlab-capture</code></a>
+            <span class="muted">pcap/pcapng reader and writer, and the indexed EtherCAT trace.</span>
+          </li>
+          <li>
+            <a href="flowlab_analysis/index.html"><code>flowlab-analysis</code></a>
+            <span class="muted">Capture analysis: cyclic streams, timing, working counters, load, stations, mailbox.</span>
+          </li>
+          <li>
+            <a href="flowlab_synth/index.html"><code>flowlab-synth</code></a>
+            <span class="muted">Deterministic synthetic captures with known ground truth.</span>
+          </li>
+          <li>
+            <a href="flowlab_sim/index.html"><code>flowlab-sim</code></a>
+            <span class="muted">Discrete-event simulator of master, link, ESC and PDI, emitting real frames.</span>
+          </li>
+          <li>
+            <a href="flowlab_devices/index.html"><code>flowlab-devices</code></a>
+            <span class="muted">ESI and ENI readers, ENI writer and the bus-budget planner.</span>
+          </li>
+          <li>
+            <a href="flowlab_study/index.html"><code>flowlab-study</code></a>
+            <span class="muted">Parameter studies: sweeps, constraints, Pareto frontier, calibration.</span>
+          </li>
+          <li>
+            <a href="flowlab_server/index.html"><code>flowlab-server</code></a>
+            <span class="muted">Local HTTP API and static host for the UI.</span>
+          </li>
+          <li>
+            <a href="flowlab/index.html"><code>flowlab-cli</code></a>
+            <span class="muted">The flowlab command line.</span>
+          </li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

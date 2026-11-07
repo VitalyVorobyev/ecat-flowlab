@@ -17,6 +17,7 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace
 cd ui && bun run fmt:check && bun run lint && bun run typecheck && bun run test:run && bun run build
 mdbook build book                              # if you changed the book
+scripts/build-site.sh                          # the whole Pages site in _site/
 ```
 
 CI runs all of these, plus the Wireshark cross-check, the licence check (`cargo deny`) and the
@@ -31,9 +32,10 @@ report regeneration below. See [Testing and validation](testing.md).
 - **Study reports.** `python3 scripts/bulk-transfer-report.py` (after
   `cargo build --release -p flowlab-cli`) rewrites the specs in
   `configs/studies/bulk-transfer/report/` and the tables in
-  `book/src/studies/bulk-transfer/generated/`. A change to the simulator that moves a number
-  fails CI until the tables are regenerated. Then reread the report text: its prose quotes some
-  of those numbers.
+  `book/src/studies/bulk-transfer/generated/`, including `findings.json`, the data of the
+  findings page. A change to the simulator that moves a number fails CI until the tables are
+  regenerated. Then reread the report text and the findings page: both quote some of those
+  numbers.
 
 ## Rules that reviews check
 
@@ -61,7 +63,11 @@ report regeneration below. See [Testing and validation](testing.md).
 
 ## Documentation
 
-This book is the user-facing documentation; the README stays a short entry point. Write in the
+This book is the user-facing documentation; the README stays a short entry point. The published
+site (<https://vitalyvorobyev.github.io/ecat-flowlab/>) wraps it: a start page and the
+interactive findings page in `site/` (static HTML, Observable Plot from a CDN), the book under
+`/book` and the rustdoc under `/api`. `scripts/build-site.sh` assembles it in `_site/`; the
+Pages workflow runs the same script on every push to `main`. Write in the
 present tense about what the code does, with units, and with British spelling as in the code.
 Public Rust items need doc comments (`missing_docs`); a crate's top-level docs should say what it
 is for and show a short example.

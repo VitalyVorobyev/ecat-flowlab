@@ -12,7 +12,7 @@ create-missing = false
 [output.html]
 git-repository-url = "https://github.com/VitalyVorobyev/ecat-flowlab"
 edit-url-template = "https://github.com/VitalyVorobyev/ecat-flowlab/edit/main/book/{path}"
-site-url = "/ecat-flowlab/"
+site-url = "/ecat-flowlab/book/"
 no-section-label = false
 
 [output.html.fold]

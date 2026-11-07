@@ -5,7 +5,9 @@ behind a LAN9252-class EtherCAT slave controller on SPI, and which changes help,
 and on what conditions. It is based on **simulations only**. No lab measurement exists yet. The
 slave-side parameters that matter most (the SPI's effective rate and per-access cost) are
 placeholders until they are measured. Read the numbers as *how the outcome depends on the
-system*. They are not predictions of the lab result.
+system*. They are not predictions of the lab result. The same results are on the interactive
+[findings page](https://vitalyvorobyev.github.io/ecat-flowlab/findings/), which also checks
+every configuration against a deadline and link and SPI limits you set.
 
 > **In short**
 >
