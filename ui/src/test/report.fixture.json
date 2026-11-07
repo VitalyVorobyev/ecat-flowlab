@@ -11,7 +11,7 @@
     },
     "assumptions": [
       "Utilization assumes a 100 Mbit/s link; wire bytes include padding to 64 bytes, preamble, FCS and the 12-byte inter-frame gap.",
-      "A cyclic stream is a datagram layout (command, address, length) sent at least 20 times with ≥ 60 % of intervals within ±50 % of the median.",
+      "A cyclic stream is a datagram layout (command, address, length) sent at least 20 times with ≥ 60 % of intervals within ±50 % of the median; an interval longer than 1.5 periods is a gap.",
       "Expected working counters are the most frequent value per datagram position; no ENI network configuration was given.",
       "Timestamps are taken as recorded by the capture tool; their accuracy is not known to FlowLab.",
       "Directions: source MAC without the locally-administered bit is TX, with it RX (ESCs set the bit on returning frames).",

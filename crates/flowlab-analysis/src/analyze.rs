@@ -21,6 +21,12 @@ pub struct AnalysisOptions {
     pub min_stream_frames: usize,
     /// Warn when |phase jitter| p99 exceeds this fraction of the period.
     pub jitter_warn_fraction: f64,
+    /// An interval longer than this many periods is a gap (missed cycles; warned about).
+    pub gap_factor: f64,
+    /// A layout is a cyclic stream when at least this share of its intervals…
+    pub regular_share: f64,
+    /// …lies within ± this fraction of the median interval.
+    pub regular_tolerance: f64,
     /// Points per time series.
     pub max_series_points: usize,
     /// Histogram bins (target).
@@ -39,6 +45,9 @@ impl Default for AnalysisOptions {
             link_bps: units::FAST_ETHERNET_BPS,
             min_stream_frames: 20,
             jitter_warn_fraction: 0.10,
+            gap_factor: 1.5,
+            regular_share: 0.6,
+            regular_tolerance: 0.5,
             max_series_points: 2000,
             histogram_bins: 40,
             in_flight_window_ns: 50_000_000,
@@ -160,7 +169,7 @@ pub fn analyze(trace: &Trace, opts: &AnalysisOptions) -> Analysis {
         |i: u32| trace.datagrams_of(&trace.frames[i as usize]).iter().all(|d| mailbox.channels.access(d).is_some());
     let mut candidates: Vec<(u32, Vec<u32>)> = by_layout
         .into_iter()
-        .filter(|(_, v)| v.len() >= opts.min_stream_frames && !only_mailbox(v[0]) && is_regular(trace, v))
+        .filter(|(_, v)| v.len() >= opts.min_stream_frames && !only_mailbox(v[0]) && is_regular(trace, v, opts))
         .collect();
     candidates.sort_by(|a, b| b.1.len().cmp(&a.1.len()).then(a.0.cmp(&b.0)));
 
@@ -239,15 +248,16 @@ fn intervals(trace: &Trace, frames: &[u32]) -> Vec<f64> {
     frames.windows(2).map(|w| (trace.frames[w[1] as usize].t_ns - trace.frames[w[0] as usize].t_ns) as f64).collect()
 }
 
-/// At least 60 % of intervals within ±50 % of the median interval.
-fn is_regular(trace: &Trace, frames: &[u32]) -> bool {
+/// At least `regular_share` of the intervals within ±`regular_tolerance` of the median interval.
+fn is_regular(trace: &Trace, frames: &[u32], opts: &AnalysisOptions) -> bool {
     let mut iv = intervals(trace, frames);
     let m = median(&mut iv);
     if m <= 0.0 {
         return false;
     }
-    let ok = iv.iter().filter(|&&d| d >= 0.5 * m && d <= 1.5 * m).count();
-    ok as f64 >= 0.6 * iv.len() as f64
+    let tol = opts.regular_tolerance;
+    let ok = iv.iter().filter(|&&d| d >= (1.0 - tol) * m && d <= (1.0 + tol) * m).count();
+    ok as f64 >= opts.regular_share * iv.len() as f64
 }
 
 fn frame_event(trace: &Trace, i: u32) -> FrameEvent {
@@ -300,7 +310,7 @@ fn build_stream(
     let (mut gaps, mut missed) = (0u64, 0u64);
     let mut regular = Vec::with_capacity(iv.len());
     for d in &iv {
-        if *d > 1.5 * period {
+        if *d > opts.gap_factor * period {
             gaps += 1;
             missed += ((d / period).round() as u64).saturating_sub(1);
         } else {
@@ -724,7 +734,10 @@ fn findings(
             add(
                 Severity::Warn,
                 format!("{name}: {} missed cycles", s.missed_cycles),
-                format!("{} gaps longer than 1.5 periods in the master's send times.", s.gaps),
+                format!(
+                    "{} gaps longer than {} periods in the master's send times. Threshold: any.",
+                    s.gaps, opts.gap_factor
+                ),
             );
         }
         if let Some(p99) = s.phase_jitter_abs_p99_ns
@@ -767,8 +780,11 @@ fn assumptions(trace: &Trace, opts: &AnalysisOptions) -> Vec<String> {
             opts.link_bps / 1_000_000
         ),
         format!(
-            "A cyclic stream is a datagram layout (command, address, length) sent at least {} times with ≥ 60 % of intervals within ±50 % of the median.",
-            opts.min_stream_frames
+            "A cyclic stream is a datagram layout (command, address, length) sent at least {} times with ≥ {:.0} % of intervals within ±{:.0} % of the median; an interval longer than {} periods is a gap.",
+            opts.min_stream_frames,
+            opts.regular_share * 100.0,
+            opts.regular_tolerance * 100.0,
+            opts.gap_factor
         ),
         match &opts.network {
             None => "Expected working counters are the most frequent value per datagram position; no ENI network configuration was given.".into(),

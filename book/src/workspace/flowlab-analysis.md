@@ -35,16 +35,18 @@ user guide: [Analysing a capture](../guide/analysis.md), [Mailbox traffic](../gu
 | `link_bps` | 100 000 000 bit/s | utilization |
 | `min_stream_frames` | 20 | minimum TX frames of a cyclic stream |
 | `jitter_warn_fraction` | 0.10 | Warn when the p99 of \|phase jitter\| exceeds this fraction of the period |
+| `gap_factor` | 1.5 | an interval longer than this many periods is a gap (missed cycles, Warn) |
+| `regular_share`, `regular_tolerance` | 0.6, 0.5 | a cyclic stream needs this share of its intervals within ± this fraction of the median interval |
 | `max_series_points` | 2000 | points per time series (min/max decimation keeps spikes) |
 | `histogram_bins` | 40 | target bins per histogram |
 | `in_flight_window_ns` | 50 000 000 ns (50 ms) | TX frames this close to the capture end are not counted as unanswered |
 | `mailbox_hints` | empty | mailbox addresses for stations without SyncManager configuration in the capture |
 | `network` | `None` | the master's ENI: expected working counters, mailboxes, station names |
 
-Fixed in the code and stated in the report's assumptions or finding text: a stream needs
-≥ 60 % of its intervals within ±50 % of the median interval; a gap is an interval longer than
-1.5 periods; event and transaction lists hold at most 2000 entries; utilization bins are at
-least 100 µs wide.
+The stream and gap thresholds are stated in the report's assumptions and finding text. Fixed
+in the code: event and transaction lists hold at most 2000 entries; utilization bins are at
+least 100 µs wide; the mailbox service pattern needs 10 cycles and reads more than 1.5 frames
+per cycle as back-to-back polling (both stated in the assumptions).
 
 ## The pass
 
@@ -64,7 +66,7 @@ least 100 µs wide.
 5. **Period and jitter.** Each interval is rounded to a whole number of median intervals,
    giving a cycle number per frame; the period is the least-squares slope of send time over
    cycle number, so gaps do not bias it. *Phase jitter* is each send time's residual from that
-   line; *interval* statistics exclude gaps (> 1.5 periods), which are counted as gaps and
+   line; *interval* statistics exclude gaps (> `gap_factor` periods, default 1.5), which are counted as gaps and
    missed cycles. For independent send errors of σ, phase σ ≈ σ and interval σ ≈ √2 σ.
 6. **Round trip.** RX time minus TX time for every paired frame of a stream.
 7. **Working counters.** Per datagram position of a stream, the expected value is the ENI's
@@ -96,7 +98,7 @@ threshold. `Warn` and `Defect` are verdicts against a declared threshold; `Info`
 | Defect | working-counter mismatches | any, against the stated basis |
 | Defect | station reports an AL error | error bit in the last AL status read |
 | Defect | SDO transfers violated the protocol | any |
-| Warn | missed cycles | gaps > 1.5 periods |
+| Warn | missed cycles | any gap > `gap_factor` periods (1.5) |
 | Warn | send jitter p99 | `jitter_warn_fraction` × period |
 | Warn | malformed EtherCAT frames; aborted SDO transfers; CoE emergencies; failed FoE transfers; EoE frames not reassembled; mailbox error replies; malformed mailbox messages | any |
 | Info | no EtherCAT frames; directions unknown or inferred from WKC; no cyclic stream; unfinished SDO transfers; rejected mailbox writes; synthetic capture | — |

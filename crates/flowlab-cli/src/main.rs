@@ -83,6 +83,9 @@ enum Cmd {
         /// Network configuration (ENI) for analysing that capture.
         #[arg(long, value_name = "XML")]
         eni: Option<PathBuf>,
+        /// Mailbox addresses for that capture, `STATION=OUT,IN`. Repeatable.
+        #[arg(long = "mailbox", value_name = "STATION=OUT,IN")]
+        mailbox_hints: Vec<MailboxHint>,
         /// Write the result JSON.
         #[arg(long)]
         result: Option<PathBuf>,
@@ -305,7 +308,7 @@ fn run(cli: Cli) -> Result<()> {
                 }
             }
         }
-        Cmd::Study { spec, capture, eni, result } => {
+        Cmd::Study { spec, capture, eni, mailbox_hints, result } => {
             let spec: flowlab_study::StudySpec = match spec {
                 Some(p) => serde_json::from_reader(File::open(&p).map_err(|e| format!("{}: {e}", p.display()))?)
                     .map_err(|e| format!("{}: {e}", p.display()))?,
@@ -315,8 +318,11 @@ fn run(cli: Cli) -> Result<()> {
                 Some(c) => {
                     let file = CaptureFile::read(c).map_err(|e| format!("{}: {e}", c.display()))?;
                     let name = c.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                    let opts =
-                        AnalysisOptions { network: eni.as_deref().map(read_eni).transpose()?, ..Default::default() };
+                    let opts = AnalysisOptions {
+                        network: eni.as_deref().map(read_eni).transpose()?,
+                        mailbox_hints,
+                        ..Default::default()
+                    };
                     Some(analyze(&Trace::build(file, &name), &opts).report)
                 }
                 None => None,

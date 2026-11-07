@@ -46,7 +46,7 @@ intervals lie within ±50 % of the median, is a **cyclic stream**.
   not bias it.
 - **Phase jitter**: each send time's residual from that line. This is what a slave
   synchronised to the master's cycle sees.
-- **Interval**: the difference between consecutive send times, excluding gaps (> 1.5 periods),
+- **Interval**: the difference between consecutive send times, excluding gaps (> 1.5 periods by default),
   which are counted as **missed cycles** instead. For independent send errors of σ, phase σ ≈ σ
   and interval σ ≈ √2 σ.
 

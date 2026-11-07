@@ -22,7 +22,7 @@ flowlab <COMMAND>
 | `analyze CAPTURE` | `-o/--out FILE` JSON report · `--json` to stdout · `--eni XML` · `--mailbox STATION=OUT,IN` (repeatable) · `--eoe-out PCAPNG` · `--link-mbps N` (100) · `--min-stream-frames N` (20) |
 | `synth [SPEC]` | `-o/--out FILE` (required) · `--truth FILE` · `--eni FILE` |
 | `simulate [SPECS…]` | `-o/--out FILE` frames (one spec) · `--result FILE` JSON (an array for several specs) |
-| `study [SPEC]` | `--capture FILE` to calibrate against · `--eni XML` for that capture · `--result FILE` |
+| `study [SPEC]` | `--capture FILE` to calibrate against · `--eni XML` and `--mailbox …` for that capture · `--result FILE` |
 | `plan [SPEC]` | `--json` |
 | `esi FILE` | `--json` |
 | `serve [CAPTURES…]` | `-p/--port` (7878) · `--host` (127.0.0.1) · `--ui-dir` (ui/dist) · `--open` · `--eni XML` · `--mailbox …` |

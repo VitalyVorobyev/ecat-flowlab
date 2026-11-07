@@ -323,3 +323,28 @@ fn eni_supplies_mailboxes_missing_from_the_capture() {
     assert!(m.channels.iter().all(|c| c.source == ChannelSource::Eni), "{:?}", m.channels);
     assert_eq!(m.eoe.frames_total, truth.mailbox.eoe_frames_to_slave + truth.mailbox.eoe_frames_from_slave);
 }
+
+#[test]
+fn stream_thresholds_come_from_the_options() {
+    let s = faulty();
+    let mut bytes = Vec::new();
+    let truth = generate(&s, &mut bytes).unwrap();
+    assert!(truth.skipped_cycles > 0);
+    let trace = Trace::build(CaptureFile::parse(bytes).unwrap(), "t.pcapng");
+    let with = |opts: AnalysisOptions| analyze(&trace, &opts).report;
+
+    let r = with(AnalysisOptions::default());
+    assert!(r.streams[0].gaps > 0);
+    assert!(r.findings.iter().any(|f| f.detail.contains("longer than 1.5 periods")));
+    assert!(r.meta.assumptions.iter().any(|a| a.contains("≥ 60 % of intervals within ±50 %")));
+
+    // A skipped cycle is a 2-period interval: not a gap above a factor of 2.5.
+    let r = with(AnalysisOptions { gap_factor: 2.5, ..AnalysisOptions::default() });
+    assert_eq!(r.streams[0].gaps, 0);
+    assert!(!r.findings.iter().any(|f| f.title.contains("missed cycles")));
+
+    // Demanding every interval within ±1 % rejects the jittered stream (5 µs σ on 1 ms).
+    let r = with(AnalysisOptions { regular_share: 1.0, regular_tolerance: 0.001, ..AnalysisOptions::default() });
+    assert!(r.streams.is_empty());
+    assert!(r.meta.assumptions.iter().any(|a| a.contains("≥ 100 % of intervals within ±0 %")));
+}

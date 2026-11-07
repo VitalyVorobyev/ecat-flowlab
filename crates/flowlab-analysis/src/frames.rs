@@ -33,6 +33,28 @@ pub struct FrameFilter {
     pub mailbox: Option<String>,
 }
 
+impl FrameFilter {
+    /// Check the names in the filter, so a typo is an error instead of an empty list.
+    pub fn validate(&self) -> Result<(), String> {
+        if let Some(c) = &self.command
+            && !ecat_wire::Command::ALL.iter().any(|k| k.mnemonic().eq_ignore_ascii_case(c))
+        {
+            return Err(format!("unknown command `{c}`"));
+        }
+        if let Some(d) = &self.direction
+            && !["tx", "rx", "unknown"].contains(&d.as_str())
+        {
+            return Err(format!("unknown direction `{d}`: expected tx, rx or unknown"));
+        }
+        if let Some(m) = &self.mailbox
+            && mailbox_mask(m).is_none()
+        {
+            return Err(format!("unknown mailbox filter `{m}`: expected any, coe, foe, eoe, soe, voe, aoe or error"));
+        }
+        Ok(())
+    }
+}
+
 fn mailbox_mask(name: &str) -> Option<u32> {
     let t = match name.to_ascii_lowercase().as_str() {
         "any" => return Some(ANY_MAILBOX),
