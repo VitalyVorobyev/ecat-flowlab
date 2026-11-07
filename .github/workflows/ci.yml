@@ -31,6 +31,26 @@ jobs:
           cargo run -q -p flowlab-cli -- synth configs/synth/demo.json -o results/demo.pcapng --truth results/truth.json
           cargo run -q -p flowlab-cli -- analyze results/demo.pcapng --out results/report.json
 
+  wireshark:
+    name: Cross-check with Wireshark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install tshark
+        run: |
+          echo "wireshark-common wireshark-common/install-setuid boolean false" | sudo debconf-set-selections
+          sudo DEBIAN_FRONTEND=noninteractive apt-get update -q
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -yq tshark
+          tshark --version | head -1
+      - name: Mailbox decoding matches the EtherCAT dissector
+        run: |
+          mkdir -p results
+          cargo run -q -p flowlab-cli -- synth configs/synth/demo.json -o results/demo.pcapng
+          cargo run -q -p flowlab-cli -- analyze results/demo.pcapng --out results/demo.json
+          python3 scripts/crosscheck-tshark.py results/demo.pcapng results/demo.json
+
   ui:
     runs-on: ubuntu-latest
     defaults:

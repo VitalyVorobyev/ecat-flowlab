@@ -1,4 +1,4 @@
-use crate::error::{WireError, le16, need};
+use crate::error::{WireError, le16, le32, need};
 
 /// Length of the mailbox header.
 pub const MAILBOX_HEADER_LEN: usize = 6;
@@ -100,5 +100,77 @@ impl MailboxHeader {
             (self.channel & 0x3F) | (self.priority << 6),
             (self.mailbox_type.code() & 0x0F) | ((self.counter & 0x07) << 4),
         ]
+    }
+}
+
+/// The 6-byte VoE header after the mailbox header.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct VoeHeader {
+    /// Vendor id (ETG-assigned).
+    pub vendor_id: u32,
+    /// Vendor-specific type.
+    pub vendor_type: u16,
+}
+
+impl VoeHeader {
+    /// Length of the VoE header.
+    pub const LEN: usize = 6;
+
+    /// Parse from the start of `buf`.
+    pub fn parse(buf: &[u8]) -> Result<Self, WireError> {
+        need(buf, 0, Self::LEN)?;
+        Ok(Self { vendor_id: le32(buf, 0), vendor_type: le16(buf, 4) })
+    }
+
+    /// Encode to 6 bytes.
+    pub fn encode(&self) -> [u8; 6] {
+        let v = self.vendor_id.to_le_bytes();
+        let t = self.vendor_type.to_le_bytes();
+        [v[0], v[1], v[2], v[3], t[0], t[1]]
+    }
+}
+
+/// A mailbox error reply (mailbox type 0): the slave rejected a mailbox message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct MailboxErrorReply {
+    /// Service type, `0x0001` for a mailbox command error.
+    pub service: u16,
+    /// Error detail code.
+    pub detail: u16,
+}
+
+impl MailboxErrorReply {
+    /// Length after the mailbox header.
+    pub const LEN: usize = 4;
+
+    /// Parse from the start of `buf`.
+    pub fn parse(buf: &[u8]) -> Result<Self, WireError> {
+        need(buf, 0, Self::LEN)?;
+        Ok(Self { service: le16(buf, 0), detail: le16(buf, 2) })
+    }
+
+    /// Encode to 4 bytes.
+    pub fn encode(&self) -> [u8; 4] {
+        let s = self.service.to_le_bytes();
+        let d = self.detail.to_le_bytes();
+        [s[0], s[1], d[0], d[1]]
+    }
+
+    /// Text of the detail code.
+    pub const fn detail_text(&self) -> &'static str {
+        match self.detail {
+            0x0001 => "Syntax of the 6-byte mailbox header is wrong",
+            0x0002 => "Mailbox protocol not supported",
+            0x0003 => "Channel field contains a wrong value",
+            0x0004 => "Service in the mailbox protocol not supported",
+            0x0005 => "Mailbox protocol header is wrong",
+            0x0006 => "Length of received mailbox data is too short",
+            0x0007 => "Mailbox protocol cannot be processed: not enough memory",
+            0x0008 => "Length of data is inconsistent",
+            0x0009 => "Mailbox service already in use",
+            _ => "Unknown mailbox error",
+        }
     }
 }

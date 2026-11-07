@@ -23,6 +23,18 @@ export type { ByteRange } from "./gen/ByteRange";
 export type { Point } from "./gen/Point";
 export type { Direction } from "./gen/Direction";
 export type { DirectionMode } from "./gen/DirectionMode";
+export type { ChannelSource } from "./gen/ChannelSource";
+export type { CoeReport } from "./gen/CoeReport";
+export type { EmergencyEvent } from "./gen/EmergencyEvent";
+export type { EoeFrame } from "./gen/EoeFrame";
+export type { FoeTransfer } from "./gen/FoeTransfer";
+export type { MailboxChannel } from "./gen/MailboxChannel";
+export type { MailboxErrorEvent } from "./gen/MailboxErrorEvent";
+export type { MailboxInfo } from "./gen/MailboxInfo";
+export type { MailboxReport } from "./gen/MailboxReport";
+export type { ProtocolStats } from "./gen/ProtocolStats";
+export type { SdoOutcome } from "./gen/SdoOutcome";
+export type { SdoTransaction } from "./gen/SdoTransaction";
 
 /** An error the server answered with `{ "error": "..." }`, or a transport failure. */
 export class ApiError extends Error {
@@ -75,6 +87,7 @@ export function frameQuery(filter: FrameFilter, offset: number, limit: number): 
   if (filter.stream !== null) q.set("stream", String(filter.stream));
   if (filter.problems_only) q.set("problems_only", "true");
   if (filter.include_other) q.set("include_other", "true");
+  if (filter.mailbox) q.set("mailbox", filter.mailbox);
   return q.toString();
 }
 
@@ -85,7 +98,20 @@ export const NO_FILTER: FrameFilter = {
   stream: null,
   problems_only: false,
   include_other: false,
+  mailbox: null,
 };
+
+/** Mailbox protocol filters the server understands (`FrameFilter.mailbox`). */
+export const MAILBOX_FILTERS = [
+  { value: "any", label: "Any mailbox access" },
+  { value: "coe", label: "CoE" },
+  { value: "foe", label: "FoE" },
+  { value: "eoe", label: "EoE" },
+  { value: "soe", label: "SoE" },
+  { value: "voe", label: "VoE" },
+  { value: "aoe", label: "AoE" },
+  { value: "error", label: "Mailbox error" },
+] as const;
 
 export const api = {
   health: () => request<{ version: string }>("/api/health"),
@@ -102,6 +128,8 @@ export const api = {
   frames: (id: number, filter: FrameFilter, offset: number, limit: number) =>
     request<FramePage>(`/api/captures/${id}/frames?${frameQuery(filter, offset, limit)}`),
   frame: (id: number, no: number) => request<FrameDetail>(`/api/captures/${id}/frames/${no}`),
+  /** URL of the Ethernet frames reassembled from EoE, as a pcapng download. */
+  eoeUrl: (id: number) => `/api/captures/${id}/eoe.pcapng`,
   synthSchema: () => request<Record<string, unknown>>("/api/synth/schema"),
   synthExample: () => request<Record<string, unknown>>("/api/synth/example"),
   synth: (spec: unknown) => request<CaptureInfo>("/api/synth", json("POST", spec)),

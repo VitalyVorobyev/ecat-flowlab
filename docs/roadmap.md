@@ -25,13 +25,20 @@ No dates. Each milestone ends with a running, demonstrable artifact. Studies (e.
 - [x] UI on lab-ui: Captures, Overview, Timing, Frames (filters, decode, hex), Stations (AL timeline).
 - [x] ts-rs API types; render tests against a real report fixture.
 
-## M3 — Mailbox analysis
+## M3 — Mailbox analysis ✅
 
-- [ ] Mailbox stream reassembly: SyncManager addresses from observed SM configuration writes, else a user hint.
-- [ ] CoE: SDO transactions (expedited, segmented, complete access), abort codes, latency; SDO Information; emergencies.
-- [ ] FoE file transfers, EoE fragment reassembly (frame → Ethernet packet), VoE, SoE headers.
-- [ ] Per-protocol throughput and latency; mailbox polling cadence; UI Mailbox view.
-- [ ] Validate against public sample captures and Wireshark's dissector where licences allow.
+- [x] Mailbox channels: SyncManager addresses from observed SM configuration writes, else a user hint
+      (`--mailbox STATION=OUT,IN`), else a header heuristic — the source is reported.
+- [x] Messages from returning datagrams (WKC > 0); rejected writes, empty reads, status polls, repeats.
+- [x] CoE: SDO transactions (expedited, normal, segmented, complete access flag), toggle/size checks,
+      abort codes with text, duration; emergencies; SDO Information counted.
+- [x] FoE file transfers (goodput, errors, busy); EoE fragment reassembly with pcapng export; SoE/VoE/AoE headers.
+- [x] Per-protocol traffic; polling cadence; mailbox datagrams excluded from WKC verdicts and stream detection.
+- [x] UI Mailbox view; frame list filter by protocol; decoded mailbox fields in the frame detail.
+- [x] Synth: polling, rejected writes, segmented SDO, aborts, FoE, EoE, emergencies with ground truth.
+- [x] Cross-check against Wireshark's EtherCAT dissector (CI).
+- [ ] Validate on real captures from at least two masters (none available yet).
+- [ ] SDO Information transactions, SoE transactions, AoE; logically mapped mailbox status.
 
 ## M4 — Simulator
 

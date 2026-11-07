@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
+use flowlab_analysis::mailbox::{MailboxHint, write_eoe_pcapng};
 use flowlab_analysis::{AnalysisOptions, CaptureReport, Severity, analyze};
 use flowlab_capture::{CaptureFile, Trace};
 use flowlab_synth::SynthSpec;
@@ -47,6 +48,13 @@ enum Cmd {
         /// Minimum repetitions for a cyclic stream.
         #[arg(long, default_value_t = 20)]
         min_stream_frames: usize,
+        /// Mailbox addresses of a station whose SyncManager configuration is not in the
+        /// capture: `STATION=OUT,IN`, e.g. `0x1001=0x1000,0x1080`. Repeatable.
+        #[arg(long = "mailbox", value_name = "STATION=OUT,IN")]
+        mailbox_hints: Vec<MailboxHint>,
+        /// Write the Ethernet frames reassembled from EoE to this pcapng.
+        #[arg(long, value_name = "PCAPNG")]
+        eoe_out: Option<PathBuf>,
     },
     /// Serve the web UI and API on localhost.
     Serve {
@@ -65,6 +73,10 @@ enum Cmd {
         /// Open the UI in the default browser.
         #[arg(long)]
         open: bool,
+        /// Mailbox addresses for stations without SyncManager configuration in the capture,
+        /// `STATION=OUT,IN`. Repeatable.
+        #[arg(long = "mailbox", value_name = "STATION=OUT,IN")]
+        mailbox_hints: Vec<MailboxHint>,
     },
     /// Print a JSON Schema.
     Schema {
@@ -114,12 +126,22 @@ fn run(cli: Cli) -> Result<()> {
                 gt.skipped_cycles
             );
         }
-        Cmd::Analyze { capture, out, json, link_mbps, min_stream_frames } => {
+        Cmd::Analyze { capture, out, json, link_mbps, min_stream_frames, mailbox_hints, eoe_out } => {
             let file = CaptureFile::read(&capture).map_err(|e| format!("{}: {e}", capture.display()))?;
             let name = capture.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             let trace = Trace::build(file, &name);
-            let opts = AnalysisOptions { link_bps: link_mbps * 1_000_000, min_stream_frames, ..Default::default() };
+            let opts = AnalysisOptions {
+                link_bps: link_mbps * 1_000_000,
+                min_stream_frames,
+                mailbox_hints,
+                ..Default::default()
+            };
             let a = analyze(&trace, &opts);
+            if let Some(p) = &eoe_out {
+                ensure_parent(p)?;
+                let n = write_eoe_pcapng(&a.mailbox, trace.provenance, &name, BufWriter::new(File::create(p)?))?;
+                eprintln!("wrote {n} EoE-reassembled frames to {}", p.display());
+            }
             if let Some(o) = &out {
                 ensure_parent(o)?;
                 serde_json::to_writer_pretty(BufWriter::new(File::create(o)?), &a.report)?;
@@ -130,11 +152,11 @@ fn run(cli: Cli) -> Result<()> {
                 print_summary(&a.report);
             }
         }
-        Cmd::Serve { captures, port, host, ui_dir, open } => {
+        Cmd::Serve { captures, port, host, ui_dir, open, mailbox_hints } => {
             if !host.is_loopback() {
                 tracing::warn!("binding to {host}: the API can read local files and has no authentication");
             }
-            let state = flowlab_server::AppState::new(AnalysisOptions::default());
+            let state = flowlab_server::AppState::new(AnalysisOptions { mailbox_hints, ..Default::default() });
             for c in &captures {
                 let info = state.load_path(c).map_err(|e| format!("{}: {e}", c.display()))?;
                 tracing::info!("loaded {} ({} frames)", info.name, info.frames);
@@ -229,6 +251,42 @@ fn print_summary(r: &CaptureReport) {
             "  stations: {}",
             r.stations.iter().map(|s| format!("0x{:04X}", s.station)).collect::<Vec<_>>().join(" ")
         );
+    }
+    let m = &r.mailbox;
+    if !m.channels.is_empty() {
+        let protos: Vec<String> =
+            m.protocols.iter().map(|p| format!("{} {}↓/{}↑", p.protocol, p.messages_out, p.messages_in)).collect();
+        println!("  mailbox: {} stations; messages {}", m.channels.len(), protos.join(", "));
+        let c = &m.coe;
+        if c.transactions_total > 0 {
+            println!(
+                "    SDO: {} transfers, {} ok, {} aborted, {} unfinished, {} protocol errors; duration p50 {}",
+                c.transactions_total,
+                c.ok,
+                c.aborted,
+                c.unfinished,
+                c.protocol_errors,
+                c.duration.as_ref().map_or("-".into(), |d| ns(d.p50))
+            );
+        }
+        for t in &m.foe {
+            println!(
+                "    FoE {} '{}' station 0x{:04X}: {} B in {} packets, {}{}",
+                t.kind,
+                t.file_name,
+                t.station,
+                t.bytes,
+                t.packets,
+                t.outcome,
+                t.goodput_bps.map_or(String::new(), |b| format!(", {:.1} kbit/s", b / 1e3))
+            );
+        }
+        if m.eoe.frames_total > 0 || m.eoe.reassembly_errors > 0 {
+            println!(
+                "    EoE: {} frames reassembled ({} B to slaves, {} B from slaves), {} errors",
+                m.eoe.frames_total, m.eoe.bytes_to_slaves, m.eoe.bytes_from_slaves, m.eoe.reassembly_errors
+            );
+        }
     }
     for f in &r.findings {
         let tag = match f.severity {

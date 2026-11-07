@@ -40,14 +40,32 @@ const WKC_COLUMNS: Column<WkcSlot>[] = [
     header: "Datagram",
     cell: (w) => <span className="font-mono text-xs">{w.label}</span>,
   },
-  { key: "e", header: "Expected", numeric: true, cell: (w) => w.expected },
+  {
+    key: "e",
+    header: "Expected",
+    numeric: true,
+    cell: (w) =>
+      w.mailbox ? (
+        <span
+          className="text-xs text-fg-subtle"
+          title="Mailbox access: WKC 0 means the mailbox was full or empty, so it is not judged."
+        >
+          varies (mailbox)
+        </span>
+      ) : (
+        w.expected
+      ),
+  },
   {
     key: "m",
     header: "Mismatches",
     numeric: true,
-    cell: (w) => (
-      <span className={w.mismatches > 0 ? "text-defect" : undefined}>{count(w.mismatches)}</span>
-    ),
+    cell: (w) =>
+      w.mailbox ? (
+        "–"
+      ) : (
+        <span className={w.mismatches > 0 ? "text-defect" : undefined}>{count(w.mismatches)}</span>
+      ),
   },
   { key: "z", header: "Zero", numeric: true, cell: (w) => count(w.zero) },
 ];

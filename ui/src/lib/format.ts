@@ -30,6 +30,15 @@ export function bytes(n: number): string {
   return `${n} B`;
 }
 
+/** Bit rate in decimal units: `219.9 kbit/s`, `4.20 Mbit/s`. */
+export function bitRate(bps: number): string {
+  if (!Number.isFinite(bps)) return "–";
+  if (bps >= 1e9) return `${(bps / 1e9).toFixed(2)} Gbit/s`;
+  if (bps >= 1e6) return `${(bps / 1e6).toFixed(2)} Mbit/s`;
+  if (bps >= 1e3) return `${(bps / 1e3).toFixed(1)} kbit/s`;
+  return `${bps.toFixed(0)} bit/s`;
+}
+
 /** Percentage with adaptive precision: `0.042 %`, `1.24 %`, `37.5 %`. */
 export function percent(p: number): string {
   if (!Number.isFinite(p)) return "–";

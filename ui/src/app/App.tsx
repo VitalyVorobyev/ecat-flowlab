@@ -1,6 +1,6 @@
 import { Button, ErrorBox, Select, SkeletonRows, ThemeToggle, toast } from "@vitavision/ui";
 import { AppShell, FileDrop, NavRail, NavRailItem, StatusBar } from "@vitavision/workbench";
-import { Activity, FolderOpen, Gauge, Network, Rows3, Sparkles } from "lucide-react";
+import { Activity, FolderOpen, Gauge, Mail, Network, Rows3, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { api, type CaptureInfo, errorMessage, type FrameFilter, NO_FILTER } from "../api";
@@ -10,11 +10,12 @@ import { count, ns } from "../lib/format";
 import { useAsync } from "../lib/useAsync";
 import { CAPTURE_ACCEPT, Captures } from "../screens/Captures";
 import { Frames, type FramesTarget } from "../screens/Frames";
+import { Mailbox } from "../screens/Mailbox";
 import { Overview } from "../screens/Overview";
 import { Stations } from "../screens/Stations";
 import { Timing } from "../screens/Timing";
 
-export type View = "captures" | "overview" | "timing" | "frames" | "stations";
+export type View = "captures" | "overview" | "timing" | "frames" | "stations" | "mailbox";
 
 const DIRECTIONS = {
   mac_local_bit: "directions: MAC bit",
@@ -171,6 +172,7 @@ export function App() {
       <NavRailItem value="timing" label="Timing" icon={<Activity />} disabled={!hasReport} />
       <NavRailItem value="frames" label="Frames" icon={<Rows3 />} disabled={!hasReport} />
       <NavRailItem value="stations" label="Stations" icon={<Network />} disabled={!hasReport} />
+      <NavRailItem value="mailbox" label="Mailbox" icon={<Mail />} disabled={!hasReport} />
     </NavRail>
   );
 
@@ -222,6 +224,8 @@ export function App() {
         onFilterChange={setFrameFilter}
       />
     );
+  } else if (view === "mailbox") {
+    main = <Mailbox captureId={selectedId} report={report.data} onOpenFrame={openFrame} />;
   } else {
     main = <Stations report={report.data} onOpenFrame={openFrame} />;
   }

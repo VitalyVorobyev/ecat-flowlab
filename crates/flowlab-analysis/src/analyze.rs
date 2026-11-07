@@ -4,6 +4,7 @@ use ecat_wire::{AddressMode, AlStatus, Command, DatagramAddress, register_info, 
 use flowlab_capture::{DatagramRecord, Direction, DirectionMode, FrameKind, Trace};
 use flowlab_core::{Provenance, ReportMeta, units};
 
+use crate::mailbox::{self, Channels, MailboxAnalysis, MailboxHint};
 use crate::report::*;
 use crate::stats::{Distribution, decimate, nice_step};
 
@@ -22,6 +23,8 @@ pub struct AnalysisOptions {
     pub histogram_bins: usize,
     /// TX frames within this time of the capture end are not counted as unanswered.
     pub in_flight_window_ns: u64,
+    /// Mailbox SyncManager addresses for stations whose configuration the capture lacks.
+    pub mailbox_hints: Vec<MailboxHint>,
 }
 
 impl Default for AnalysisOptions {
@@ -33,6 +36,7 @@ impl Default for AnalysisOptions {
             max_series_points: 2000,
             histogram_bins: 40,
             in_flight_window_ns: 50_000_000,
+            mailbox_hints: Vec::new(),
         }
     }
 }
@@ -57,6 +61,8 @@ pub struct Analysis {
     pub unanswered: Vec<bool>,
     /// Expected WKC per (stream id, datagram position).
     pub expected_wkc: HashMap<(u16, u16), u16>,
+    /// Mailbox channels, messages and reassembled EoE frames.
+    pub mailbox: MailboxAnalysis,
 }
 
 type Layout = Vec<(u8, u32, u16)>;
@@ -111,6 +117,8 @@ pub fn analyze(trace: &Trace, opts: &AnalysisOptions) -> Analysis {
     }
 
     let directions_known = trace.direction_mode != DirectionMode::Unknown;
+    let (mailbox, mailbox_report) =
+        mailbox::analyze(trace, &order, &pair_of, &opts.mailbox_hints, directions_known, opts.histogram_bins);
     let is_sent = |i: usize| match trace.frames[i].direction {
         Direction::Tx => true,
         Direction::Rx => false,
@@ -124,8 +132,13 @@ pub fn analyze(trace: &Trace, opts: &AnalysisOptions) -> Analysis {
             by_layout.entry(layout_of[i as usize]).or_default().push(i);
         }
     }
-    let mut candidates: Vec<(u32, Vec<u32>)> =
-        by_layout.into_iter().filter(|(_, v)| v.len() >= opts.min_stream_frames && is_regular(trace, v)).collect();
+    // Frames made only of mailbox accesses are polling, not process data.
+    let only_mailbox =
+        |i: u32| trace.datagrams_of(&trace.frames[i as usize]).iter().all(|d| mailbox.channels.access(d).is_some());
+    let mut candidates: Vec<(u32, Vec<u32>)> = by_layout
+        .into_iter()
+        .filter(|(_, v)| v.len() >= opts.min_stream_frames && !only_mailbox(v[0]) && is_regular(trace, v))
+        .collect();
     candidates.sort_by(|a, b| b.1.len().cmp(&a.1.len()).then(a.0.cmp(&b.0)));
 
     let mut stream_of = vec![u16::MAX; n];
@@ -148,6 +161,7 @@ pub fn analyze(trace: &Trace, opts: &AnalysisOptions) -> Analysis {
             &pair_of,
             &unanswered,
             directions_known,
+            &mailbox.channels,
             &mut wkc_mismatch,
             &mut expected_wkc,
         ));
@@ -156,10 +170,14 @@ pub fn analyze(trace: &Trace, opts: &AnalysisOptions) -> Analysis {
     let utilization = utilization(trace, opts, directions_known);
     let (stations, al_events, slaves_responding) = stations(trace, &order, directions_known);
     let summary = summary(trace, &pair_of, &unanswered, slaves_responding);
-    let findings = findings(trace, opts, &summary, &streams, &stations);
-    let meta = ReportMeta::new(trace.provenance, trace.input.clone(), assumptions(trace, opts));
-    let report = CaptureReport { meta, summary, streams, utilization, stations, al_events, findings };
-    Analysis { report, pair_of, stream_of, wkc_mismatch, unanswered, expected_wkc }
+    let mut findings = findings(trace, opts, &summary, &streams, &stations);
+    mailbox::findings(&mailbox_report, &mut findings);
+    let mut assumptions = assumptions(trace, opts);
+    assumptions.extend(mailbox::assumptions(&mailbox_report));
+    let meta = ReportMeta::new(trace.provenance, trace.input.clone(), assumptions);
+    let report =
+        CaptureReport { meta, summary, streams, utilization, stations, al_events, mailbox: mailbox_report, findings };
+    Analysis { report, pair_of, stream_of, wkc_mismatch, unanswered, expected_wkc, mailbox }
 }
 
 fn median(v: &mut [f64]) -> f64 {
@@ -210,6 +228,7 @@ fn build_stream(
     pair_of: &[u32],
     unanswered: &[bool],
     directions_known: bool,
+    channels: &Channels,
     wkc_mismatch: &mut [bool],
     expected_wkc: &mut HashMap<(u16, u16), u16>,
 ) -> CyclicStream {
@@ -275,6 +294,7 @@ fn build_stream(
                 expected: expected[p],
                 mismatches: 0,
                 zero: 0,
+                mailbox: channels.access(d).is_some(),
             })
             .collect();
         for (p, e) in expected.iter().enumerate() {
@@ -283,7 +303,7 @@ fn build_stream(
         for &r in &rx {
             let mut bad = false;
             for (p, d) in trace.datagrams_of(&trace.frames[r as usize]).iter().enumerate() {
-                if d.wkc != expected[p] {
+                if d.wkc != expected[p] && !slots[p].mailbox {
                     slots[p].mismatches += 1;
                     bad = true;
                 }

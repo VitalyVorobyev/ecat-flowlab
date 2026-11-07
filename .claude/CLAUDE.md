@@ -11,6 +11,7 @@ cd ui && bun run lint && bun run typecheck && bun run test:run && bun run build 
 cargo run -p flowlab-cli -- synth configs/synth/demo.json -o results/demo.pcapng --truth results/demo.truth.json
 cargo run -p flowlab-cli -- analyze results/demo.pcapng --out results/demo.json
 cargo run -p flowlab-cli -- serve results/demo.pcapng      # UI from ui/dist on :7878
+python3 scripts/crosscheck-tshark.py results/demo.pcapng results/demo.json   # needs tshark
 ```
 
 `cargo test` exports ts-rs types to `ui/src/api/gen/` (configured in `.cargo/config.toml`).
@@ -30,6 +31,9 @@ the report schema changed, regenerate `ui/src/test/report.fixture.json` (see `ui
   tests assert against its `GroundTruth`, not against hand-copied numbers.
 - `flowlab-server`: thin. No analysis logic in handlers; heavy work in `spawn_blocking`.
 - The simulator (M4) must emit frames through `ecat-wire` into the same analysis pipeline.
+- Mailbox: messages only from returning datagrams with WKC > 0; channel addresses from SM
+  configuration before hints before heuristics, and the source is always reported. New
+  mailbox encodings in synth must stay identical to Wireshark's reading (CI `wireshark` job).
 
 ## Rules
 

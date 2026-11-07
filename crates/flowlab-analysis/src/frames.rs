@@ -1,14 +1,15 @@
 //! Listing, filtering and explaining individual frames.
 
 use ecat_wire::{
-    AlStatus, CoeHeader, DatagramAddress, MAILBOX_HEADER_LEN, MailboxHeader, MailboxType, SdoHeader, parse_frame,
-    register_info, wire_bytes,
+    AlStatus, DatagramAddress, MAILBOX_HEADER_LEN, MailboxHeader, MailboxType, parse_frame, register_info, wire_bytes,
 };
 use flowlab_capture::{Direction, FrameKind, Trace};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::analyze::{Analysis, NONE};
+use crate::mailbox::{ANY_MAILBOX, Access, describe, protocol_name};
+use crate::report::ChannelSource;
 
 /// Which frames to list. All conditions must hold.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, TS)]
@@ -27,6 +28,24 @@ pub struct FrameFilter {
     pub problems_only: bool,
     /// Include non-EtherCAT frames.
     pub include_other: bool,
+    /// `"any"`: a datagram accesses a mailbox; or a protocol (`"coe"`, `"foe"`, `"eoe"`,
+    /// `"soe"`, `"voe"`, `"aoe"`, `"error"`): the frame carries a message of it.
+    pub mailbox: Option<String>,
+}
+
+fn mailbox_mask(name: &str) -> Option<u32> {
+    let t = match name.to_ascii_lowercase().as_str() {
+        "any" => return Some(ANY_MAILBOX),
+        "error" => MailboxType::Error,
+        "aoe" => MailboxType::Aoe,
+        "eoe" => MailboxType::Eoe,
+        "coe" => MailboxType::Coe,
+        "foe" => MailboxType::Foe,
+        "soe" => MailboxType::Soe,
+        "voe" => MailboxType::Voe,
+        _ => return None,
+    };
+    Some(1 << t.code())
 }
 
 /// One row of the frame list.
@@ -97,6 +116,11 @@ fn matches(trace: &Trace, a: &Analysis, i: usize, f: &FrameFilter) -> bool {
     if f.problems_only && !(a.wkc_mismatch[i] || a.unanswered[i] || fr.kind == FrameKind::Malformed) {
         return false;
     }
+    if let Some(m) = &f.mailbox
+        && mailbox_mask(m).is_none_or(|mask| a.mailbox.frame_flags[i] & mask == 0)
+    {
+        return false;
+    }
     if f.command.is_some() || f.station.is_some() {
         let dgs = trace.datagrams_of(fr);
         if let Some(c) = &f.command
@@ -124,7 +148,20 @@ fn row(trace: &Trace, a: &Analysis, i: usize) -> FrameRow {
             if dgs.len() > 4 {
                 parts.push(format!("+{}", dgs.len() - 4));
             }
-            parts.join(" · ")
+            let mut s = parts.join(" · ");
+            let msg = (0..dgs.len() as u16).find_map(|p| a.mailbox.by_datagram.get(&(i as u32, p)));
+            if let Some(&m) = msg {
+                s.push_str(" — ");
+                s.push_str(&a.mailbox.messages[m as usize].summary);
+            } else if f.direction == Direction::Rx {
+                let note = dgs.iter().find_map(|d| match (a.mailbox.channels.access(d), d.wkc) {
+                    (Some(Access::In), 0) => Some(" — mailbox empty"),
+                    (Some(Access::Out), 0) => Some(" — mailbox full, write rejected"),
+                    _ => None,
+                });
+                s.push_str(note.unwrap_or(""));
+            }
+            s
         }
     };
     let paired = (a.pair_of[i] != NONE).then(|| a.pair_of[i]);
@@ -212,32 +249,23 @@ pub struct AddressInfo {
     pub register_area: Option<String>,
 }
 
-/// CoE content of a mailbox.
+/// A labelled value of a decoded structure.
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
-pub struct CoeInfo {
-    /// Service name.
-    pub service: String,
-    /// SDO command byte.
-    pub sdo_command: Option<u8>,
-    /// SDO object index.
-    pub index: Option<u16>,
-    /// SDO subindex.
-    pub subindex: Option<u8>,
-    /// SDO data field (expedited data, size or abort code).
-    pub data: Option<u32>,
-    /// Is an SDO abort.
-    pub abort: bool,
+pub struct Field {
+    /// Label.
+    pub name: String,
+    /// Value as text.
+    pub value: String,
 }
 
-/// Mailbox header found in a datagram's data (heuristic: physical write/read into RAM whose
-/// first bytes form a plausible mailbox header).
+/// The mailbox header of a message.
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
-pub struct MailboxInfo {
-    /// Protocol.
+pub struct MailboxHeaderInfo {
+    /// Protocol (`"CoE"`, …).
     pub protocol: String,
-    /// Declared length.
+    /// Declared length of the data after the header.
     pub length: u16,
     /// Address field.
     pub address: u16,
@@ -247,8 +275,25 @@ pub struct MailboxInfo {
     pub priority: u8,
     /// Counter.
     pub counter: u8,
-    /// CoE details, for CoE.
-    pub coe: Option<CoeInfo>,
+}
+
+/// How a datagram uses a slave's mailbox, and what it carries.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct MailboxInfo {
+    /// `"write"`, `"write rejected"` (mailbox full), `"write attempt"` (TX), `"read"`,
+    /// `"empty read"`, `"read attempt"` (TX) or `"status poll"`.
+    pub role: String,
+    /// How the mailbox address was learned.
+    pub source: ChannelSource,
+    /// Header, when the datagram carries a message.
+    pub header: Option<MailboxHeaderInfo>,
+    /// One-line description of the message.
+    pub summary: Option<String>,
+    /// Decoded protocol fields.
+    pub fields: Vec<Field>,
+    /// The message repeats the previous one's counter and was not counted.
+    pub repeat: bool,
 }
 
 /// Decoded datagram.
@@ -349,40 +394,53 @@ fn address_info(d: &ecat_wire::Datagram<'_>) -> AddressInfo {
     }
 }
 
-fn mailbox_info(d: &ecat_wire::Datagram<'_>) -> Option<MailboxInfo> {
-    let ado = d.address.ado()?;
-    if ado < 0x1000 || !matches!(d.address, DatagramAddress::Fixed { .. }) || d.data.len() < MAILBOX_HEADER_LEN {
-        return None;
-    }
-    let h = MailboxHeader::parse(d.data).ok()?;
-    if h.length == 0
-        || h.length as usize + MAILBOX_HEADER_LEN > d.data.len()
-        || matches!(h.mailbox_type, MailboxType::Reserved(_))
-    {
-        return None;
-    }
-    let body = &d.data[MAILBOX_HEADER_LEN..MAILBOX_HEADER_LEN + h.length as usize];
-    let coe = (h.mailbox_type == MailboxType::Coe).then(|| CoeHeader::parse(body).ok()).flatten().map(|c| {
-        let sdo = matches!(c.service, ecat_wire::CoeService::SdoRequest | ecat_wire::CoeService::SdoResponse)
-            .then(|| SdoHeader::parse(&body[CoeHeader::LEN..]).ok())
-            .flatten();
-        CoeInfo {
-            service: format!("{:?}", c.service),
-            sdo_command: sdo.map(|s| s.command),
-            index: sdo.map(|s| s.index),
-            subindex: sdo.map(|s| s.subindex),
-            data: sdo.map(|s| s.data),
-            abort: sdo.is_some_and(|s| s.is_abort()),
+fn mailbox_info(trace: &Trace, a: &Analysis, i: usize, p: u16) -> Option<MailboxInfo> {
+    let f = &trace.frames[i];
+    let rec = trace.datagrams_of(f).get(p as usize)?;
+    let access = a.mailbox.channels.access(rec)?;
+    let DatagramAddress::Fixed { station, .. } = rec.address() else { return None };
+    let tx = f.direction == Direction::Tx;
+    let role = match access {
+        Access::Status => "status poll",
+        Access::Out if tx => "write attempt",
+        Access::Out if rec.wkc == 0 => "write rejected",
+        Access::Out => "write",
+        Access::In if tx => "read attempt",
+        Access::In if rec.wkc == 0 => "empty read",
+        Access::In => "read",
+    };
+    let carries = matches!(role, "write attempt" | "write rejected" | "write" | "read");
+    let data = trace.datagram_data(rec);
+    let parsed = carries
+        .then(|| MailboxHeader::parse(data).ok())
+        .flatten()
+        .filter(|h| h.length as usize + MAILBOX_HEADER_LEN <= data.len());
+    let (header, summary, fields) = match parsed {
+        Some(h) => {
+            let (summary, fields) = describe(&h, &data[MAILBOX_HEADER_LEN..MAILBOX_HEADER_LEN + h.length as usize]);
+            (
+                Some(MailboxHeaderInfo {
+                    protocol: protocol_name(h.mailbox_type).to_owned(),
+                    length: h.length,
+                    address: h.address,
+                    channel: h.channel,
+                    priority: h.priority,
+                    counter: h.counter,
+                }),
+                Some(summary),
+                fields.into_iter().map(|(name, value)| Field { name, value }).collect(),
+            )
         }
-    });
+        None => (None, None, Vec::new()),
+    };
+    let repeat = a.mailbox.by_datagram.get(&(i as u32, p)).is_some_and(|&m| a.mailbox.messages[m as usize].repeat);
     Some(MailboxInfo {
-        protocol: format!("{:?}", h.mailbox_type).to_uppercase(),
-        length: h.length,
-        address: h.address,
-        channel: h.channel,
-        priority: h.priority,
-        counter: h.counter,
-        coe,
+        role: role.to_owned(),
+        source: a.mailbox.channels.source(station).unwrap_or(ChannelSource::Heuristic),
+        header,
+        summary,
+        fields,
+        repeat,
     })
 }
 
@@ -468,7 +526,7 @@ pub fn detail(trace: &Trace, a: &Analysis, no: u32) -> Option<FrameDetail> {
                 None
             },
             al_state,
-            mailbox: mailbox_info(&d),
+            mailbox: mailbox_info(trace, a, i, p16),
         });
     }
     if bytes.len() > end {

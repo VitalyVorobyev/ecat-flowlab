@@ -1,7 +1,7 @@
 //! Analysis checked against flowlab-synth ground truth.
 
 use flowlab_capture::{CaptureFile, Trace};
-use flowlab_synth::{FaultSpec, GroundTruth, SlaveSpec, SynthSpec, generate};
+use flowlab_synth::{FaultSpec, GroundTruth, MailboxSpec, SlaveSpec, SynthSpec, generate};
 
 use super::frames::{FrameFilter, detail, query};
 use super::*;
@@ -24,6 +24,7 @@ fn spec(faults: FaultSpec) -> SynthSpec {
         sdo_uploads_per_slave: 2,
         distributed_clocks: true,
         start_unix_s: 1_767_225_600,
+        mailbox: Default::default(),
         faults,
     }
 }
@@ -38,7 +39,12 @@ fn run(s: &SynthSpec) -> (Trace, Analysis, GroundTruth) {
 }
 
 fn faulty() -> SynthSpec {
-    spec(FaultSpec { lost_frame_probability: 0.01, wkc_error_probability: 0.01, skipped_cycle_probability: 0.005 })
+    spec(FaultSpec {
+        lost_frame_probability: 0.01,
+        wkc_error_probability: 0.01,
+        skipped_cycle_probability: 0.005,
+        ..FaultSpec::default()
+    })
 }
 
 #[test]
@@ -118,10 +124,11 @@ fn frame_detail_decodes_mailbox() {
         d.datagrams[0].mailbox.clone()
     });
     let mbx = sdo.expect("an SDO request to station 0x1002");
-    assert_eq!(mbx.protocol, "COE");
-    let coe = mbx.coe.unwrap();
-    assert_eq!(coe.service, "SdoRequest");
-    assert_eq!(coe.index, Some(0x1018));
+    assert_eq!(mbx.role, "write attempt");
+    assert_eq!(mbx.source, ChannelSource::SmConfig);
+    assert_eq!(mbx.header.unwrap().protocol, "CoE");
+    assert!(mbx.summary.unwrap().starts_with("CoE SDO upload req 0x1018:01"));
+    assert!(mbx.fields.iter().any(|f| f.name == "Index" && f.value == "0x1018:01"));
 
     let cyclic =
         query(&trace, &a, &FrameFilter { stream: Some(0), direction: Some("rx".into()), ..Default::default() }, 0, 1);
@@ -151,4 +158,129 @@ fn report_is_deterministic() {
     let j2 = serde_json::to_string(&a2.report).unwrap();
     assert_eq!(j1, j2);
     assert!(j1.contains("\"source\":\"synthetic\""));
+}
+
+fn mailbox_heavy() -> SynthSpec {
+    let mut s = faulty();
+    s.cycles = 1500;
+    s.mailbox = MailboxSpec {
+        response_delay_polls: 3,
+        segmented_upload_bytes: 300,
+        download_bytes: 250,
+        aborted_uploads: 2,
+        foe_write_bytes: 116 * 5, // a whole number of packets: ends with an empty DATA packet
+        eoe_frames_to_slave: 4,
+        eoe_frames_from_slave: 3,
+        eoe_frame_bytes: 1000,
+        emergencies: 2,
+    };
+    s.faults.mailbox_write_reject_probability = 0.1;
+    s
+}
+
+#[test]
+fn recovers_mailbox_ground_truth() {
+    let (trace, a, truth) = run(&mailbox_heavy());
+    let m = &a.report.mailbox;
+    let t = &truth.mailbox;
+    assert!(t.rejected_writes > 0 && t.empty_polls > 0, "{t:?}");
+
+    assert_eq!(m.channels.len(), 3);
+    for c in &m.channels {
+        assert_eq!(c.source, ChannelSource::SmConfig);
+        assert_eq!((c.out_start, c.out_len, c.in_start, c.in_len), (Some(0x1000), Some(128), Some(0x1080), Some(128)));
+        assert_eq!(c.repeats, 0);
+    }
+    let sum = |f: fn(&MailboxChannel) -> u64| m.channels.iter().map(f).sum::<u64>();
+    assert_eq!(sum(|c| c.messages_out), t.messages_to_slaves);
+    assert_eq!(sum(|c| c.messages_in), t.messages_from_slaves);
+    assert_eq!(sum(|c| c.writes_rejected), t.rejected_writes);
+    assert_eq!(sum(|c| c.empty_reads), t.empty_polls);
+    assert_eq!(m.malformed, 0);
+
+    let coe = &m.coe;
+    assert_eq!(coe.ok, t.sdo_ok);
+    assert_eq!(coe.aborted, t.sdo_aborted);
+    assert_eq!((coe.protocol_errors, coe.unfinished), (0, 0));
+    let segmented: Vec<_> = coe.transactions.iter().filter(|x| x.transfer == "segmented").collect();
+    assert_eq!(segmented.len() as u64, t.sdo_segmented);
+    assert_eq!(coe.transactions.iter().map(|x| x.segments as u64).sum::<u64>(), t.sdo_segments);
+    let up = coe.transactions.iter().find(|x| x.index == 0x2000).unwrap();
+    assert_eq!((up.kind.as_str(), up.size, up.bytes), ("upload", Some(300), 300));
+    let down = coe.transactions.iter().find(|x| x.index == 0x2001).unwrap();
+    assert_eq!((down.kind.as_str(), down.size, down.bytes), ("download", Some(250), 250));
+    let ab = coe.transactions.iter().find(|x| x.outcome == SdoOutcome::Aborted).unwrap();
+    assert_eq!((ab.abort_code, ab.aborted_by.as_deref()), (Some(flowlab_synth::ABORT_NO_OBJECT), Some("slave")));
+    assert_eq!(coe.emergencies_total, t.emergencies);
+
+    assert_eq!(m.foe.len() as u64, t.foe_transfers);
+    let foe = &m.foe[0];
+    assert_eq!((foe.outcome.as_str(), foe.kind.as_str(), foe.file_name.as_str()), ("ok", "write", "firmware.bin"));
+    assert_eq!(foe.bytes, t.foe_bytes);
+    assert_eq!(foe.packets, 6);
+    assert!(foe.goodput_bps.unwrap() > 0.0);
+
+    let eoe = &m.eoe;
+    assert_eq!(eoe.reassembly_errors, 0);
+    assert_eq!(eoe.frames_total, t.eoe_frames_to_slave + t.eoe_frames_from_slave);
+    assert_eq!((eoe.bytes_to_slaves, eoe.bytes_from_slaves), (t.eoe_bytes_to_slave, t.eoe_bytes_from_slave));
+    assert!(eoe.frames.iter().all(|f| f.ethertype == Some(flowlab_synth::EOE_ETHERTYPE) && f.fragments == 11));
+    assert_eq!(a.mailbox.eoe_packets.len() as u64, eoe.frames_total);
+
+    // Mailbox polling frames neither form streams nor count as WKC errors.
+    let r = &a.report;
+    assert_eq!(r.streams.len(), 1);
+    assert_eq!(r.streams[0].wkc_events.len() as u64, truth.wkc_errors);
+    assert!(r.findings.iter().any(|f| f.severity == Severity::Warn && f.title.contains("SDO transfers aborted")));
+    assert!(r.findings.iter().any(|f| f.severity == Severity::Warn && f.title.contains("emergencies")));
+    assert!(r.findings.iter().any(|f| f.title.contains("mailbox writes rejected")));
+    assert!(!r.findings.iter().any(|f| f.title.contains("violated") || f.title.contains("EoE")));
+
+    // Frame queries by protocol.
+    let foe_frames = query(&trace, &a, &FrameFilter { mailbox: Some("foe".into()), ..Default::default() }, 0, 1000);
+    // WRQ + 6 DATA + 7 ACK, each seen as TX and RX, plus rejected write attempts that never
+    // carried a message do not count: only frames with an accepted message.
+    assert_eq!(foe_frames.total, 2 * 14);
+    assert!(foe_frames.rows.iter().any(|r| r.summary.contains("FoE DATA #6 0 B")));
+    let any = query(&trace, &a, &FrameFilter { mailbox: Some("any".into()), ..Default::default() }, 0, 1);
+    assert!(any.total > foe_frames.total);
+    let no = query(&trace, &a, &FrameFilter { mailbox: Some("bogus".into()), ..Default::default() }, 0, 1);
+    assert_eq!(no.total, 0);
+}
+
+#[test]
+fn mailbox_without_configuration_uses_hints_or_heuristic() {
+    let mut s = mailbox_heavy();
+    s.include_startup = false; // no SyncManager configuration in the capture
+    let mut bytes = Vec::new();
+    let truth = generate(&s, &mut bytes).unwrap();
+    let trace = Trace::build(CaptureFile::parse(bytes).unwrap(), "t.pcapng");
+    let a = analyze(&trace, &AnalysisOptions::default());
+    let m = &a.report.mailbox;
+    assert!(m.channels.iter().all(|c| c.source == ChannelSource::Heuristic));
+    assert_eq!(m.eoe.frames_total, truth.mailbox.eoe_frames_to_slave + truth.mailbox.eoe_frames_from_slave);
+    assert!(a.report.meta.assumptions.iter().any(|x| x.contains("inferred")));
+
+    let heuristic_out = m.channels.iter().find(|c| c.station == 0x1002).unwrap().messages_out;
+    assert!(heuristic_out > 0);
+    let hint: crate::mailbox::MailboxHint = "0x1002=0x1000,0x1080".parse().unwrap();
+    let a = analyze(&trace, &AnalysisOptions { mailbox_hints: vec![hint], ..AnalysisOptions::default() });
+    let c = a.report.mailbox.channels.iter().find(|c| c.station == 0x1002).unwrap();
+    assert_eq!(c.source, ChannelSource::Hint);
+    assert_eq!(c.messages_out, heuristic_out);
+    assert!("0x1002=0x1000".parse::<crate::mailbox::MailboxHint>().is_err());
+}
+
+#[test]
+fn example_spec_mailbox_matches_truth() {
+    let (_, a, truth) = run(&SynthSpec::example());
+    let m = &a.report.mailbox;
+    let t = &truth.mailbox;
+    assert!(m.channels.iter().all(|c| c.repeats == 0), "counters continue across PREOP and OP");
+    assert_eq!(m.channels.iter().map(|c| c.messages_out).sum::<u64>(), t.messages_to_slaves);
+    assert_eq!(m.channels.iter().map(|c| c.messages_in).sum::<u64>(), t.messages_from_slaves);
+    assert_eq!((m.coe.ok, m.coe.aborted, m.coe.emergencies_total), (t.sdo_ok, t.sdo_aborted, t.emergencies));
+    assert_eq!(m.eoe.frames_total, t.eoe_frames_to_slave + t.eoe_frames_from_slave);
+    assert_eq!(m.eoe.reassembly_errors, 0);
+    assert_eq!(m.foe.iter().map(|f| f.bytes).sum::<u64>(), t.foe_bytes);
 }
