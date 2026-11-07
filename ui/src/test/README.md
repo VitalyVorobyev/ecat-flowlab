@@ -13,3 +13,5 @@ cargo run -p flowlab-cli -- analyze results/fixture.pcapng --out ui/src/test/rep
 python3 -c "import json; s=json.load(open('configs/sim/example.json')); [t.update(payload_bytes=8000) for t in s['transfers']]; s['capture']={'enabled':False,'max_frames':0}; json.dump(s,open('results/sim-fixture-spec.json','w'))"
 cargo run -p flowlab-cli -- simulate results/sim-fixture-spec.json --result ui/src/test/sim.fixture.json
 ```
+
+`plan.fixture.json` is `flowlab plan --json` (the built-in example).

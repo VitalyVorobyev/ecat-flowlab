@@ -32,6 +32,9 @@ enum Cmd {
         /// Also write the ground truth as JSON.
         #[arg(long)]
         truth: Option<PathBuf>,
+        /// Also write the network configuration a master would use, as ENI XML.
+        #[arg(long)]
+        eni: Option<PathBuf>,
     },
     /// Analyze a pcap/pcapng capture.
     Analyze {
@@ -56,6 +59,25 @@ enum Cmd {
         /// Write the Ethernet frames reassembled from EoE to this pcapng.
         #[arg(long, value_name = "PCAPNG")]
         eoe_out: Option<PathBuf>,
+        /// Network configuration (ENI XML): expected working counters, mailboxes, names.
+        #[arg(long, value_name = "XML")]
+        eni: Option<PathBuf>,
+    },
+    /// Summarize the devices of an ESI file.
+    Esi {
+        /// ESI XML file.
+        file: PathBuf,
+        /// Print JSON instead of the summary.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Lay out the cyclic frames of a network and check its budget.
+    Plan {
+        /// Plan spec (see `flowlab schema plan`). Omit to use the built-in example.
+        spec: Option<PathBuf>,
+        /// Print JSON instead of the summary.
+        #[arg(long)]
+        json: bool,
     },
     /// Run the discrete-event simulator. With several specs, print a comparison table.
     Simulate {
@@ -89,11 +111,14 @@ enum Cmd {
         /// `STATION=OUT,IN`. Repeatable.
         #[arg(long = "mailbox", value_name = "STATION=OUT,IN")]
         mailbox_hints: Vec<MailboxHint>,
+        /// Network configuration (ENI XML) applied to every capture.
+        #[arg(long, value_name = "XML")]
+        eni: Option<PathBuf>,
     },
     /// Print a JSON Schema.
     Schema {
         /// Which schema.
-        #[arg(value_parser = ["synth", "sim"])]
+        #[arg(value_parser = ["synth", "sim", "plan"])]
         which: String,
     },
 }
@@ -116,7 +141,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 fn run(cli: Cli) -> Result<()> {
     match cli.command {
-        Cmd::Synth { spec, out, truth } => {
+        Cmd::Synth { spec, out, truth, eni } => {
             let spec: SynthSpec = match spec {
                 Some(p) => serde_json::from_reader(File::open(&p).map_err(|e| format!("{}: {e}", p.display()))?)?,
                 None => SynthSpec::example(),
@@ -126,6 +151,10 @@ fn run(cli: Cli) -> Result<()> {
             if let Some(t) = truth {
                 ensure_parent(&t)?;
                 serde_json::to_writer_pretty(File::create(&t)?, &gt)?;
+            }
+            if let Some(e) = eni {
+                ensure_parent(&e)?;
+                std::fs::write(&e, flowlab_devices::write_eni(&flowlab_synth::network_config(&spec)))?;
             }
             eprintln!(
                 "wrote {} frames to {} (synthetic, seed {}): {} cyclic, {} lost, {} WKC errors, {} skipped cycles",
@@ -138,7 +167,7 @@ fn run(cli: Cli) -> Result<()> {
                 gt.skipped_cycles
             );
         }
-        Cmd::Analyze { capture, out, json, link_mbps, min_stream_frames, mailbox_hints, eoe_out } => {
+        Cmd::Analyze { capture, out, json, link_mbps, min_stream_frames, mailbox_hints, eoe_out, eni } => {
             let file = CaptureFile::read(&capture).map_err(|e| format!("{}: {e}", capture.display()))?;
             let name = capture.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             let trace = Trace::build(file, &name);
@@ -146,6 +175,7 @@ fn run(cli: Cli) -> Result<()> {
                 link_bps: link_mbps * 1_000_000,
                 min_stream_frames,
                 mailbox_hints,
+                network: eni.as_deref().map(read_eni).transpose()?,
                 ..Default::default()
             };
             let a = analyze(&trace, &opts);
@@ -164,11 +194,12 @@ fn run(cli: Cli) -> Result<()> {
                 print_summary(&a.report);
             }
         }
-        Cmd::Serve { captures, port, host, ui_dir, open, mailbox_hints } => {
+        Cmd::Serve { captures, port, host, ui_dir, open, mailbox_hints, eni } => {
             if !host.is_loopback() {
                 tracing::warn!("binding to {host}: the API can read local files and has no authentication");
             }
-            let state = flowlab_server::AppState::new(AnalysisOptions { mailbox_hints, ..Default::default() });
+            let network = eni.as_deref().map(read_eni).transpose()?;
+            let state = flowlab_server::AppState::new(AnalysisOptions { mailbox_hints, network, ..Default::default() });
             for c in &captures {
                 let info = state.load_path(c).map_err(|e| format!("{}: {e}", c.display()))?;
                 tracing::info!("loaded {} ({} frames)", info.name, info.frames);
@@ -187,8 +218,49 @@ fn run(cli: Cli) -> Result<()> {
             tokio::runtime::Runtime::new()?.block_on(flowlab_server::serve(state, addr, ui))?;
         }
         Cmd::Schema { which } => {
-            let schema = if which == "sim" { flowlab_sim::spec_schema() } else { flowlab_synth::spec_schema() };
+            let schema = match which.as_str() {
+                "sim" => flowlab_sim::spec_schema(),
+                "plan" => flowlab_devices::plan_schema(),
+                _ => flowlab_synth::spec_schema(),
+            };
             println!("{}", serde_json::to_string_pretty(&schema)?);
+        }
+        Cmd::Esi { file, json } => {
+            let text = std::fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file.display()))?;
+            let esi = flowlab_devices::parse_esi(&text).map_err(|e| format!("{}: {e}", file.display()))?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&esi)?);
+            } else {
+                println!("{} (vendor 0x{:08X}): {} devices", esi.vendor_name, esi.vendor_id, esi.devices.len());
+                for d in &esi.devices {
+                    let mbx = d.mailbox.as_ref().map_or("no mailbox".to_owned(), |m| m.names().join("/"));
+                    println!(
+                        "  {:<14} 0x{:08X} rev 0x{:08X}  out {:>4} B  in {:>4} B  mailbox {:>4}/{:<4} B  {}{}  {}",
+                        d.type_name,
+                        d.product_code,
+                        d.revision,
+                        d.default_outputs_bits.div_ceil(8),
+                        d.default_inputs_bits.div_ceil(8),
+                        d.sm_size("MBoxOut").unwrap_or(0),
+                        d.sm_size("MBoxIn").unwrap_or(0),
+                        mbx,
+                        if d.dc { ", DC" } else { "" },
+                        d.name
+                    );
+                }
+            }
+        }
+        Cmd::Plan { spec, json } => {
+            let spec: flowlab_devices::PlanSpec = match spec {
+                Some(p) => serde_json::from_reader(File::open(&p).map_err(|e| format!("{}: {e}", p.display()))?)?,
+                None => flowlab_devices::PlanSpec::example(),
+            };
+            let r = flowlab_devices::plan(&spec);
+            if json {
+                println!("{}", serde_json::to_string_pretty(&r)?);
+            } else {
+                print_plan(&r);
+            }
         }
         Cmd::Simulate { specs, out, result } => {
             if specs.len() > 1 && out.is_some() {
@@ -232,6 +304,39 @@ fn run(cli: Cli) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn read_eni(p: &Path) -> Result<flowlab_devices::NetworkConfig> {
+    let text = std::fs::read_to_string(p).map_err(|e| format!("{}: {e}", p.display()))?;
+    Ok(flowlab_devices::parse_eni(&text).map_err(|e| format!("{}: {e}", p.display()))?)
+}
+
+fn print_plan(r: &flowlab_devices::PlanResult) {
+    println!(
+        "cycle {}  link {:.0} Mbit/s  process image {} B out / {} B in",
+        ns(r.cycle_ns),
+        r.link_bps / 1e6,
+        r.image_out_bytes,
+        r.image_in_bytes
+    );
+    for (i, f) in r.frames.iter().enumerate() {
+        let dgs: Vec<String> = f.datagrams.iter().map(|d| format!("{} {} B", d.command, d.data_bytes)).collect();
+        println!("  frame {i}: {} B, {} on the wire  [{}]", f.frame_bytes, ns(f.wire_ns), dgs.join(", "));
+    }
+    println!(
+        "  cyclic frames back after {} ({:.1} % of the cycle on the wire, ring {}); idle {} ({:.1} %)",
+        ns(r.cyclic_done_ns),
+        r.cyclic_percent,
+        ns(r.ring_delay_ns),
+        ns(r.idle_ns),
+        r.idle_percent
+    );
+    if let (Some(f), Some(n), Some(b)) = (r.mailbox_frame_ns, r.mailbox_frames_per_cycle, r.mailbox_bytes_per_s) {
+        println!("  mailbox: {} per frame, {n} frames fit per cycle, ≤ {:.0} kB/s per direction", ns(f), b / 1e3);
+    }
+    for c in &r.checks {
+        println!("  [{}] {}: {}", c.severity.to_uppercase(), c.subject, c.message);
+    }
 }
 
 fn ensure_parent(p: &Path) -> Result<()> {

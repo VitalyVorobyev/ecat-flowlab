@@ -6,8 +6,8 @@ in a browser UI or as a JSON report. Synthetic captures with known ground truth 
 so every number can be checked against what was put in. Simulation and transport studies
 (EoE, FoE, PDO bulk transfer) build on the same pipeline.
 
-**Status:** M0–M4 — capture analysis, mailbox analysis, a discrete-event simulator, CLI,
-local server and UI. See [the roadmap](docs/roadmap.md).
+**Status:** M0–M5 — capture analysis, mailbox analysis, a discrete-event simulator, ESI/ENI
+import and a bus-budget planner; CLI, local server and UI. See [the roadmap](docs/roadmap.md).
 
 ## Quick start
 
@@ -61,6 +61,21 @@ a measurement of any device.
 When a capture starts after the mailboxes were configured, give their addresses with
 `--mailbox 0x1001=0x1000,0x1080` (repeatable; also on `flowlab serve`).
 
+## Network configuration and planning
+
+```bash
+# Judge working counters against the master's configuration instead of the most frequent value
+cargo run -p flowlab-cli -- analyze capture.pcapng --eni network.xml
+cargo run -p flowlab-cli -- esi vendor-devices.xml          # what the devices declare
+cargo run -p flowlab-cli -- plan                            # frame layout and budget of a network
+```
+
+With an ENI (ETG.2100, e.g. exported from TwinCAT), each cyclic datagram it lists is judged
+against its configured working counter, stations get their names, and mailboxes missing from
+the capture's SyncManager writes are known. In the UI: **Attach ENI…** on the Overview, and
+the **Planner** view, which imports ESI files (ETG.2000) and lays out the cyclic frames with
+their wire time, idle time, mailbox headroom and capability checks.
+
 ## Simulation
 
 ```bash
@@ -86,12 +101,13 @@ calibrated against measurements.
 | **Timing** | Per cyclic stream: least-squares period, send-time jitter against the cycle grid, interval distribution, TX→RX round trip, gaps and missed cycles, working counters per datagram |
 | **Frames** | Every frame, filterable by direction, command, stream, station, mailbox protocol or problems; decoded datagrams (register names, AL states, mailbox messages) beside a hex view |
 | **Stations** | Configured station addresses, ring positions, reads/writes, no-response counts, AL state over time |
+| **Planner** | Frame layout, wire time, ring delay, idle time and bus-side mailbox headroom of a network; ESC RAM, mailbox size and protocol checks; devices imported from ESI |
 | **Sim run** | For a simulated run: transfers with time, goodput, link bound, TCP reference and integrity; protocol work; PDI load and ESC RAM per slave; model assumptions |
 | **Mailbox** | Per-slave mailbox SyncManagers and their use (accepted/rejected writes, empty reads, polling cadence); traffic per protocol; CoE SDO transfers with outcome, abort codes and duration; emergencies; FoE transfers with goodput; EoE frames reassembled (downloadable as pcapng) |
 
 How each number is inferred — and what it assumes — is written into every report
 (`meta.assumptions`) and shown in the UI. Notably: expected working counters are the most
-frequent observed value (no ENI/ESI is read yet), and TX/RX are told apart by the
+frequent observed value unless an ENI is given, and TX/RX are told apart by the
 locally-administered bit ESCs set in the source MAC of returning frames.
 
 ## Provenance
@@ -110,8 +126,9 @@ crates/
   flowlab-analysis/  streams, timing, WKC, utilization, stations; frame queries
   flowlab-synth/     deterministic synthetic captures with ground truth
   flowlab-sim/       discrete-event simulator: master, link, ESC, PDI; bulk transfers
+  flowlab-devices/   ESI/ENI readers, ENI writer, bus-budget planner
   flowlab-server/    local HTTP API + static UI (axum)
-  flowlab-cli/       `flowlab synth | analyze | simulate | serve | schema`
+  flowlab-cli/       `flowlab synth | analyze | simulate | plan | esi | serve | schema`
 ui/                  React 19 + Vite + Tailwind 4 on the @vitavision lab-ui packages
 configs/synth/       example generator specs
 configs/sim/         example simulator spec; configs/studies/: study scenarios

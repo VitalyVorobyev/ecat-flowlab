@@ -1,8 +1,9 @@
-import { Button, Disclosure, PageHeader, Panel, Table, type Column } from "@vitavision/ui";
-import { Download } from "lucide-react";
+import { Badge, Button, Disclosure, PageHeader, Panel, Table, type Column } from "@vitavision/ui";
+import { Download, FileCode, Unlink } from "lucide-react";
 
 import type { CaptureReport, CyclicStream } from "../api";
 import { TimeHistogram, TimeSeries } from "../components/charts";
+import { FilePickButton } from "../components/FilePickButton";
 import { Findings } from "../components/Findings";
 import { Metric, MetricGrid } from "../components/Metric";
 import { ProvenanceBadge } from "../components/ProvenanceBadge";
@@ -67,9 +68,16 @@ function commandColumns(maxCmd: number): Column<CommandRow>[] {
 export function Overview({
   report,
   onOpenStream,
+  eni = null,
+  onAttachEni,
+  onDetachEni,
 }: {
   report: CaptureReport;
   onOpenStream: (id: number) => void;
+  /** Master name of the attached network configuration, if any. */
+  eni?: string | null;
+  onAttachEni?: (file: File) => void;
+  onDetachEni?: () => void;
 }) {
   const { meta, summary: s, utilization: u } = report;
   const main = report.streams[0] ?? null;
@@ -97,15 +105,43 @@ export function Overview({
           </span>
         }
         actions={
-          <Button
-            variant="secondary"
-            icon={<Download className="size-4" />}
-            onClick={() =>
-              downloadJson(meta.input.name.replace(/\.[^.]+$/, "") + ".report.json", report)
-            }
-          >
-            Report JSON
-          </Button>
+          <>
+            {eni !== null ? (
+              <span className="flex items-center gap-1">
+                <span title="Expected working counters, mailboxes and names come from this network configuration.">
+                  <Badge tone="info">ENI: {eni}</Badge>
+                </span>
+                {onDetachEni ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={<Unlink className="size-3.5" />}
+                    onClick={onDetachEni}
+                    aria-label="Remove the network configuration"
+                  >
+                    Remove
+                  </Button>
+                ) : null}
+              </span>
+            ) : onAttachEni ? (
+              <FilePickButton
+                accept=".xml,application/xml,text/xml"
+                icon={<FileCode className="size-4" />}
+                onFile={onAttachEni}
+              >
+                Attach ENI…
+              </FilePickButton>
+            ) : null}
+            <Button
+              variant="secondary"
+              icon={<Download className="size-4" />}
+              onClick={() =>
+                downloadJson(meta.input.name.replace(/\.[^.]+$/, "") + ".report.json", report)
+              }
+            >
+              Report JSON
+            </Button>
+          </>
         }
       />
 
@@ -145,7 +181,11 @@ export function Overview({
           label="WKC mismatches"
           value={known ? count(wkc) : "–"}
           verdict={known ? (wkc > 0 ? "defect" : "normal") : undefined}
-          sub="vs. most frequent value"
+          sub={
+            main?.wkc.some((w) => w.expected_from === "eni")
+              ? "vs. configured (ENI)"
+              : "vs. most frequent value"
+          }
           hint="Returning cyclic frames whose working counter differs from the usual value at that datagram. Threshold: any."
         />
         <Metric

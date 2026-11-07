@@ -14,6 +14,12 @@
 //! | GET | `/api/captures/{id}/frames/{no}` | | `FrameDetail` |
 //! | GET | `/api/captures/{id}/eoe.pcapng` | | Ethernet frames reassembled from EoE (pcapng) |
 //! | GET | `/api/captures/{id}/simulation` | | `SimResult` of a simulated capture |
+//! | POST | `/api/captures/{id}/eni` | ENI XML | `CaptureInfo` (re-analysed with the configuration) |
+//! | DELETE | `/api/captures/{id}/eni` | | `CaptureInfo` (re-analysed without) |
+//! | POST | `/api/esi` | ESI XML | `EsiImport` |
+//! | GET | `/api/plan/schema` | | JSON Schema of `PlanSpec` |
+//! | GET | `/api/plan/example` | | `PlanSpec` |
+//! | POST | `/api/plan` | `PlanSpec` | `PlanResult` |
 //! | GET | `/api/synth/schema` | | JSON Schema of `SynthSpec` |
 //! | GET | `/api/synth/example` | | `SynthSpec` |
 //! | POST | `/api/synth` | `SynthSpec` | `CaptureInfo` |
@@ -34,6 +40,7 @@ use flowlab_analysis::frames::{FrameFilter, detail, query};
 use flowlab_analysis::{Analysis, AnalysisOptions, Severity, analyze};
 use flowlab_capture::{CaptureFile, CaptureFormat, Trace};
 use flowlab_core::Provenance;
+use flowlab_devices::{EsiFile, NetworkConfig, PlanResult, PlanSlave, PlanSpec};
 use flowlab_sim::{SimResult, SimSpec};
 use flowlab_synth::SynthSpec;
 use serde::{Deserialize, Serialize};
@@ -75,11 +82,23 @@ pub struct CaptureInfo {
     pub sha256: String,
     /// A simulation result is attached (`/api/captures/{id}/simulation`).
     pub has_simulation: bool,
+    /// Name of the master in the attached network configuration (ENI), if any.
+    pub eni: Option<String>,
+}
+
+/// Devices read from an ESI file, each with a plan entry for its default configuration.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct EsiImport {
+    /// The file.
+    pub file: EsiFile,
+    /// One plan entry per device, in file order.
+    pub slaves: Vec<PlanSlave>,
 }
 
 struct Entry {
     info: CaptureInfo,
-    trace: Trace,
+    trace: Arc<Trace>,
     analysis: Analysis,
     simulation: Option<SimResult>,
 }
@@ -113,13 +132,31 @@ impl AppState {
             .ok_or_else(|| ApiError::not_found(format!("no capture {id}")))
     }
 
+    fn options_with(&self, network: Option<NetworkConfig>) -> AnalysisOptions {
+        AnalysisOptions { network: network.or_else(|| self.options.network.clone()), ..(*self.options).clone() }
+    }
+
     fn insert(&self, trace: Trace, analysis: Analysis, simulation: Option<SimResult>) -> Result<CaptureInfo, ApiError> {
         let mut store = self.inner.write().map_err(|_| ApiError::internal("state lock poisoned"))?;
         store.next_id += 1;
+        let id = store.next_id;
+        let entry = Self::entry(id, Arc::new(trace), analysis, simulation, self.options.network.as_ref());
+        let info = entry.info.clone();
+        store.entries.push(Arc::new(entry));
+        Ok(info)
+    }
+
+    fn entry(
+        id: u32,
+        trace: Arc<Trace>,
+        analysis: Analysis,
+        simulation: Option<SimResult>,
+        network: Option<&NetworkConfig>,
+    ) -> Entry {
         let r = &analysis.report;
         let count = |s: Severity| r.findings.iter().filter(|f| f.severity == s).count() as u32;
         let info = CaptureInfo {
-            id: store.next_id,
+            id,
             name: trace.input.name.clone(),
             provenance: trace.provenance,
             format: trace.file.format,
@@ -132,8 +169,22 @@ impl AppState {
             warnings: count(Severity::Warn),
             sha256: trace.input.sha256.clone(),
             has_simulation: simulation.is_some(),
+            eni: network.map(|n| n.master.clone().unwrap_or_else(|| "network configuration".into())),
         };
-        store.entries.push(Arc::new(Entry { info: info.clone(), trace, analysis, simulation }));
+        Entry { info, trace, analysis, simulation }
+    }
+
+    /// Re-analyse capture `id` with `network` (or without, when `None`) and replace it.
+    pub fn set_network(&self, id: u32, network: Option<NetworkConfig>) -> Result<CaptureInfo, ApiError> {
+        let old = self.get(id)?;
+        let opts = self.options_with(network);
+        let analysis = analyze(&old.trace, &opts);
+        let entry = Self::entry(id, old.trace.clone(), analysis, old.simulation.clone(), opts.network.as_ref());
+        let info = entry.info.clone();
+        let mut store = self.inner.write().map_err(|_| ApiError::internal("state lock poisoned"))?;
+        if let Some(slot) = store.entries.iter_mut().find(|e| e.info.id == id) {
+            *slot = Arc::new(entry);
+        }
         Ok(info)
     }
 
@@ -339,6 +390,43 @@ async fn simulation(State(s): State<AppState>, UrlPath(id): UrlPath<u32>) -> Res
     }
 }
 
+fn xml_body(body: &axum::body::Bytes) -> Result<String, ApiError> {
+    String::from_utf8(body.to_vec()).map_err(|_| ApiError::bad_request("the file is not UTF-8 XML"))
+}
+
+async fn attach_eni(
+    State(s): State<AppState>,
+    UrlPath(id): UrlPath<u32>,
+    body: axum::body::Bytes,
+) -> Result<Json<CaptureInfo>, ApiError> {
+    let text = xml_body(&body)?;
+    let network = flowlab_devices::parse_eni(&text).map_err(|e| ApiError::bad_request(format!("ENI: {e}")))?;
+    Ok(Json(blocking(move || s.set_network(id, Some(network))).await?))
+}
+
+async fn detach_eni(State(s): State<AppState>, UrlPath(id): UrlPath<u32>) -> Result<Json<CaptureInfo>, ApiError> {
+    Ok(Json(blocking(move || s.set_network(id, None)).await?))
+}
+
+async fn esi(body: axum::body::Bytes) -> Result<Json<EsiImport>, ApiError> {
+    let text = xml_body(&body)?;
+    let file = flowlab_devices::parse_esi(&text).map_err(|e| ApiError::bad_request(format!("ESI: {e}")))?;
+    let slaves = file.devices.iter().map(PlanSlave::from_device).collect();
+    Ok(Json(EsiImport { file, slaves }))
+}
+
+async fn plan_schema() -> Json<serde_json::Value> {
+    Json(flowlab_devices::plan_schema())
+}
+
+async fn plan_example() -> Json<PlanSpec> {
+    Json(PlanSpec::example())
+}
+
+async fn plan(Json(spec): Json<PlanSpec>) -> Json<PlanResult> {
+    Json(flowlab_devices::plan(&spec))
+}
+
 async fn sim_schema() -> Json<serde_json::Value> {
     Json(flowlab_sim::spec_schema())
 }
@@ -388,6 +476,11 @@ pub fn api(state: AppState) -> Router {
         .route("/api/sim/schema", get(sim_schema))
         .route("/api/sim/example", get(sim_example))
         .route("/api/simulate", post(simulate))
+        .route("/api/captures/{id}/eni", post(attach_eni).delete(detach_eni))
+        .route("/api/esi", post(esi))
+        .route("/api/plan/schema", get(plan_schema))
+        .route("/api/plan/example", get(plan_example))
+        .route("/api/plan", post(plan))
         .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES))
         .with_state(state)
 }
@@ -523,6 +616,42 @@ mod tests {
         let (st, err) = call(&app, json_post("/api/simulate", &spec)).await;
         assert_eq!(st, StatusCode::BAD_REQUEST);
         assert!(err["error"].as_str().unwrap().contains("ESC RAM"));
+    }
+
+    #[tokio::test]
+    async fn eni_attach_esi_import_and_plan() {
+        let app = api(AppState::default());
+        let mut spec = SynthSpec::example();
+        spec.cycles = 200;
+        spec.faults.wkc_error_probability = 0.7;
+        let (_, info) = call(&app, json_post("/api/synth", &spec)).await;
+        let id = info["id"].as_u64().unwrap();
+        assert!(info["eni"].is_null());
+        let eni = flowlab_devices::write_eni(&flowlab_synth::network_config(&spec));
+        let (st, info) =
+            call(&app, Request::post(format!("/api/captures/{id}/eni")).body(Body::from(eni)).unwrap()).await;
+        assert_eq!(st, StatusCode::OK, "{info}");
+        assert_eq!(info["id"].as_u64(), Some(id), "same capture, re-analysed");
+        assert!(info["eni"].as_str().unwrap().starts_with("flowlab-synth"));
+        let (_, report) =
+            call(&app, Request::get(format!("/api/captures/{id}/report")).body(Body::empty()).unwrap()).await;
+        assert!(report["streams"][0]["wkc"].as_array().unwrap().iter().all(|w| w["expected_from"] == "eni"));
+        let (st, _) =
+            call(&app, Request::post(format!("/api/captures/{id}/eni")).body(Body::from("<x/>")).unwrap()).await;
+        assert_eq!(st, StatusCode::BAD_REQUEST);
+        let (st, info) =
+            call(&app, Request::delete(format!("/api/captures/{id}/eni")).body(Body::empty()).unwrap()).await;
+        assert_eq!(st, StatusCode::OK);
+        assert!(info["eni"].is_null());
+
+        let esi = include_str!("../../flowlab-devices/tests/fixtures/flowlab-demo.esi.xml");
+        let (st, imp) = call(&app, Request::post("/api/esi").body(Body::from(esi)).unwrap()).await;
+        assert_eq!(st, StatusCode::OK, "{imp}");
+        assert_eq!(imp["slaves"][1]["mailbox_out_bytes"], 512);
+        let (_, example) = call(&app, Request::get("/api/plan/example").body(Body::empty()).unwrap()).await;
+        let (st, plan) = call(&app, json_post("/api/plan", &example)).await;
+        assert_eq!(st, StatusCode::OK);
+        assert_eq!(plan["frames"].as_array().unwrap().len(), 1);
     }
 
     #[tokio::test]

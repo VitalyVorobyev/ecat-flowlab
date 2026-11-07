@@ -10,6 +10,10 @@ export type StationSummary = {
  */
 station: number, 
 /**
+ * Name from the network configuration (ENI), if one was given.
+ */
+name: string | null, 
+/**
  * Ring position, when the master assigned the address with APWR 0x0010.
  */
 position: number | null, 

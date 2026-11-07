@@ -25,6 +25,10 @@ mismatches: number,
  */
 zero: number, 
 /**
+ * `"eni"`: the configured value; `"most_frequent"`: inferred from the capture.
+ */
+expected_from: string, 
+/**
  * The datagram accesses a mailbox; its WKC varies by design (0 = mailbox full/empty)
  * and is not counted as a mismatch.
  */

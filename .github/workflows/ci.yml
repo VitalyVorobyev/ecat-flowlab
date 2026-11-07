@@ -30,6 +30,12 @@ jobs:
         run: |
           cargo run -q -p flowlab-cli -- synth configs/synth/demo.json -o results/demo.pcapng --truth results/truth.json
           cargo run -q -p flowlab-cli -- analyze results/demo.pcapng --out results/report.json
+      - name: ENI, ESI and planner round trip
+        run: |
+          cargo run -q -p flowlab-cli -- synth configs/synth/demo.json -o results/demo.pcapng --eni results/demo.eni.xml
+          cargo run -q -p flowlab-cli -- analyze results/demo.pcapng --eni results/demo.eni.xml --out results/eni-report.json
+          cargo run -q -p flowlab-cli -- esi crates/flowlab-devices/tests/fixtures/flowlab-demo.esi.xml
+          cargo run -q -p flowlab-cli -- plan
       - name: Simulator runs the shipped scenarios
         run: cargo run -q --release -p flowlab-cli -- simulate configs/sim/example.json configs/studies/bulk-transfer/*.json
 

@@ -284,3 +284,42 @@ fn example_spec_mailbox_matches_truth() {
     assert_eq!(m.eoe.reassembly_errors, 0);
     assert_eq!(m.foe.iter().map(|f| f.bytes).sum::<u64>(), t.foe_bytes);
 }
+
+#[test]
+fn eni_supplies_expected_wkc_when_errors_dominate() {
+    // With most cycles faulty, the most frequent WKC is a wrong one; the ENI knows better.
+    let mut s = faulty();
+    s.faults.wkc_error_probability = 0.7;
+    let (trace, a, truth) = run(&s);
+    let lrw = |a: &Analysis| a.report.streams[0].wkc.iter().find(|w| w.label.starts_with("LRW")).unwrap().clone();
+    assert_ne!(lrw(&a).expected, truth.expected_lrw_wkc, "the heuristic is fooled");
+    assert_eq!(lrw(&a).expected_from, "most_frequent");
+
+    let network = flowlab_synth::network_config(&s);
+    let eni = flowlab_devices::write_eni(&network);
+    let parsed = flowlab_devices::parse_eni(&eni).unwrap();
+    let opts = AnalysisOptions { in_flight_window_ns: 0, network: Some(parsed), ..AnalysisOptions::default() };
+    let b = analyze(&trace, &opts);
+    let slot = lrw(&b);
+    assert_eq!((slot.expected, slot.expected_from.as_str()), (truth.expected_lrw_wkc, "eni"));
+    assert_eq!(slot.mismatches, truth.wkc_errors);
+    assert_eq!(b.report.streams[0].wkc_events.len() as u64, truth.wkc_errors);
+    assert!(b.report.streams[0].wkc.iter().all(|w| w.expected_from == "eni"));
+    assert!(b.report.findings.iter().any(|f| f.detail.contains("configured in the ENI")));
+    assert!(b.report.meta.assumptions.iter().any(|x| x.contains("come from the ENI")));
+    assert_eq!(b.report.stations[3].name.as_deref(), Some("drive"));
+}
+
+#[test]
+fn eni_supplies_mailboxes_missing_from_the_capture() {
+    let mut s = mailbox_heavy();
+    s.include_startup = false;
+    let mut bytes = Vec::new();
+    let truth = generate(&s, &mut bytes).unwrap();
+    let trace = Trace::build(CaptureFile::parse(bytes).unwrap(), "t.pcapng");
+    let opts = AnalysisOptions { network: Some(flowlab_synth::network_config(&s)), ..AnalysisOptions::default() };
+    let a = analyze(&trace, &opts);
+    let m = &a.report.mailbox;
+    assert!(m.channels.iter().all(|c| c.source == ChannelSource::Eni), "{:?}", m.channels);
+    assert_eq!(m.eoe.frames_total, truth.mailbox.eoe_frames_to_slave + truth.mailbox.eoe_frames_from_slave);
+}

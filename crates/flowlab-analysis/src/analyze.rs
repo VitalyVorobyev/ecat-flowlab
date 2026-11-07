@@ -25,6 +25,8 @@ pub struct AnalysisOptions {
     pub in_flight_window_ns: u64,
     /// Mailbox SyncManager addresses for stations whose configuration the capture lacks.
     pub mailbox_hints: Vec<MailboxHint>,
+    /// The master's network configuration (ENI): expected working counters, mailboxes, names.
+    pub network: Option<flowlab_devices::NetworkConfig>,
 }
 
 impl Default for AnalysisOptions {
@@ -37,6 +39,7 @@ impl Default for AnalysisOptions {
             histogram_bins: 40,
             in_flight_window_ns: 50_000_000,
             mailbox_hints: Vec::new(),
+            network: None,
         }
     }
 }
@@ -117,8 +120,15 @@ pub fn analyze(trace: &Trace, opts: &AnalysisOptions) -> Analysis {
     }
 
     let directions_known = trace.direction_mode != DirectionMode::Unknown;
-    let (mailbox, mailbox_report) =
-        mailbox::analyze(trace, &order, &pair_of, &opts.mailbox_hints, directions_known, opts.histogram_bins);
+    let (mailbox, mailbox_report) = mailbox::analyze(
+        trace,
+        &order,
+        &pair_of,
+        &opts.mailbox_hints,
+        opts.network.as_ref(),
+        directions_known,
+        opts.histogram_bins,
+    );
     let is_sent = |i: usize| match trace.frames[i].direction {
         Direction::Tx => true,
         Direction::Rx => false,
@@ -168,7 +178,12 @@ pub fn analyze(trace: &Trace, opts: &AnalysisOptions) -> Analysis {
     }
 
     let utilization = utilization(trace, opts, directions_known);
-    let (stations, al_events, slaves_responding) = stations(trace, &order, directions_known);
+    let (mut stations, al_events, slaves_responding) = stations(trace, &order, directions_known);
+    if let Some(n) = &opts.network {
+        for s in &mut stations {
+            s.name = n.slave(s.station).map(|c| c.name.clone());
+        }
+    }
     let summary = summary(trace, &pair_of, &unanswered, slaves_responding);
     let mut findings = findings(trace, opts, &summary, &streams, &stations);
     mailbox::findings(&mailbox_report, &mut findings);
@@ -281,9 +296,18 @@ fn build_stream(
                 *counts[p].entry(d.wkc).or_default() += 1;
             }
         }
+        let configured: Vec<Option<u16>> = dgs
+            .iter()
+            .map(|d| opts.network.as_ref().and_then(|n| n.expected_wkc(d.command.code(), d.address_raw, d.len)))
+            .collect();
         let expected: Vec<u16> = counts
             .iter()
-            .map(|c| c.iter().max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(a.0))).map(|(w, _)| *w).unwrap_or(0))
+            .zip(&configured)
+            .map(|(c, conf)| {
+                conf.unwrap_or_else(|| {
+                    c.iter().max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(a.0))).map(|(w, _)| *w).unwrap_or(0)
+                })
+            })
             .collect();
         let mut slots: Vec<WkcSlot> = dgs
             .iter()
@@ -294,6 +318,7 @@ fn build_stream(
                 expected: expected[p],
                 mismatches: 0,
                 zero: 0,
+                expected_from: if configured[p].is_some() { "eni" } else { "most_frequent" }.into(),
                 mailbox: channels.access(d).is_some(),
             })
             .collect();
@@ -515,6 +540,7 @@ fn stations(trace: &Trace, order: &[u32], directions_known: bool) -> (Vec<Statio
             areas.sort_by(|x, y| y.count.cmp(&x.count).then(x.area.cmp(&y.area)));
             StationSummary {
                 station,
+                name: None,
                 position: positions.get(&station).copied().or(a.position),
                 datagrams: a.datagrams,
                 reads: a.reads,
@@ -647,13 +673,18 @@ fn findings(
         let mism: u64 = s.wkc.iter().map(|w| w.mismatches).sum();
         if mism > 0 {
             let worst = s.wkc.iter().max_by_key(|w| w.mismatches).map(|w| w.label.clone()).unwrap_or_default();
-            add(
-                Severity::Defect,
-                format!("{name}: {} working-counter mismatches", s.wkc_events.len().max(1)),
+            add(Severity::Defect, format!("{name}: {} working-counter mismatches", s.wkc_events.len().max(1)), {
+                let basis = if s.wkc.iter().all(|w| w.expected_from == "eni") {
+                    "the value configured in the ENI"
+                } else if s.wkc.iter().any(|w| w.expected_from == "eni") {
+                    "the ENI value where configured, else the most frequent value"
+                } else {
+                    "the most frequent value"
+                };
                 format!(
-                    "Returning frames whose WKC differs from the most frequent value; most affected datagram: {worst}. Threshold: any."
-                ),
-            );
+                    "Returning frames whose WKC differs from {basis}; most affected datagram: {worst}. Threshold: any."
+                )
+            });
         }
         if s.missed_cycles > 0 {
             add(
@@ -705,7 +736,10 @@ fn assumptions(trace: &Trace, opts: &AnalysisOptions) -> Vec<String> {
             "A cyclic stream is a datagram layout (command, address, length) sent at least {} times with ≥ 60 % of intervals within ±50 % of the median.",
             opts.min_stream_frames
         ),
-        "Expected working counters are the most frequent value per datagram position; no ENI/ESI network configuration was used.".into(),
+        match &opts.network {
+            None => "Expected working counters are the most frequent value per datagram position; no ENI network configuration was given.".into(),
+            Some(_) => "Expected working counters come from the ENI where it lists the datagram (same command, address and length); other datagrams use the most frequent value.".into(),
+        },
         "Timestamps are taken as recorded by the capture tool; their accuracy is not known to FlowLab.".into(),
     ];
     a.push(match trace.direction_mode {

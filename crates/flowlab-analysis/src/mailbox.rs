@@ -107,7 +107,13 @@ impl Channels {
         self.map.get(&station).map(|c| c.source)
     }
 
-    fn detect(trace: &Trace, order: &[u32], hints: &[MailboxHint], directions_known: bool) -> Self {
+    fn detect(
+        trace: &Trace,
+        order: &[u32],
+        hints: &[MailboxHint],
+        network: Option<&flowlab_devices::NetworkConfig>,
+        directions_known: bool,
+    ) -> Self {
         let mut map: BTreeMap<u16, ChannelInfo> = BTreeMap::new();
         let mut positions: HashMap<u16, u16> = HashMap::new();
         let mut by_position: Vec<(u16, u8, ecat_wire::SyncManagerConfig)> = Vec::new();
@@ -152,6 +158,17 @@ impl Channels {
             if let Some(&st) = positions.get(&p) {
                 add_sm(&mut map, st, n, sm);
             }
+        }
+        for s in network.map(|n| n.slaves.as_slice()).unwrap_or_default() {
+            let Some(m) = &s.mailbox else { continue };
+            map.entry(s.station).or_insert_with(|| {
+                let mut c = ChannelInfo::new(ChannelSource::Eni);
+                c.out.insert(m.out_start, m.out_len);
+                c.inn.insert(m.in_start, m.in_len);
+                // ENI does not say which SyncManager is "mailbox in"; SM1 by convention.
+                c.status.insert(SM_REGISTER_BASE + SM_REGISTER_LEN + 5);
+                c
+            });
         }
         for h in hints {
             let c = map.entry(h.station).or_insert_with(|| ChannelInfo::new(ChannelSource::Hint));
@@ -317,10 +334,11 @@ pub(crate) fn analyze(
     order: &[u32],
     pair_of: &[u32],
     hints: &[MailboxHint],
+    network: Option<&flowlab_devices::NetworkConfig>,
     directions_known: bool,
     bins: usize,
 ) -> (MailboxAnalysis, MailboxReport) {
-    let channels = Channels::detect(trace, order, hints, directions_known);
+    let channels = Channels::detect(trace, order, hints, network, directions_known);
     let mut out = MailboxAnalysis { frame_flags: vec![0; trace.frames.len()], ..Default::default() };
     let mut acc: BTreeMap<u16, ChannelAcc> = channels.map.keys().map(|&s| (s, ChannelAcc::default())).collect();
     let mut protocols: BTreeMap<&'static str, ProtocolStats> = BTreeMap::new();
@@ -1297,6 +1315,9 @@ pub(crate) fn assumptions(m: &MailboxReport) -> Vec<String> {
         "Mailbox SyncManagers come from SyncManager configuration writes in the capture (mailbox mode); messages are taken from returning datagrams at their start address with WKC > 0.".to_owned(),
         "Logically mapped mailbox access and the SyncManager repeat mechanism are not interpreted; a message whose counter equals the previous one is treated as a repeat.".into(),
     ];
+    if m.channels.iter().any(|c| c.source == ChannelSource::Eni) {
+        a.push("Mailboxes of stations without SyncManager configuration in the capture come from the ENI; its \"Recv\" mailbox is taken to be SM1 for status polls.".into());
+    }
     if m.channels.iter().any(|c| c.source == ChannelSource::Heuristic) {
         a.push("Some stations had no SyncManager configuration in the capture; their mailboxes were inferred from FPWR/FPRD at ≥ 0x1000 whose data parses as a mailbox header.".into());
     }

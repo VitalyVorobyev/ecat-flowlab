@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hand-written for FlowLab tests (not a vendor file). Structure per ETG.2000. -->
+<EtherCATInfo Version="1.11">
+  <Vendor>
+    <Id>#x00000FFF</Id>
+    <Name>FlowLab Test Devices</Name>
+  </Vendor>
+  <Descriptions>
+    <Groups>
+      <Group><Type>Test</Type><Name>Test</Name></Group>
+    </Groups>
+    <Devices>
+      <Device Physics="YY">
+        <Type ProductCode="#x00010001" RevisionNo="#x00020000">FL-DI16</Type>
+        <Name LcId="1033">FL-DI16 16-channel digital input</Name>
+        <GroupType>Test</GroupType>
+        <Fmmu>Inputs</Fmmu>
+        <Sm StartAddress="#x1000" ControlByte="#x00" Enable="1">Inputs</Sm>
+        <TxPdo Fixed="1" Mandatory="1" Sm="0">
+          <Index>#x1a00</Index>
+          <Name>Channels</Name>
+          <Entry><Index>#x6000</Index><SubIndex>1</SubIndex><BitLen>16</BitLen><Name>Inputs</Name><DataType>UINT</DataType></Entry>
+        </TxPdo>
+      </Device>
+      <Device Physics="YY">
+        <Type ProductCode="#x00020001" RevisionNo="#x00010000">FL-BULK</Type>
+        <Name LcId="1033">FL-BULK bulk endpoint</Name>
+        <Name LcId="1031">FL-BULK Endpunkt</Name>
+        <GroupType>Test</GroupType>
+        <Fmmu>Outputs</Fmmu>
+        <Fmmu>Inputs</Fmmu>
+        <Fmmu>MBoxState</Fmmu>
+        <Sm MinSize="64" MaxSize="1024" DefaultSize="512" StartAddress="#x1000" ControlByte="#x26" Enable="1">MBoxOut</Sm>
+        <Sm MinSize="64" MaxSize="1024" DefaultSize="512" StartAddress="#x1200" ControlByte="#x22" Enable="1">MBoxIn</Sm>
+        <Sm StartAddress="#x1400" ControlByte="#x64" Enable="1">Outputs</Sm>
+        <Sm StartAddress="#x1600" ControlByte="#x20" Enable="1">Inputs</Sm>
+        <RxPdo Fixed="1" Sm="2">
+          <Index>#x1600</Index>
+          <Name>Control</Name>
+          <Entry><Index>#x7000</Index><SubIndex>1</SubIndex><BitLen>16</BitLen><Name>Controlword</Name><DataType>UINT</DataType></Entry>
+          <Entry><Index>#x7000</Index><SubIndex>2</SubIndex><BitLen>32</BitLen><Name>Setpoint</Name><DataType>DINT</DataType></Entry>
+          <Entry><Index>0</Index><BitLen>16</BitLen></Entry>
+        </RxPdo>
+        <RxPdo>
+          <Index>#x1601</Index>
+          <Name>Optional</Name>
+          <Entry><Index>#x7010</Index><SubIndex>1</SubIndex><BitLen>32</BitLen><Name>Extra</Name><DataType>UDINT</DataType></Entry>
+        </RxPdo>
+        <TxPdo Fixed="1" Sm="3">
+          <Index>#x1a00</Index>
+          <Name>Status</Name>
+          <Entry><Index>#x6000</Index><SubIndex>1</SubIndex><BitLen>16</BitLen><Name>Statusword</Name><DataType>UINT</DataType></Entry>
+          <Entry><Index>#x6000</Index><SubIndex>2</SubIndex><BitLen>32</BitLen><Name>Position</Name><DataType>DINT</DataType></Entry>
+          <Entry><Index>0</Index><BitLen>16</BitLen></Entry>
+        </TxPdo>
+        <Mailbox DataLinkLayer="true">
+          <CoE SdoInfo="true" CompleteAccess="true" PdoAssign="false" PdoConfig="false"/>
+          <FoE/>
+          <EoE IP="true" MAC="true"/>
+        </Mailbox>
+        <Dc>
+          <OpMode><Name>DC</Name><Desc>DC-Synchron</Desc><AssignActivate>#x0300</AssignActivate></OpMode>
+        </Dc>
+      </Device>
+    </Devices>
+  </Descriptions>
+</EtherCATInfo>

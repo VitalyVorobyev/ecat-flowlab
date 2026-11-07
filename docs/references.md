@@ -31,7 +31,8 @@ Checked as of **2026-11-07**. Links are design/research sources, not proof that 
 16. IEEE EtherType registry: 0x88A4 EtherCAT; IANA UDP port 34980 (0x88A4) "EtherCAT": https://www.iana.org/assignments/service-names-port-numbers/
 17. RFC 7042 — documentation MAC range 00-00-5E-00-53-xx used by `flowlab-synth`: https://www.rfc-editor.org/rfc/rfc7042
 18. ETG.1000.6 (application layer protocol specification): mailbox header, CoE (SDO, emergency, SDO Information), FoE, EoE fragmentation, SoE; CiA 301 for SDO command specifiers and abort codes. FlowLab's encodings are cross-checked against Wireshark's `ecat_mailbox` dissector (`scripts/crosscheck-tshark.py`, CI job `wireshark`).
-19. Rust crates adopted (all MIT/Apache-2.0 dual or MIT): serde, serde_json, thiserror, clap, tracing, schemars 1.x, sha2, axum 0.8, tokio, tower-http, ts-rs 12, proptest. UI: `@vitavision/*` (MIT OR Apache-2.0), React 19, Tailwind 4, lucide-react (ISC).
+19. ETG.2000 (EtherCAT Slave Information, ESI) and ETG.2100 (EtherCAT Network Information, ENI): XML layouts read by `flowlab-devices`; FlowLab reads the subset it needs.
+20. Rust crates adopted (all MIT/Apache-2.0 dual or MIT): serde, serde_json, thiserror, clap, tracing, schemars 1.x, sha2, axum 0.8, tokio, tower-http, ts-rs 12, proptest, roxmltree 0.21. UI: `@vitavision/*` (MIT OR Apache-2.0), React 19, Tailwind 4, lucide-react (ISC).
 
 ## Claims requiring future validation
 
