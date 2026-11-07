@@ -10,8 +10,9 @@ cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 cd ui && bun run lint && bun run typecheck && bun run test:run && bun run build && bun run fmt:check
 cargo run -p flowlab-cli -- synth configs/synth/demo.json -o results/demo.pcapng --truth results/demo.truth.json
 cargo run -p flowlab-cli -- analyze results/demo.pcapng --out results/demo.json
-cargo run --release -p flowlab-cli -- simulate configs/studies/bulk-transfer/*.json
+cargo run --release -p flowlab-cli -- simulate configs/studies/bulk-transfer/{smoke,large-payload,mixed-load}.json
 cargo run -p flowlab-cli -- plan                     # bus budget; `esi FILE` summarizes an ESI
+cargo run --release -p flowlab-cli -- study configs/studies/bulk-transfer/foe-sweep.json
 cargo run -p flowlab-cli -- serve results/demo.pcapng      # UI from ui/dist on :7878
 python3 scripts/crosscheck-tshark.py results/demo.pcapng results/demo.json   # needs tshark
 ```
@@ -34,6 +35,9 @@ the report schema changed, regenerate `ui/src/test/report.fixture.json` (see `ui
 - `flowlab-server`: thin. No analysis logic in handlers; heavy work in `spawn_blocking`.
 - `flowlab-devices`: ESI/ENI subset readers (roxmltree, DTDs rejected), ENI writer, planner
   (arithmetic only). No vendor ESI/ENI files in the repo — fixtures are hand-written.
+- `flowlab-study`: runs simulations without captures; parameters are JSON pointers into the
+  spec. Calibrate only on quantities both a capture and the simulator observe (message spans,
+  not application end-to-end times); always report residuals.
 - `flowlab-sim`: deterministic (own RNG, stable event order). Emits frames through `ecat-wire`
   into the same analysis pipeline; never analyses its own frames. Every modelling choice that
   changes results is a spec parameter or an entry in the result's assumptions. Keep its tests

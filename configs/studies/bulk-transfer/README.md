@@ -2,13 +2,14 @@ Simulator specs (`SimSpec`, see `flowlab schema sim`) for the
 [bulk-transfer study](../../../docs/studies/bulk-transfer/README.md). Run them side by side:
 
 ```bash
-cargo run --release -p flowlab-cli -- simulate configs/studies/bulk-transfer/*.json
+cargo run --release -p flowlab-cli -- simulate configs/studies/bulk-transfer/{smoke,large-payload,mixed-load}.json
 ```
 
 | Spec | What it compares |
 |---|---|
 | `smoke.json` | 65,536 B master → slave by EoE, FoE, CoE and a 256 B/cycle PDO channel at 1 ms |
 | `large-payload.json` | 10,000,000 B master → slave by FoE, then EoE, at 500 µs (no capture written) |
+| `foe-sweep.json` | A study (`flowlab study`): mailbox size × PDI rate × policy for a 100 kB FoE write; Pareto frontier of time vs link load |
 | `mixed-load.json` | 10,000,000 B slave → master by EoE next to 768 B of cyclic process data at 250 µs |
 
 They replace the starter design's scenario files (kept verbatim in

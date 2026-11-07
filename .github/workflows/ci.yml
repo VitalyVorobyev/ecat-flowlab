@@ -37,7 +37,9 @@ jobs:
           cargo run -q -p flowlab-cli -- esi crates/flowlab-devices/tests/fixtures/flowlab-demo.esi.xml
           cargo run -q -p flowlab-cli -- plan
       - name: Simulator runs the shipped scenarios
-        run: cargo run -q --release -p flowlab-cli -- simulate configs/sim/example.json configs/studies/bulk-transfer/*.json
+        run: |
+          cargo run -q --release -p flowlab-cli -- simulate configs/sim/example.json configs/studies/bulk-transfer/{smoke,large-payload,mixed-load}.json
+          cargo run -q --release -p flowlab-cli -- study configs/studies/bulk-transfer/foe-sweep.json
 
   wireshark:
     name: Cross-check with Wireshark

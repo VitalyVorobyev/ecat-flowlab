@@ -322,6 +322,7 @@ dependencies = [
  "flowlab-devices",
  "flowlab-server",
  "flowlab-sim",
+ "flowlab-study",
  "flowlab-synth",
  "open",
  "serde_json",
@@ -361,6 +362,7 @@ dependencies = [
  "flowlab-core",
  "flowlab-devices",
  "flowlab-sim",
+ "flowlab-study",
  "flowlab-synth",
  "http-body-util",
  "serde",
@@ -380,6 +382,22 @@ dependencies = [
  "flowlab-analysis",
  "flowlab-capture",
  "flowlab-core",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "ts-rs",
+]
+
+[[package]]
+name = "flowlab-study"
+version = "0.1.0"
+dependencies = [
+ "flowlab-analysis",
+ "flowlab-capture",
+ "flowlab-core",
+ "flowlab-sim",
  "schemars",
  "serde",
  "serde_json",
@@ -1329,6 +1347,7 @@ version = "12.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "756050066659291d47a554a9f558125db17428b073c5ffce1daf5dcb0f7231d8"
 dependencies = [
+ "serde_json",
  "thiserror",
  "ts-rs-macros",
 ]

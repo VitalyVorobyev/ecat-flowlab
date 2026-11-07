@@ -7,6 +7,7 @@ import type { FramePage } from "./gen/FramePage";
 import type { EsiImport } from "./gen/EsiImport";
 import type { PlanResult } from "./gen/PlanResult";
 import type { SimResult } from "./gen/SimResult";
+import type { StudyResult } from "./gen/StudyResult";
 
 export type { CaptureInfo } from "./gen/CaptureInfo";
 export type { CaptureReport } from "./gen/CaptureReport";
@@ -47,6 +48,9 @@ export type { PlanCheck } from "./gen/PlanCheck";
 export type { PlannedFrame } from "./gen/PlannedFrame";
 export type { PlanResult } from "./gen/PlanResult";
 export type { PlanSlave } from "./gen/PlanSlave";
+export type { Residual } from "./gen/Residual";
+export type { StudyResult } from "./gen/StudyResult";
+export type { StudyRun } from "./gen/StudyRun";
 
 /** An error the server answered with `{ "error": "..." }`, or a transport failure. */
 export class ApiError extends Error {
@@ -165,4 +169,11 @@ export const api = {
   planSchema: () => request<Record<string, unknown>>("/api/plan/schema"),
   planExample: () => request<Record<string, unknown>>("/api/plan/example"),
   plan: (spec: unknown) => request<PlanResult>("/api/plan", json("POST", spec)),
+  studySchema: () => request<Record<string, unknown>>("/api/study/schema"),
+  studyExample: () => request<Record<string, unknown>>("/api/study/example"),
+  study: (spec: unknown, captureId: number | null) =>
+    request<StudyResult>(
+      captureId === null ? "/api/study" : `/api/study?capture=${captureId}`,
+      json("POST", spec),
+    ),
 };

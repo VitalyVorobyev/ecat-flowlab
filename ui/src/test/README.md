@@ -15,3 +15,6 @@ cargo run -p flowlab-cli -- simulate results/sim-fixture-spec.json --result ui/s
 ```
 
 `plan.fixture.json` is `flowlab plan --json` (the built-in example).
+
+`study.fixture.json` is `flowlab study` output for `configs/studies/bulk-transfer/foe-sweep.json`
+without its PDI-rate parameter (mailbox size × policy, 8 runs).

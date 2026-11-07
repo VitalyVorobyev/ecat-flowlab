@@ -2,6 +2,8 @@ import { Button, ErrorBox, Select, SkeletonRows, ThemeToggle, toast } from "@vit
 import { AppShell, FileDrop, NavRail, NavRailItem, StatusBar } from "@vitavision/workbench";
 import {
   Activity,
+  ChartScatter,
+  Columns2,
   FlaskConical,
   FolderOpen,
   Gauge,
@@ -20,12 +22,14 @@ import { SimulateDialog, SynthDialog } from "../components/SynthDialog";
 import { count, ns } from "../lib/format";
 import { useAsync } from "../lib/useAsync";
 import { CAPTURE_ACCEPT, Captures } from "../screens/Captures";
+import { Compare } from "../screens/Compare";
 import { Frames, type FramesTarget } from "../screens/Frames";
 import { Mailbox } from "../screens/Mailbox";
 import { Overview } from "../screens/Overview";
 import { Planner } from "../screens/Planner";
 import { Simulation } from "../screens/Simulation";
 import { Stations } from "../screens/Stations";
+import { Study } from "../screens/Study";
 import { Timing } from "../screens/Timing";
 
 export type View =
@@ -36,7 +40,9 @@ export type View =
   | "stations"
   | "mailbox"
   | "simulation"
-  | "planner";
+  | "planner"
+  | "study"
+  | "compare";
 
 const DIRECTIONS = {
   mac_local_bit: "directions: MAC bit",
@@ -242,6 +248,13 @@ export function App() {
       <NavRailItem value="stations" label="Stations" icon={<Network />} disabled={!hasReport} />
       <NavRailItem value="mailbox" label="Mailbox" icon={<Mail />} disabled={!hasReport} />
       <NavRailItem value="planner" label="Planner" icon={<Ruler />} />
+      <NavRailItem value="study" label="Study" icon={<ChartScatter />} />
+      <NavRailItem
+        value="compare"
+        label="Compare"
+        icon={<Columns2 />}
+        disabled={captures.length < 2}
+      />
       <NavRailItem
         value="simulation"
         label="Sim run"
@@ -254,6 +267,10 @@ export function App() {
   let main;
   if (view === "planner") {
     main = <Planner />;
+  } else if (view === "study") {
+    main = <Study captures={captures} onCreated={added} />;
+  } else if (view === "compare") {
+    main = <Compare key={captures.map((c) => c.id).join(",")} captures={captures} />;
   } else if (view === "captures" || selectedId === null) {
     main = (
       <Captures

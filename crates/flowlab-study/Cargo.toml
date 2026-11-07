@@ -1,0 +1,25 @@
+[package]
+name = "flowlab-study"
+description = "Parameter studies over the simulator: sweeps, constraints, Pareto frontier, calibration against captures."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+flowlab-core.workspace = true
+flowlab-analysis.workspace = true
+flowlab-sim.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+ts-rs = { version = "12", features = ["serde-json-impl"] }
+
+[dev-dependencies]
+flowlab-capture.workspace = true
+
+[lints]
+workspace = true

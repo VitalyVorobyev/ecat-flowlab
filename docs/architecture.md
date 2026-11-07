@@ -29,6 +29,7 @@ simulator model (see `decisions.md`, ADR-010).
 | `flowlab-analysis` | cyclic-stream detection, period / jitter / round trip, WKC expectation, utilization, stations and AL timeline, findings; frame listing and decode | hold global state |
 | `flowlab-synth` | deterministic master + slave-line capture generator, `GroundTruth`, JSON Schema of its spec | claim fidelity beyond its documented round-trip model |
 | `flowlab-devices` | ESI and ENI readers (subset), ENI writer, bus-budget planner with capability checks | depend on capture or analysis code |
+| `flowlab-study` | parameter studies over the simulator: sampling, constraints, Pareto frontier, calibration against an analysed capture | write captures (runs are simulated without frames) |
 | `flowlab-sim` | discrete-event model of master, link, ESC and PDI; bulk-transfer protocols; `SimResult`; JSON Schema of `SimSpec` | analyse its own frames (that is `flowlab-analysis`'s job) or present model output as measurement |
 | `flowlab-server` | in-memory capture store, REST API, static UI | contain analysis logic |
 | `flowlab-cli` | `synth`, `analyze`, `serve`, `schema` | — |
@@ -117,5 +118,5 @@ Schema (schemars) as the generator form. API types are generated from Rust by ts
 | SYNTH | `flowlab synth` | M0 |
 | SIMULATE | discrete-event model emitting frames | M4 ✅ |
 | PLAN | ESI/ENI + topology → frame layout and budget | M5 ✅ |
-| OPTIMIZE / COMPARE | sweeps, Pareto, sim vs measured | M6 |
+| OPTIMIZE / COMPARE | sweeps, Pareto, calibration, sim vs measured | M6 ✅ |
 | LIVE | libpcap capture, master adapters, isolated lab only | M7 |

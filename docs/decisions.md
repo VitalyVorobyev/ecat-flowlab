@@ -81,6 +81,19 @@ Architecture decisions, newest last. A decision is changed by a new entry that s
 - **ADR-027 The planner is arithmetic.** Frame layout, wire time and bus-side headroom only; PDI
   and slave timing belong to the simulator. Its assumptions travel with each result.
 
+## 2026-11-07 — M6 studies, calibration and comparison
+
+- **ADR-028 One study concept for sweeps and calibration.** Parameters are JSON pointers into a
+  simulator spec, so any spec field can vary without study-specific code. Targets turn a sweep
+  into a calibration whose first objective is the fit error.
+- **ADR-029 Calibrate on what both sides observe.** The simulator reports each transfer's message
+  span at the master, the same span `flowlab analyze` measures in a capture; end-to-end
+  application times are not used for fitting.
+- **ADR-030 A good fit is not identification.** Results say so: several parameter sets may
+  reproduce the same measurements. Residuals are always shown.
+- **ADR-031 Comparison keeps provenance per column.** The Compare view shows ratios between
+  labelled columns; it never averages or merges measured and simulated values.
+
 ## Open questions
 
 - Do TwinCAT / other masters' captures always show the ESC-set source-MAC bit, or are
