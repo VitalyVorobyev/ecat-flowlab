@@ -1,3 +1,5 @@
+//! pcap and pcapng reading from memory: formats, interfaces, timestamp resolution and offsets.
+
 use thiserror::Error;
 
 /// Link type of Ethernet (DLT_EN10MB).
@@ -112,7 +114,7 @@ impl CaptureFile {
         Self::parse(std::fs::read(path)?)
     }
 
-    /// Captured bytes of packet `i`.
+    /// Captured bytes of packet `p`.
     pub fn data(&self, p: &PacketRecord) -> &[u8] {
         &self.bytes[p.data_start..p.data_start + p.captured_len as usize]
     }

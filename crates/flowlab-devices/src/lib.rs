@@ -9,6 +9,17 @@
 //!   mailbox capabilities.
 //!
 //! Only the parts FlowLab uses are read; unknown elements are ignored. DTDs are rejected.
+//!
+//! ```
+//! use flowlab_devices::{PlanSpec, plan};
+//!
+//! let result = plan(&PlanSpec::example());
+//! // The cyclic frames, their wire time and what is left of the cycle for mailbox traffic.
+//! assert!(result.cyclic_wire_ns > 0.0 && result.idle_ns < result.cycle_ns);
+//! for check in &result.checks {
+//!     println!("{check:?}");
+//! }
+//! ```
 
 mod eni;
 mod esi;

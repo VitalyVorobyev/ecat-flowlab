@@ -1,3 +1,5 @@
+//! pcapng writing, with the provenance marker in the section comment.
+
 use std::io::Write;
 
 use crate::file::LINKTYPE_ETHERNET;

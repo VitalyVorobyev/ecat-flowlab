@@ -1,3 +1,6 @@
+//! The analysis pass: directions and pairing, cyclic streams, timing, working counters,
+//! utilization, stations, mailbox, findings.
+
 use std::collections::{BTreeMap, HashMap};
 
 use ecat_wire::{AddressMode, AlStatus, Command, DatagramAddress, register_info, wire_bytes};
@@ -76,14 +79,23 @@ pub fn analyze(trace: &Trace, opts: &AnalysisOptions) -> Analysis {
     let mut order: Vec<u32> = (0..n as u32).collect();
     order.sort_by_key(|&i| trace.frames[i as usize].t_ns);
 
-    // Layout ids.
+    // Layout ids: the full layout groups sent frames into streams; the pairing layout leaves
+    // out the ADP of position and broadcast datagrams, which every slave increments, so a
+    // returning frame matches the frame that was sent.
     let mut layouts: HashMap<Layout, u32> = HashMap::new();
+    let mut pair_layouts: HashMap<Layout, u32> = HashMap::new();
     let mut layout_of = vec![NONE; n];
+    let mut pair_layout_of = vec![NONE; n];
     for (i, f) in trace.frames.iter().enumerate() {
         if f.kind == FrameKind::Ethercat && f.datagram_count > 0 {
-            let l: Layout = trace.datagrams_of(f).iter().map(|d| (d.command.code(), d.address_raw, d.len)).collect();
+            let dgs = trace.datagrams_of(f);
+            let l: Layout = dgs.iter().map(|d| (d.command.code(), d.address_raw, d.len)).collect();
             let next = layouts.len() as u32;
             layout_of[i] = *layouts.entry(l).or_insert(next);
+            let l: Layout =
+                dgs.iter().map(|d| (d.command.code(), d.command.stable_address(d.address_raw), d.len)).collect();
+            let next = pair_layouts.len() as u32;
+            pair_layout_of[i] = *pair_layouts.entry(l).or_insert(next);
         }
     }
 
@@ -94,10 +106,10 @@ pub fn analyze(trace: &Trace, opts: &AnalysisOptions) -> Analysis {
     let mut pending: HashMap<(u32, u8), u32> = HashMap::new();
     for &i in &order {
         let f = &trace.frames[i as usize];
-        if layout_of[i as usize] == NONE {
+        if pair_layout_of[i as usize] == NONE {
             continue;
         }
-        let key = (layout_of[i as usize], trace.datagrams[f.first_datagram as usize].index);
+        let key = (pair_layout_of[i as usize], trace.datagrams[f.first_datagram as usize].index);
         match f.direction {
             Direction::Tx => {
                 if let Some(old) = pending.insert(key, i) {
@@ -673,7 +685,9 @@ fn findings(
         let mism: u64 = s.wkc.iter().map(|w| w.mismatches).sum();
         if mism > 0 {
             let worst = s.wkc.iter().max_by_key(|w| w.mismatches).map(|w| w.label.clone()).unwrap_or_default();
-            add(Severity::Defect, format!("{name}: {} working-counter mismatches", s.wkc_events.len().max(1)), {
+            let frames = s.wkc_events.len().max(1);
+            let frames = if frames >= MAX_EVENTS { format!("≥ {frames}") } else { frames.to_string() };
+            add(Severity::Defect, format!("{name}: {frames} working-counter mismatches"), {
                 let basis = if s.wkc.iter().all(|w| w.expected_from == "eni") {
                     "the value configured in the ENI"
                 } else if s.wkc.iter().any(|w| w.expected_from == "eni") {

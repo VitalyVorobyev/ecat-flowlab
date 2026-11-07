@@ -255,6 +255,8 @@ struct Sim<'a, W: Write> {
     frames: u64,
     wire_bytes: u64,
     cycles: u64,
+    /// Start of the latest master cycle, ns.
+    cycle_start: u64,
     t0: u64,
     cycle_ns: u64,
     regions: Vec<Region>,
@@ -293,11 +295,16 @@ impl<'a, W: Write> Sim<'a, W> {
         self.spec.slaves.iter().map(|s| s.forwarding_delay_ns as u64).sum()
     }
 
-    fn build(src: MacAddr, dgs: &[Dg], returning: bool, first_index: u8) -> Result<Vec<u8>, SimError> {
+    /// Encode a frame as sent (`slaves_passed: None`) or as returned after the whole ring.
+    fn build(src: MacAddr, dgs: &[Dg], slaves_passed: Option<u16>, first_index: u8) -> Result<Vec<u8>, SimError> {
         let mut b = FrameBuilder::new(MacAddr([0xFF; 6]), src);
         for (i, d) in dgs.iter().enumerate() {
-            let (data, wkc) = if returning { (&d.rx, d.wkc) } else { (&d.tx, 0) };
-            let spec = DatagramSpec::new(d.command, first_index.wrapping_add(i as u8), d.address, data);
+            let (data, wkc, address) = match slaves_passed {
+                // Every slave increments the ADP of position and broadcast datagrams.
+                Some(n) => (&d.rx, d.wkc, d.command.address_after(d.address, n)),
+                None => (&d.tx, 0, d.address),
+            };
+            let spec = DatagramSpec::new(d.command, first_index.wrapping_add(i as u8), address, data);
             b.push(spec.with_wkc(wkc))?;
         }
         Ok(b.finish())
@@ -310,7 +317,7 @@ impl<'a, W: Write> Sim<'a, W> {
         }
         let first_index = self.index;
         self.index = self.index.wrapping_add(dgs.len() as u8);
-        let tx = Self::build(MASTER_MAC, &dgs, false, first_index)?;
+        let tx = Self::build(MASTER_MAC, &dgs, None, first_index)?;
         let wire = wire_bytes(tx.len() as u32) as u64;
         let start = at.max(self.link_free);
         self.link_free = start + ns_for_bits(wire * 8, self.spec.link_bps);
@@ -352,13 +359,16 @@ impl<'a, W: Write> Sim<'a, W> {
     }
 
     /// Send `dgs` in as few frames as fit.
+    /// Send `dgs` in as few frames as fit. Only the last frame carries `mailbox_cycle`, so an
+    /// opportunistic master runs one chain of mailbox frames per cycle however many frames a
+    /// batch needs.
     fn send_packed(&mut self, at: u64, dgs: Vec<Dg>, mailbox_cycle: Option<u64>) -> Result<(), SimError> {
         let mut frame = Vec::new();
         let mut size = 0;
         for d in dgs {
             let len = 10 + d.tx.len() + 2;
             if size + len > MAX_PDU && !frame.is_empty() {
-                self.send(at, std::mem::take(&mut frame), mailbox_cycle)?;
+                self.send(at, std::mem::take(&mut frame), None)?;
                 size = 0;
             }
             size += len;
@@ -467,6 +477,7 @@ impl<'a, W: Write> Sim<'a, W> {
             return Ok(());
         }
         self.cycles += 1;
+        self.cycle_start = t;
         let mut dgs = Vec::with_capacity(2);
         if self.image_len > 0 {
             let mut data = vec![0u8; self.image_len];
@@ -536,7 +547,8 @@ impl<'a, W: Write> Sim<'a, W> {
         let Some(f) = self.flights.remove(&id) else { return Ok(()) };
         let now = self.now;
         if !f.lost {
-            let rx = Self::build(MASTER_MAC.with_local_bit(), &f.dgs, true, f.first_index)?;
+            let rx =
+                Self::build(MASTER_MAC.with_local_bit(), &f.dgs, Some(self.spec.slaves.len() as u16), f.first_index)?;
             self.capture.push(now, rx);
         }
         let mut touched = Vec::new();
@@ -610,6 +622,9 @@ impl<'a, W: Write> Sim<'a, W> {
         if let (Some(cs), MailboxPolicy::Opportunistic { bus_budget_percent, turnaround_ns }) =
             (f.mailbox_cycle, &self.spec.mailbox_policy)
         {
+            // A frame still in flight when the next cycle starts continues in that cycle's
+            // budget: the master keeps using spare time whichever cycle it falls in.
+            let cs = cs.max(self.cycle_start);
             let at = now + *turnaround_ns as u64;
             let limit = cs + (self.cycle_ns as f64 * bus_budget_percent / 100.0) as u64;
             if at < limit && !self.stop {
@@ -1082,6 +1097,7 @@ pub fn simulate<W: Write>(spec: &SimSpec, capture: Option<W>) -> Result<SimResul
         frames: 0,
         wire_bytes: 0,
         cycles: 0,
+        cycle_start: 0,
         t0: 0,
         cycle_ns: spec.cycle_time_us as u64 * 1000,
         regions,

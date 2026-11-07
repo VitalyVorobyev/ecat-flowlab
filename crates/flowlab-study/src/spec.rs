@@ -1,3 +1,5 @@
+//! The study's input: parameters, sampling, objectives, constraints and calibration targets.
+
 use flowlab_sim::SimSpec;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

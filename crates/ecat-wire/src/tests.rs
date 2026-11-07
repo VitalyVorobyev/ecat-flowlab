@@ -287,3 +287,17 @@ proptest! {
         for (n, _) in sync_managers_in(ado, &data) { prop_assert!(n < 16); }
     }
 }
+
+#[test]
+fn slaves_increment_adp_of_position_and_broadcast_datagrams() {
+    // APRD to position −1 (ADP 0xFFFF) after three slaves: 0x0002; ADO untouched.
+    assert_eq!(Command::Aprd.address_after(0x0130_FFFF, 3), 0x0130_0002);
+    assert_eq!(Command::Brd.address_after(0x0130_0000, 6), 0x0130_0006);
+    assert_eq!(Command::Fprd.address_after(0x0130_1001, 6), 0x0130_1001);
+    assert_eq!(Command::Lrw.address_after(0x0001_0000, 6), 0x0001_0000);
+    for c in [Command::Aprd, Command::Brd, Command::Fprd, Command::Lrw] {
+        for a in [0u32, 0x0130_FFFF, 0x1234_5678] {
+            assert_eq!(c.stable_address(c.address_after(a, 5)), c.stable_address(a), "{c:?} {a:#x}");
+        }
+    }
+}

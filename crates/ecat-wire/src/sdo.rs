@@ -163,7 +163,7 @@ impl SdoCommand {
         }
     }
 
-    /// Short name.
+    /// Full name, e.g. "initiate download request" ([`Self::short_name`] is the compact one).
     pub const fn name(self) -> &'static str {
         match self {
             Self::InitiateDownloadRequest { .. } => "initiate download request",

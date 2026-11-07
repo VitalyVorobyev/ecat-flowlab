@@ -1,3 +1,5 @@
+//! Ethernet II framing, the optional 802.1Q tag, and EtherCAT over UDP/IPv4.
+
 use crate::datagram::EcatPdu;
 use crate::error::{WireError, need};
 

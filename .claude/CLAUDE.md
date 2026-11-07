@@ -1,7 +1,8 @@
 # ECAT FlowLab — agent guide
 
 EtherCAT analysis workbench: Rust core + local axum server + React UI on the `@vitavision/*`
-lab-ui packages. Read `README.md`, then `docs/architecture.md` and `docs/roadmap.md`.
+lab-ui packages. Read `README.md`, then the book in `book/src/` (start with
+`workspace/overview.md`, `workspace/contributing.md` and `workspace/decisions.md`).
 
 ## Commands
 
@@ -15,6 +16,8 @@ cargo run -p flowlab-cli -- plan                     # bus budget; `esi FILE` su
 cargo run --release -p flowlab-cli -- study configs/studies/bulk-transfer/foe-sweep.json
 cargo run -p flowlab-cli -- serve results/demo.pcapng      # UI from ui/dist on :7878
 python3 scripts/crosscheck-tshark.py results/demo.pcapng results/demo.json   # needs tshark
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace && mdbook build book
+python3 scripts/bulk-transfer-report.py      # after a release build; regenerates the report's tables
 ```
 
 `cargo test` exports ts-rs types to `ui/src/api/gen/` (configured in `.cargo/config.toml`).
@@ -61,6 +64,31 @@ the report schema changed, regenerate `ui/src/test/report.fixture.json` (see `ui
 - **Hardware safety.** Never run a second master on an active segment; live capture/master
   features need explicit opt-in, interface name and an isolated network. An ordinary Ethernet
   MAC is not an ESC — do not label non-ESC traffic "EtherCAT".
-- **Unknowns** become falsifiable questions in `docs/decisions.md` or the relevant study, not
+- **Unknowns** become falsifiable questions in `book/src/workspace/decisions.md` or the relevant study, not
   silent assumptions in code.
 - Check licences before adopting a dependency (SOEM is GPLv3/commercial).
+
+## Documentation
+
+- `book/` (mdBook) is the user-facing documentation; `README.md` stays a short entry point.
+  Both describe what the code does now: no milestones, plans or "will". Update the matching
+  book page with every user-visible change.
+- `book/src/studies/bulk-transfer/generated/` and `configs/studies/bulk-transfer/report/` are
+  written by `scripts/bulk-transfer-report.py`; CI fails if they are stale. After a model change,
+  regenerate and reread the report's prose, which quotes some of the numbers.
+
+## Open work (not user-facing)
+
+- Validate analysis, ENI reader and direction inference on real captures from several masters
+  (TwinCAT, EtherCrab, SOEM/IgH) and a tap; answer the open questions in `workspace/decisions.md`.
+- SDO Information and SoE transactions, AoE; logically mapped mailbox status.
+- Simulator: TCP over EoE, VoE, priority/weighted mailbox policies, the study's application
+  session protocol; calibrate PDI and master parameters on lab captures.
+- Planner → simulator in one step; local optimisation beyond grid/LHS for large sweeps.
+- Distributed-clock analysis (propagation delay, drift, sync error).
+- Live capture and master adapters only behind a feature with explicit opt-in (hardware rules).
+- Upstream `HexView` and `StateTimeline` to lab-ui; an item editor for arrays of objects in
+  `@vitavision/forms`.
+- Thresholds still hard-coded in analysis (1.5-period gap, stream regularity 60 % / ±50 %) belong
+  in `AnalysisOptions`; `GET /report` serialises on the async runtime.
+

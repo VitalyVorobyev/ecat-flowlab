@@ -7,6 +7,18 @@
 //!
 //! It is a model: every result follows from the spec's parameters, which are listed with
 //! the model's assumptions in [`SimResult::meta`]. Nothing here is a measurement.
+//!
+//! ```
+//! use flowlab_sim::{SimSpec, simulate};
+//!
+//! let mut spec = SimSpec::example();
+//! spec.transfers.truncate(1); // the EoE transfer only
+//! let result = simulate(&spec, None::<Vec<u8>>).unwrap();
+//! let t = &result.transfers[0];
+//! assert!(t.verified, "every byte arrived, SHA-256 matches");
+//! // No transfer is faster than its payload alone on the link.
+//! assert!(t.duration_ns.unwrap() >= t.physical_bound_ns);
+//! ```
 
 mod engine;
 mod protocol;

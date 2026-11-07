@@ -22,7 +22,7 @@ pub struct FrameFilter {
     pub direction: Option<String>,
     /// A datagram addresses this configured station.
     pub station: Option<u16>,
-    /// The frame belongs to this cyclic stream; `65535` = to none.
+    /// The frame belongs to this cyclic stream; `65535` = in no stream.
     pub stream: Option<u16>,
     /// Only frames with a WKC mismatch, no answer, or a parse error.
     pub problems_only: bool,
@@ -324,7 +324,7 @@ pub struct DatagramDetail {
     pub expected_wkc: Option<u16>,
     /// Decoded AL control/status for accesses at 0x0120/0x0130.
     pub al_state: Option<String>,
-    /// Mailbox content, if the data looks like a mailbox.
+    /// Mailbox content, if the datagram accesses a known mailbox channel.
     pub mailbox: Option<MailboxInfo>,
 }
 

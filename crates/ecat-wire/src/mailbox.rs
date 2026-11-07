@@ -1,3 +1,5 @@
+//! The mailbox header, the protocol type it announces, VoE headers and mailbox error replies.
+
 use crate::error::{WireError, le16, le32, need};
 
 /// Length of the mailbox header.

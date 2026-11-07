@@ -7,7 +7,7 @@
     "input": {
       "name": "fixture.pcapng",
       "bytes": 279872,
-      "sha256": "239e1c447a7266b818990a46d9e708779d0e54535ffe797d76b6d62e853ee6ea"
+      "sha256": "8f88694e56e64a4043b13f8ace92fc81b2ef44b35f70717a63b84fd6e92256a3"
     },
     "assumptions": [
       "Utilization assumes a 100 Mbit/s link; wire bytes include padding to 64 bytes, preamble, FCS and the 12-byte inter-frame gap.",
@@ -15,7 +15,7 @@
       "Expected working counters are the most frequent value per datagram position; no ENI network configuration was given.",
       "Timestamps are taken as recorded by the capture tool; their accuracy is not known to FlowLab.",
       "Directions: source MAC without the locally-administered bit is TX, with it RX (ESCs set the bit on returning frames).",
-      "Mailbox SyncManagers come from SyncManager configuration writes in the capture (mailbox mode); messages are taken from returning datagrams at their start address with WKC > 0.",
+      "Each station's mailbox SyncManagers come, in this order of preference, from SyncManager configuration writes in the capture (mailbox mode), the ENI, a user hint or a heuristic; the source is reported per channel. Messages are taken from returning datagrams at the mailbox start address with WKC > 0.",
       "Logically mapped mailbox access and the SyncManager repeat mechanism are not interpreted; a message whose counter equals the previous one is treated as a repeat."
     ]
   },

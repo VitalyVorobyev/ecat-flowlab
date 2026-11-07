@@ -1,3 +1,6 @@
+//! The trace index: every frame decoded once into compact per-frame and per-datagram records,
+//! with TX/RX directions inferred.
+
 use std::collections::HashMap;
 
 use ecat_wire::{Command, DatagramAddress, Encapsulation, MacAddr, parse_frame};

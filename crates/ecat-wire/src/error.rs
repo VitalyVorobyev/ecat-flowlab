@@ -1,3 +1,5 @@
+//! Parse errors. Every malformed input maps to one of these instead of a panic.
+
 use thiserror::Error;
 
 /// Why a byte sequence is not a well-formed EtherCAT structure.

@@ -1,4 +1,5 @@
-//! `flowlab`: generate synthetic captures, analyze captures, and serve the UI.
+//! `flowlab`: analyse captures, generate synthetic ones, simulate, run studies, plan networks,
+//! read ESI files and serve the UI. `flowlab help` lists the subcommands.
 
 use std::fs::File;
 use std::io::BufWriter;
@@ -93,7 +94,7 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
-    /// Run the discrete-event simulator. With several specs, print a comparison table.
+    /// Run the discrete-event simulator. With several specs, run each and print its table.
     Simulate {
         /// Spec files (see `flowlab schema sim`). Omit to use the built-in example.
         specs: Vec<PathBuf>,

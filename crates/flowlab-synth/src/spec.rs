@@ -1,3 +1,5 @@
+//! The generator's input (`SynthSpec`): master, slaves, mailbox traffic and faults.
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

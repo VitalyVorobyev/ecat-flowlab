@@ -1,0 +1,147 @@
+{
+  "description": "FoE write, 1024 B mailboxes, opportunistic master: PDI rate × per-access overhead (message_only)",
+  "base": {
+    "seed": 1,
+    "description": "Bulk-transfer report: one 10 MB transfer to the bulk endpoint",
+    "link_bps": 100000000,
+    "cycle_time_us": 1000,
+    "master_jitter_ns": 2000,
+    "slaves": [
+      {
+        "name": "coupler",
+        "outputs_bytes": 0,
+        "inputs_bytes": 0,
+        "forwarding_delay_ns": 700,
+        "mailbox_out_bytes": 0,
+        "mailbox_in_bytes": 0,
+        "dpram_bytes": 4096,
+        "pdi": {
+          "read_bps": 20000000,
+          "write_bps": 20000000,
+          "access_overhead_ns": 5000,
+          "mailbox_access": "whole_buffer"
+        },
+        "app_processing_ns": 20000
+      },
+      {
+        "name": "io",
+        "outputs_bytes": 8,
+        "inputs_bytes": 8,
+        "forwarding_delay_ns": 700,
+        "mailbox_out_bytes": 0,
+        "mailbox_in_bytes": 0,
+        "dpram_bytes": 4096,
+        "pdi": {
+          "read_bps": 20000000,
+          "write_bps": 20000000,
+          "access_overhead_ns": 5000,
+          "mailbox_access": "whole_buffer"
+        },
+        "app_processing_ns": 20000
+      },
+      {
+        "name": "bulk-endpoint",
+        "outputs_bytes": 8,
+        "inputs_bytes": 8,
+        "forwarding_delay_ns": 700,
+        "mailbox_out_bytes": 1024,
+        "mailbox_in_bytes": 1024,
+        "dpram_bytes": 4096,
+        "pdi": {
+          "read_bps": 20000000,
+          "write_bps": 20000000,
+          "access_overhead_ns": 5000,
+          "mailbox_access": "message_only"
+        },
+        "app_processing_ns": 20000
+      }
+    ],
+    "mailbox_policy": {
+      "kind": "opportunistic",
+      "bus_budget_percent": 90.0,
+      "turnaround_ns": 10000
+    },
+    "transfers": [
+      {
+        "slave": 2,
+        "direction": "master_to_slave",
+        "payload_bytes": 10000000,
+        "protocol": {
+          "kind": "foe"
+        },
+        "start_ms": 0.0
+      }
+    ],
+    "max_duration_ms": 900000,
+    "faults": {
+      "frame_loss_probability": 0.0
+    },
+    "capture": {
+      "enabled": false,
+      "max_frames": 200000
+    },
+    "start_unix_s": 1767225600
+  },
+  "parameters": [
+    {
+      "path": "/slaves/2/pdi/read_bps",
+      "also": [
+        "/slaves/2/pdi/write_bps"
+      ],
+      "values": [
+        2500000,
+        5000000,
+        10000000,
+        20000000,
+        40000000,
+        80000000
+      ]
+    },
+    {
+      "path": "/slaves/2/pdi/access_overhead_ns",
+      "also": [],
+      "values": [
+        1000,
+        5000,
+        20000,
+        50000,
+        100000
+      ]
+    }
+  ],
+  "sampling": {
+    "kind": "grid"
+  },
+  "objectives": [
+    {
+      "metric": {
+        "kind": "transfer_time_s",
+        "transfer": 0
+      },
+      "goal": "minimize"
+    },
+    {
+      "metric": {
+        "kind": "link_utilization_percent"
+      },
+      "goal": "minimize"
+    },
+    {
+      "metric": {
+        "kind": "pdi_busy_percent_max"
+      },
+      "goal": "minimize"
+    }
+  ],
+  "constraints": [
+    {
+      "metric": {
+        "kind": "dpram_used_percent_max"
+      },
+      "max": 100.0,
+      "min": null
+    }
+  ],
+  "targets": [],
+  "max_runs": 400
+}

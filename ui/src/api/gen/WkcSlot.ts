@@ -13,7 +13,8 @@ position: number,
  */
 label: string, 
 /**
- * Expected value: the most frequent observed value (no configuration is known).
+ * Expected value: the ENI's configured `Cnt` when `expected_from` is `"eni"`, else the most
+ * frequent value on returning frames.
  */
 expected: number, 
 /**

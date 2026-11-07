@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
@@ -80,3 +84,46 @@ jobs:
       - run: bun run typecheck
       - run: bun run test:run
       - run: bun run build
+
+  docs:
+    name: Docs and book
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: mdbook@0.4
+      - name: Rust API docs build without warnings
+        run: cargo doc --no-deps --workspace
+        env:
+          RUSTDOCFLAGS: -D warnings
+      - name: Book builds
+        run: mdbook build book
+      - name: Links inside the book and README resolve
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --offline --no-progress --exclude-path book/build --exclude 'api/' 'book/src/**/*.md' README.md
+          fail: true
+
+  report:
+    name: Study report is up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p flowlab-cli
+      - run: python3 scripts/bulk-transfer-report.py
+      - name: Committed specs and tables match the code
+        run: git diff --exit-code -- configs/studies/bulk-transfer/report book/src/studies/bulk-transfer/generated
+
+  licenses:
+    name: Licences and advisories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories licenses bans sources

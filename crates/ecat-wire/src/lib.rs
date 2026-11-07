@@ -15,6 +15,19 @@
 //! bytes the parser accepts, which the property tests check.
 //!
 //! This crate does no I/O and knows nothing about captures, time or analysis.
+//!
+//! ```
+//! use ecat_wire::{Command, DatagramSpec, FrameBuilder, MacAddr, parse_frame};
+//!
+//! // A broadcast read of AL status (register 0x0130), as a master sends it every cycle.
+//! let mut frame = FrameBuilder::new(MacAddr([0xff; 6]), MacAddr([0x02, 0, 0, 0, 0, 1]));
+//! frame.push(DatagramSpec::new(Command::Brd, 7, 0x0130 << 16, &[0, 0]).with_wkc(3)).unwrap();
+//! let bytes = frame.finish();
+//!
+//! let parsed = parse_frame(&bytes).unwrap().expect("an EtherCAT frame");
+//! let d = parsed.pdu.datagrams().next().unwrap().unwrap();
+//! assert_eq!((d.command, d.index, d.wkc, d.data), (Command::Brd, 7, 3, &[0, 0][..]));
+//! ```
 
 mod al;
 mod coe;

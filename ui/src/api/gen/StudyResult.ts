@@ -41,7 +41,8 @@ feasible: number,
  */
 pareto: Array<number>, 
 /**
- * Best run: smallest fit error for a calibration, else the best on the first objective.
+ * Best run, chosen among the Pareto-optimal runs: smallest fit error for a calibration, else
+ * the best on the first objective. `None` without objectives and targets.
  */
 best: number | null, 
 /**

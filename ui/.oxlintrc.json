@@ -183,12 +183,6 @@
         "typescript/restrict-template-expressions": "off",
         "typescript/unbound-method": "off"
       }
-    },
-    {
-      "files": ["src/api/mock.ts"],
-      "rules": {
-        "typescript/require-await": "off"
-      }
     }
   ]
 }
