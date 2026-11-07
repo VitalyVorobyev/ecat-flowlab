@@ -1,0 +1,112 @@
+{
+  "seed": 1,
+  "description": "One bulk slave: EoE, FoE, CoE and PDO channel, 256 kB each, 1 ms cycle",
+  "link_bps": 100000000,
+  "cycle_time_us": 1000,
+  "master_jitter_ns": 2000,
+  "slaves": [
+    {
+      "name": "coupler",
+      "outputs_bytes": 0,
+      "inputs_bytes": 0,
+      "forwarding_delay_ns": 700,
+      "mailbox_out_bytes": 0,
+      "mailbox_in_bytes": 0,
+      "dpram_bytes": 4096,
+      "pdi": {
+        "read_bps": 20000000,
+        "write_bps": 20000000,
+        "access_overhead_ns": 5000,
+        "mailbox_access": "whole_buffer"
+      },
+      "app_processing_ns": 20000
+    },
+    {
+      "name": "io-16",
+      "outputs_bytes": 2,
+      "inputs_bytes": 2,
+      "forwarding_delay_ns": 700,
+      "mailbox_out_bytes": 0,
+      "mailbox_in_bytes": 0,
+      "dpram_bytes": 4096,
+      "pdi": {
+        "read_bps": 20000000,
+        "write_bps": 20000000,
+        "access_overhead_ns": 5000,
+        "mailbox_access": "whole_buffer"
+      },
+      "app_processing_ns": 20000
+    },
+    {
+      "name": "bulk-endpoint",
+      "outputs_bytes": 8,
+      "inputs_bytes": 8,
+      "forwarding_delay_ns": 700,
+      "mailbox_out_bytes": 512,
+      "mailbox_in_bytes": 512,
+      "dpram_bytes": 4096,
+      "pdi": {
+        "read_bps": 20000000,
+        "write_bps": 20000000,
+        "access_overhead_ns": 5000,
+        "mailbox_access": "whole_buffer"
+      },
+      "app_processing_ns": 20000
+    }
+  ],
+  "mailbox_policy": {
+    "kind": "fixed_quota",
+    "accesses_per_cycle": 2
+  },
+  "transfers": [
+    {
+      "slave": 2,
+      "direction": "master_to_slave",
+      "payload_bytes": 256000,
+      "protocol": {
+        "kind": "eoe",
+        "mtu_bytes": 1500
+      },
+      "start_ms": 0.0
+    },
+    {
+      "slave": 2,
+      "direction": "master_to_slave",
+      "payload_bytes": 256000,
+      "protocol": {
+        "kind": "foe"
+      },
+      "start_ms": 0.0
+    },
+    {
+      "slave": 2,
+      "direction": "master_to_slave",
+      "payload_bytes": 256000,
+      "protocol": {
+        "kind": "coe_segmented"
+      },
+      "start_ms": 0.0
+    },
+    {
+      "slave": 2,
+      "direction": "master_to_slave",
+      "payload_bytes": 256000,
+      "protocol": {
+        "kind": "pdo_channel",
+        "bytes_per_cycle": 256,
+        "window": 2,
+        "retransmit_after_cycles": 8
+      },
+      "start_ms": 0.0
+    }
+  ],
+  "max_duration_ms": 60000,
+  "faults": {
+    "frame_loss_probability": 0.0
+  },
+  "capture": {
+    "enabled": true,
+    "max_frames": 200000
+  },
+  "start_unix_s": 1767225600
+}

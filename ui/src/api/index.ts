@@ -4,6 +4,7 @@ import type { CaptureReport } from "./gen/CaptureReport";
 import type { FrameDetail } from "./gen/FrameDetail";
 import type { FrameFilter } from "./gen/FrameFilter";
 import type { FramePage } from "./gen/FramePage";
+import type { SimResult } from "./gen/SimResult";
 
 export type { CaptureInfo } from "./gen/CaptureInfo";
 export type { CaptureReport } from "./gen/CaptureReport";
@@ -35,6 +36,9 @@ export type { MailboxReport } from "./gen/MailboxReport";
 export type { ProtocolStats } from "./gen/ProtocolStats";
 export type { SdoOutcome } from "./gen/SdoOutcome";
 export type { SdoTransaction } from "./gen/SdoTransaction";
+export type { SimResult } from "./gen/SimResult";
+export type { SlaveResult } from "./gen/SlaveResult";
+export type { TransferResult } from "./gen/TransferResult";
 
 /** An error the server answered with `{ "error": "..." }`, or a transport failure. */
 export class ApiError extends Error {
@@ -133,4 +137,8 @@ export const api = {
   synthSchema: () => request<Record<string, unknown>>("/api/synth/schema"),
   synthExample: () => request<Record<string, unknown>>("/api/synth/example"),
   synth: (spec: unknown) => request<CaptureInfo>("/api/synth", json("POST", spec)),
+  simSchema: () => request<Record<string, unknown>>("/api/sim/schema"),
+  simExample: () => request<Record<string, unknown>>("/api/sim/example"),
+  simulate: (spec: unknown) => request<CaptureInfo>("/api/simulate", json("POST", spec)),
+  simulation: (id: number) => request<SimResult>(`/api/captures/${id}/simulation`),
 };

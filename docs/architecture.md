@@ -28,6 +28,7 @@ simulator model (see `decisions.md`, ADR-010).
 | `flowlab-capture` | pcap (µs/ns, both endians) and pcapng (multi-section, `if_tsresol`, `if_tsoffset`, EPB/SPB/PB) reading; pcapng writing; `Trace` index; TX/RX inference | interpret traffic beyond one frame |
 | `flowlab-analysis` | cyclic-stream detection, period / jitter / round trip, WKC expectation, utilization, stations and AL timeline, findings; frame listing and decode | hold global state |
 | `flowlab-synth` | deterministic master + slave-line capture generator, `GroundTruth`, JSON Schema of its spec | claim fidelity beyond its documented round-trip model |
+| `flowlab-sim` | discrete-event model of master, link, ESC and PDI; bulk-transfer protocols; `SimResult`; JSON Schema of `SimSpec` | analyse its own frames (that is `flowlab-analysis`'s job) or present model output as measurement |
 | `flowlab-server` | in-memory capture store, REST API, static UI | contain analysis logic |
 | `flowlab-cli` | `synth`, `analyze`, `serve`, `schema` | — |
 
@@ -73,6 +74,26 @@ simulator model (see `decisions.md`, ADR-010).
 Capture timestamps are whatever the capture tool recorded. Host software timestamps add their
 own jitter; the UI and report say so rather than correcting for it.
 
+## Simulator model
+
+`flowlab-sim` runs a `SimSpec` in virtual time; events are ordered by `(time, insertion index)`,
+so a run is a pure function of the spec. Each master cycle sends a cyclic frame (LRW over the
+process image, BRD of AL status) and mailbox datagrams chosen by the policy. A frame holds the
+link for its wire time; a datagram reaches slave *p* once the bytes up to its end are serialized
+plus half the forwarding delays of slaves 0…*p*; the frame returns after the whole ring.
+
+ESCs act when a datagram passes: a mailbox write is accepted only while "mailbox out" is empty;
+a read returns data only while "mailbox in" is full; process data is latched for the
+application. The slave application uses the PDI one access at a time (rate + per-access
+overhead), for mailbox messages and process data alike, so a slow PDI shows up as rejected
+writes, empty polls and stale process data. Transfers are message-level state machines on both
+sides (EoE, FoE, CoE segmented) or a sequence-numbered chunk channel in process data. Receivers
+check every byte against the generated payload and its SHA-256.
+
+The run writes its frames as a pcapng labelled `simulated` and returns a `SimResult` with the
+model's assumptions. The frames are analysed by `flowlab-analysis` like any capture, so model and
+measurement are compared in the same views.
+
 ## Server and UI
 
 `flowlab serve` holds loaded captures in memory (`Trace` + `Analysis`), binds to 127.0.0.1
@@ -91,7 +112,7 @@ Schema (schemars) as the generator form. API types are generated from Rust by ts
 |---|---|---|
 | ANALYZE | capture files | M1–M3 |
 | SYNTH | `flowlab synth` | M0 |
-| SIMULATE | discrete-event model emitting frames | M4 |
+| SIMULATE | discrete-event model emitting frames | M4 ✅ |
 | PLAN | ESI/ENI + topology → frame layout and budget | M5 |
 | OPTIMIZE / COMPARE | sweeps, Pareto, sim vs measured | M6 |
 | LIVE | libpcap capture, master adapters, isolated lab only | M7 |

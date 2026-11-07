@@ -38,9 +38,16 @@ def flat(o, acc):
 def tshark(capture, *args):
     """Run tshark on `capture` fed through stdin (some distributions confine tshark's file
     access with AppArmor) and return stdout; any tshark failure raises."""
+    # IP is disabled: Wireshark does not reassemble EoE fragments, so it would dissect the
+    # first fragment of a tunnelled IP datagram as a truncated packet. The captures checked
+    # here carry EtherCAT as a raw EtherType, which does not need IP.
     with open(capture, "rb") as f:
         return subprocess.run(
-            ["tshark", "-r", "-", *args], stdin=f, check=True, capture_output=True, text=True
+            ["tshark", "--disable-protocol", "ip", "-r", "-", *args],
+            stdin=f,
+            check=True,
+            capture_output=True,
+            text=True,
         ).stdout
 
 

@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "id": "bulk-10mb-synthetic",
+  "description": "10 MB model-only transfer; assumes synthetic service frequency",
+  "mode": "simulation",
+  "seed": 42,
+  "payload_bytes": 10000000,
+  "direction": "master_to_slave",
+  "transport": "synthetic_mailbox",
+  "ethercat": {
+    "link_bps": 100000000,
+    "cycle_time_us": 500,
+    "background_pdo_bytes_per_cycle": 128,
+    "mailbox_out_bytes": 1024,
+    "mailbox_in_bytes": 1024,
+    "mailbox_services_per_cycle": 1,
+    "scheduler": "fixed_quota_synthetic"
+  },
+  "application": {
+    "chunk_bytes": 900,
+    "queue_depth": 32,
+    "verify_sha256": true
+  },
+  "faults": {
+    "frame_loss_probability": 0.0
+  }
+}

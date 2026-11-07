@@ -53,4 +53,8 @@ warnings: number,
 /**
  * SHA-256 of the file.
  */
-sha256: string, };
+sha256: string, 
+/**
+ * A simulation result is attached (`/api/captures/{id}/simulation`).
+ */
+has_simulation: boolean, };

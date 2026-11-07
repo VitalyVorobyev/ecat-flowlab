@@ -1,27 +1,66 @@
 {
-  "schema_version": 1,
-  "id": "offline-smoke",
-  "description": "Synthetic mailbox service model, not validated EtherCAT device",
-  "mode": "simulation",
   "seed": 42,
-  "payload_bytes": 65536,
-  "direction": "master_to_slave",
-  "transport": "synthetic_mailbox",
-  "ethercat": {
-    "link_bps": 100000000,
-    "cycle_time_us": 1000,
-    "background_pdo_bytes_per_cycle": 128,
-    "mailbox_out_bytes": 1024,
-    "mailbox_in_bytes": 1024,
-    "mailbox_services_per_cycle": 1,
-    "scheduler": "fixed_quota_synthetic"
+  "description": "Bulk-transfer smoke: 65,536 B master\u2192slave by EoE, FoE, CoE and a 256 B/cycle PDO channel; 1 ms cycle, 1024 B mailboxes. Model only.",
+  "cycle_time_us": 1000,
+  "slaves": [
+    {
+      "name": "coupler",
+      "outputs_bytes": 0,
+      "inputs_bytes": 0
+    },
+    {
+      "name": "bulk-endpoint",
+      "outputs_bytes": 128,
+      "inputs_bytes": 128,
+      "mailbox_out_bytes": 1024,
+      "mailbox_in_bytes": 1024,
+      "pdi": {
+        "read_bps": 20000000,
+        "write_bps": 20000000,
+        "access_overhead_ns": 5000
+      }
+    }
+  ],
+  "mailbox_policy": {
+    "kind": "fixed_quota",
+    "accesses_per_cycle": 2
   },
-  "application": {
-    "chunk_bytes": 900,
-    "queue_depth": 8,
-    "verify_sha256": true
-  },
-  "faults": {
-    "frame_loss_probability": 0.0
-  }
+  "transfers": [
+    {
+      "slave": 1,
+      "direction": "master_to_slave",
+      "payload_bytes": 65536,
+      "protocol": {
+        "kind": "eoe",
+        "mtu_bytes": 1500
+      }
+    },
+    {
+      "slave": 1,
+      "direction": "master_to_slave",
+      "payload_bytes": 65536,
+      "protocol": {
+        "kind": "foe"
+      }
+    },
+    {
+      "slave": 1,
+      "direction": "master_to_slave",
+      "payload_bytes": 65536,
+      "protocol": {
+        "kind": "coe_segmented"
+      }
+    },
+    {
+      "slave": 1,
+      "direction": "master_to_slave",
+      "payload_bytes": 65536,
+      "protocol": {
+        "kind": "pdo_channel",
+        "bytes_per_cycle": 256,
+        "window": 2,
+        "retransmit_after_cycles": 8
+      }
+    }
+  ]
 }

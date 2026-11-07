@@ -40,12 +40,19 @@ No dates. Each milestone ends with a running, demonstrable artifact. Studies (e.
 - [ ] Validate on real captures from at least two masters (none available yet).
 - [ ] SDO Information transactions, SoE transactions, AoE; logically mapped mailbox status.
 
-## M4 — Simulator
+## M4 — Simulator ✅
 
-- [ ] Discrete-event engine (virtual time, stable event order, seeded faults) emitting frames via `ecat-wire`.
-- [ ] Master scheduling policies (fixed quota, opportunistic, round robin) — none assumed universal.
-- [ ] ESC model: SyncManagers, DPRAM budget, PDI (SPI) throughput and latency.
-- [ ] Bulk-transfer study models (EoE, FoE, VoE, CoE, PDO channel, TCP baseline); scenario editor via `SchemaForm`.
+- [x] Discrete-event engine (virtual time, stable event order, seeded faults) emitting frames via `ecat-wire`;
+      simulated captures go through the same analysis (and match Wireshark in CI).
+- [x] Master scheduling policies (fixed quota, round robin, opportunistic) — none assumed universal.
+- [x] ESC model: mailbox and process-data SyncManagers, ESC RAM gating, PDI rates, per-access overhead,
+      whole-buffer or message-only mailbox access, contention.
+- [x] Bulk-transfer models: EoE (UDP-like tunnel), FoE, CoE segmented, PDO channel with go-back-N;
+      physical bound and plain-Ethernet TCP reference; SHA-256 integrity.
+- [x] `flowlab simulate` (comparison table), `POST /api/simulate`, Simulate dialog (SchemaForm) and Sim run view.
+- [x] Study scenarios migrated to the schema.
+- [ ] TCP over EoE, VoE, priority/weighted mailbox policies, the application session protocol of the study.
+- [ ] Calibration of PDI and master parameters against lab captures (M6/M7).
 
 ## M5 — Planner and device descriptions
 
@@ -68,3 +75,4 @@ No dates. Each milestone ends with a running, demonstrable artifact. Studies (e.
 ## Upstream to lab-ui
 
 - [ ] `HexView` (byte ranges, emphasis) and `StateTimeline` (state lanes over time), once stable.
+- [ ] `@vitavision/forms`: arrays of objects (slaves, transfers) render as JSON text; an item editor would help.

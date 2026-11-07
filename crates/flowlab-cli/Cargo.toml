@@ -16,6 +16,7 @@ flowlab-core.workspace = true
 flowlab-capture.workspace = true
 flowlab-analysis.workspace = true
 flowlab-synth.workspace = true
+flowlab-sim.workspace = true
 flowlab-server.workspace = true
 clap.workspace = true
 serde_json.workspace = true

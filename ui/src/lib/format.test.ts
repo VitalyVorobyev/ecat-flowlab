@@ -7,6 +7,9 @@ describe("format", () => {
     expect(ns(1_000_000)).toBe("1.000 ms");
     expect(ns(12_240)).toBe("12.24 µs");
     expect(ns(840)).toBe("840 ns");
+    expect(ns(999_999.99)).toBe("1.000 ms");
+    expect(ns(999.7)).toBe("1.00 µs");
+    expect(ns(-4_100)).toBe("-4.10 µs");
     expect(ns(5_017_000_000)).toBe("5.017 s");
     expect(ns(Number.NaN)).toBe("–");
     expect(signedNs(-4100)).toBe("−4.10 µs");

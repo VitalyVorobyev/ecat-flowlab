@@ -13,9 +13,13 @@
 //! | GET | `/api/captures/{id}/frames` | `FrameFilter` + `offset`, `limit` | `FramePage` |
 //! | GET | `/api/captures/{id}/frames/{no}` | | `FrameDetail` |
 //! | GET | `/api/captures/{id}/eoe.pcapng` | | Ethernet frames reassembled from EoE (pcapng) |
+//! | GET | `/api/captures/{id}/simulation` | | `SimResult` of a simulated capture |
 //! | GET | `/api/synth/schema` | | JSON Schema of `SynthSpec` |
 //! | GET | `/api/synth/example` | | `SynthSpec` |
 //! | POST | `/api/synth` | `SynthSpec` | `CaptureInfo` |
+//! | GET | `/api/sim/schema` | | JSON Schema of `SimSpec` |
+//! | GET | `/api/sim/example` | | `SimSpec` |
+//! | POST | `/api/simulate` | `SimSpec` | `CaptureInfo` (capture of the run; result via `/simulation`) |
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -30,6 +34,7 @@ use flowlab_analysis::frames::{FrameFilter, detail, query};
 use flowlab_analysis::{Analysis, AnalysisOptions, Severity, analyze};
 use flowlab_capture::{CaptureFile, CaptureFormat, Trace};
 use flowlab_core::Provenance;
+use flowlab_sim::{SimResult, SimSpec};
 use flowlab_synth::SynthSpec;
 use serde::{Deserialize, Serialize};
 use tower_http::services::{ServeDir, ServeFile};
@@ -37,6 +42,8 @@ use ts_rs::TS;
 
 /// Largest accepted upload.
 pub const MAX_UPLOAD_BYTES: usize = 2 << 30;
+/// Most frames a simulation run started from the UI may write into its capture.
+pub const MAX_SIM_FRAMES: u64 = 500_000;
 
 /// A loaded capture as listed by the API.
 #[derive(Debug, Clone, Serialize, TS)]
@@ -66,12 +73,15 @@ pub struct CaptureInfo {
     pub warnings: u32,
     /// SHA-256 of the file.
     pub sha256: String,
+    /// A simulation result is attached (`/api/captures/{id}/simulation`).
+    pub has_simulation: bool,
 }
 
 struct Entry {
     info: CaptureInfo,
     trace: Trace,
     analysis: Analysis,
+    simulation: Option<SimResult>,
 }
 
 /// Server state: loaded captures.
@@ -103,7 +113,7 @@ impl AppState {
             .ok_or_else(|| ApiError::not_found(format!("no capture {id}")))
     }
 
-    fn insert(&self, trace: Trace, analysis: Analysis) -> Result<CaptureInfo, ApiError> {
+    fn insert(&self, trace: Trace, analysis: Analysis, simulation: Option<SimResult>) -> Result<CaptureInfo, ApiError> {
         let mut store = self.inner.write().map_err(|_| ApiError::internal("state lock poisoned"))?;
         store.next_id += 1;
         let r = &analysis.report;
@@ -121,8 +131,9 @@ impl AppState {
             defects: count(Severity::Defect),
             warnings: count(Severity::Warn),
             sha256: trace.input.sha256.clone(),
+            has_simulation: simulation.is_some(),
         };
-        store.entries.push(Arc::new(Entry { info: info.clone(), trace, analysis }));
+        store.entries.push(Arc::new(Entry { info: info.clone(), trace, analysis, simulation }));
         Ok(info)
     }
 
@@ -131,7 +142,20 @@ impl AppState {
         let file = CaptureFile::parse(bytes).map_err(|e| ApiError::bad_request(e.to_string()))?;
         let trace = Trace::build(file, name);
         let analysis = analyze(&trace, &self.options);
-        self.insert(trace, analysis)
+        self.insert(trace, analysis, None)
+    }
+
+    /// Run a simulation, analyse its capture and add both. Blocking.
+    pub fn load_simulation(&self, mut spec: SimSpec) -> Result<CaptureInfo, ApiError> {
+        spec.capture.enabled = true;
+        spec.capture.max_frames = spec.capture.max_frames.min(MAX_SIM_FRAMES);
+        let mut bytes = Vec::new();
+        let result =
+            flowlab_sim::simulate(&spec, Some(&mut bytes)).map_err(|e| ApiError::bad_request(e.to_string()))?;
+        let file = CaptureFile::parse(bytes).map_err(|e| ApiError::internal(e.to_string()))?;
+        let trace = Trace::build(file, &format!("sim-seed{}.pcapng", spec.seed));
+        let analysis = analyze(&trace, &self.options);
+        self.insert(trace, analysis, Some(result))
     }
 
     /// Read a capture from disk and add it. Blocking.
@@ -307,6 +331,26 @@ async fn eoe_pcapng(State(s): State<AppState>, UrlPath(id): UrlPath<u32>) -> Res
         .into_response())
 }
 
+async fn simulation(State(s): State<AppState>, UrlPath(id): UrlPath<u32>) -> Result<Response, ApiError> {
+    let e = s.get(id)?;
+    match &e.simulation {
+        Some(r) => Ok(Json(r).into_response()),
+        None => Err(ApiError::not_found(format!("capture {id} is not a simulation run"))),
+    }
+}
+
+async fn sim_schema() -> Json<serde_json::Value> {
+    Json(flowlab_sim::spec_schema())
+}
+
+async fn sim_example() -> Json<SimSpec> {
+    Json(SimSpec::example())
+}
+
+async fn simulate(State(s): State<AppState>, Json(spec): Json<SimSpec>) -> Result<Json<CaptureInfo>, ApiError> {
+    Ok(Json(blocking(move || s.load_simulation(spec)).await?))
+}
+
 async fn synth_schema() -> Json<serde_json::Value> {
     Json(flowlab_synth::spec_schema())
 }
@@ -340,6 +384,10 @@ pub fn api(state: AppState) -> Router {
         .route("/api/synth/schema", get(synth_schema))
         .route("/api/synth/example", get(synth_example))
         .route("/api/synth", post(synth))
+        .route("/api/captures/{id}/simulation", get(simulation))
+        .route("/api/sim/schema", get(sim_schema))
+        .route("/api/sim/example", get(sim_example))
+        .route("/api/simulate", post(simulate))
         .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES))
         .with_state(state)
 }
@@ -447,6 +495,34 @@ mod tests {
         assert_eq!(st, StatusCode::NO_CONTENT);
         let (st, _) = call(&app, Request::get(format!("/api/captures/{id}/report")).body(Body::empty()).unwrap()).await;
         assert_eq!(st, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn simulate_then_read_result() {
+        let app = api(AppState::default());
+        let (st, example) = call(&app, Request::get("/api/sim/example").body(Body::empty()).unwrap()).await;
+        assert_eq!(st, StatusCode::OK);
+        let mut spec: SimSpec = serde_json::from_value(example).unwrap();
+        for t in &mut spec.transfers {
+            t.payload_bytes = 4_000;
+        }
+        let (st, info) = call(&app, json_post("/api/simulate", &spec)).await;
+        assert_eq!(st, StatusCode::OK, "{info}");
+        assert_eq!(info["provenance"], "simulated");
+        assert_eq!(info["has_simulation"], true);
+        let id = info["id"].as_u64().unwrap();
+        let (st, r) =
+            call(&app, Request::get(format!("/api/captures/{id}/simulation")).body(Body::empty()).unwrap()).await;
+        assert_eq!(st, StatusCode::OK);
+        assert_eq!(r["meta"]["source"], "simulated");
+        assert!(r["transfers"].as_array().unwrap().iter().all(|t| t["verified"] == true), "{r}");
+        let (st, _) = call(&app, Request::get("/api/sim/schema").body(Body::empty()).unwrap()).await;
+        assert_eq!(st, StatusCode::OK);
+
+        spec.slaves[2].dpram_bytes = 100;
+        let (st, err) = call(&app, json_post("/api/simulate", &spec)).await;
+        assert_eq!(st, StatusCode::BAD_REQUEST);
+        assert!(err["error"].as_str().unwrap().contains("ESC RAM"));
     }
 
     #[tokio::test]
