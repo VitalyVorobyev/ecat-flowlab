@@ -10,7 +10,9 @@ flowlab <COMMAND>
   plan      Lay out the cyclic frames of a network and check its budget
   esi       Summarize the devices of an ESI file
   serve     Serve the web UI and API on localhost
-  schema    Print a JSON Schema (synth, sim, plan, study)
+  schema    Print a JSON Schema (synth, sim, plan, study, lab)
+  pdi-fit   Fit the simulator's PDI model (cost per access + effective rate) to timed ESC accesses
+  policy    Read the master's mailbox service pattern from a capture, as a simulator policy
 ```
 
 `flowlab <command> --help` prints every option. The most used:
@@ -24,7 +26,9 @@ flowlab <COMMAND>
 | `plan [SPEC]` | `--json` |
 | `esi FILE` | `--json` |
 | `serve [CAPTURES…]` | `-p/--port` (7878) · `--host` (127.0.0.1) · `--ui-dir` (ui/dist) · `--open` · `--eni XML` · `--mailbox …` |
-| `schema WHICH` | `synth`, `sim`, `plan` or `study` |
+| `schema WHICH` | `synth`, `sim`, `plan`, `study` or `lab` |
+| `pdi-fit SAMPLES.csv` | `--result FILE` the fit with residuals · `--lab JSON` store the values in a lab-inputs file |
+| `policy CAPTURE` | `--station N` · `--mailbox …` · `--eni XML` · `--lab JSON` store the policy in a lab-inputs file |
 
 Commands that take a spec use a built-in example when it is omitted. Errors go to stderr with
 a non-zero exit code. Specs with unknown fields are rejected, so a typo cannot silently fall
@@ -42,4 +46,9 @@ flowlab analyze sim.pcapng --out sim-report.json
 
 # Fit the simulator to a lab capture and inspect the residuals
 flowlab study fit.json --capture lab.pcapng --result fit-result.json
+
+# Turn lab measurements into simulator inputs, then re-run the bulk-transfer report with them
+flowlab pdi-fit spi-timing.csv --lab lab.json
+flowlab policy master-foe.pcapng --lab lab.json
+python3 scripts/bulk-transfer-report.py --lab lab.json --out results/report-lab
 ```

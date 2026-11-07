@@ -23,6 +23,7 @@ import {
   type MailboxErrorEvent,
   type ProtocolStats,
   type SdoOutcome,
+  type ServicePattern,
   type SdoTransaction,
 } from "../api";
 import { TimeHistogram } from "../components/charts";
@@ -107,6 +108,59 @@ const CHANNEL_COLUMNS: Column<MailboxChannel>[] = [
     key: "p",
     header: "Protocols",
     cell: (c) => <span className="text-xs text-fg-muted">{c.protocols.join(" · ")}</span>,
+  },
+];
+
+function policy(p: ServicePattern): string {
+  return p.kind === "fixed_quota"
+    ? `fixed quota, ${p.accesses_per_cycle} per cycle`
+    : `back to back ≤ ${p.bus_budget_percent.toFixed(0)} % of the cycle, turnaround ${ns(p.turnaround_ns)}`;
+}
+
+type Served = MailboxChannel & { service: NonNullable<MailboxChannel["service"]> };
+
+const SERVICE_COLUMNS: Column<Served>[] = [
+  {
+    key: "st",
+    header: "Station",
+    width: "6rem",
+    cell: (c) => <span className="font-mono">{hex(c.station)}</span>,
+  },
+  { key: "cy", header: "Cycles", numeric: true, cell: (c) => count(c.service.cycles) },
+  {
+    key: "acc",
+    header: "Accesses / cycle p50 · p95",
+    numeric: true,
+    cell: (c) => `${c.service.accesses_per_cycle.p50} · ${c.service.accesses_per_cycle.p95}`,
+  },
+  {
+    key: "fr",
+    header: "Frames / cycle p50",
+    numeric: true,
+    cell: (c) => String(c.service.frames_per_cycle.p50),
+  },
+  {
+    key: "last",
+    header: "Last send p95",
+    numeric: true,
+    cell: (c) => `${c.service.last_send_percent.p95.toFixed(0)} %`,
+  },
+  {
+    key: "ta",
+    header: "Turnaround p50",
+    numeric: true,
+    cell: (c) => (c.service.turnaround ? ns(c.service.turnaround.p50) : "–"),
+  },
+  {
+    key: "cyc",
+    header: "In cyclic frames",
+    numeric: true,
+    cell: (c) => count(c.service.in_cyclic_frames),
+  },
+  {
+    key: "pol",
+    header: "Simulator policy",
+    cell: (c) => <span className="text-xs">{policy(c.service.pattern)}</span>,
   },
 ];
 
@@ -352,6 +406,7 @@ export function Mailbox({
 }) {
   const m = report.mailbox;
   const coe = m.coe;
+  const served = m.channels.filter((c): c is Served => c.service !== null);
   const counts: Record<Tab, number> = {
     sdo: Number(coe.transactions_total),
     emergencies: Number(coe.emergencies_total),
@@ -466,6 +521,17 @@ export function Mailbox({
       <Panel title="Channels">
         <Table columns={CHANNEL_COLUMNS} rows={m.channels} rowKey={(c) => c.station} />
       </Panel>
+
+      {served.length > 0 ? (
+        <Panel title="How the master serves the mailbox">
+          <p className="mb-3 text-sm text-fg-muted">
+            Per cycle of stream 0, over the cycles with reads or writes of the slave&apos;s mailbox
+            buffers. The policy column is the simulator&apos;s mailbox policy that produces this
+            pattern (<code>flowlab policy</code> writes it into a lab-inputs file).
+          </p>
+          <Table columns={SERVICE_COLUMNS} rows={served} rowKey={(c) => c.station} />
+        </Panel>
+      ) : null}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
         <Panel title="Traffic by protocol">

@@ -205,12 +205,15 @@ In order. Each step narrows the uncertainty that the next one depends on.
      spidev can differ widely);
    - the time from the ESC's mailbox interrupt to the application reading the message.
 
-   Put these numbers into `pdi.read_bps`, `pdi.write_bps`, `pdi.access_overhead_ns` and
-   `app_processing_ns`, and re-run this report.
+   Time every ESC read and write of the application (see the [lab plan](lab.md#measuring-the-spi)),
+   fit the PDI model with `flowlab pdi-fit spi.csv --lab lab.json`, add the measured
+   `app_processing_ns`, and re-run this report with
+   `scripts/bulk-transfer-report.py --lab lab.json --out DIR`.
 3. **Capture the real master's mailbox behaviour.** Record a capture at the master while it
    moves a file with FoE and open it in FlowLab's [Mailbox view](../../guide/mailbox.md). The
-   view shows the polling cadence, empty reads and rejected writes. These decide whether
-   findings 1–3 (fixed rate) or 5 (SPI-bound) apply. If the master can poll mailboxes outside
+   view shows the polling cadence, empty reads and rejected writes, and how the master served
+   the mailbox per cycle as a simulator policy (`flowlab policy capture.pcapng --lab lab.json`
+   stores it). These decide whether findings 1–3 (fixed rate) or 5 (SPI-bound) apply. If the master can poll mailboxes outside
    the cyclic frame, enable it, within the link share the other slaves can spare.
 4. **Choose mailbox sizes deliberately**, within what the ESC RAM and the device's ESI/SII
    allow. For FoE and CoE, use the largest mailbox that leaves room for the process data (here
@@ -222,8 +225,10 @@ In order. Each step narrows the uncertainty that the next one depends on.
    bytes per cycle from the measured SPI rate, keeping the application's PDI load well below
    saturation. Use a window of 2 and add end-to-end integrity (SHA-256, as the simulator does).
    It also leaves the mailbox free for diagnostics and parameters.
-7. **Calibrate, then optimise.** With lab captures, fit the simulator's PDI and master
-   parameters (`flowlab study --capture`, targets from the FoE and SDO message spans). Then
+7. **Calibrate, then optimise.** Re-run this report with the lab inputs from steps 2 and 3. Check
+   them against lab captures of FoE and SDO transfers (`flowlab study --capture`, targets from
+   the message spans): the residuals show whether the model with measured inputs reproduces the
+   measured transfers. Then
    repeat these sweeps with the fitted values and check the best candidates in the lab against
    the unoptimised baseline and the plain-Ethernet transfer.
 

@@ -19,6 +19,8 @@ python3 scripts/crosscheck-tshark.py results/demo.pcapng results/demo.json   # n
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace && mdbook build book
 scripts/build-site.sh                        # Pages site in _site/: site/ + book at /book + rustdoc at /api
 python3 scripts/bulk-transfer-report.py      # after a release build; regenerates the report's tables
+cargo run -p flowlab-cli -- pdi-fit spi.csv --lab lab.json && cargo run -p flowlab-cli -- policy lab.pcapng --lab lab.json
+python3 scripts/bulk-transfer-report.py --lab lab.json --out results/report-lab   # report with measured inputs
 ```
 
 `cargo test` exports ts-rs types to `ui/src/api/gen/` (configured in `.cargo/config.toml`).
@@ -86,7 +88,8 @@ the report schema changed, regenerate `ui/src/test/report.fixture.json` (see `ui
   (TwinCAT, EtherCrab, SOEM/IgH) and a tap; answer the open questions in `workspace/decisions.md`.
 - SDO Information and SoE transactions, AoE; logically mapped mailbox status.
 - Simulator: TCP over EoE, VoE, priority/weighted mailbox policies, the study's application
-  session protocol; calibrate PDI and master parameters on lab captures.
+  session protocol. Lab inputs (`pdi-fit`, `policy`) are untested on real hardware: run them on
+  the Verdin/LAN9252 and a real master, then commit a calibrated report next to the placeholder one.
 - Planner → simulator in one step; local optimisation beyond grid/LHS for large sweeps.
 - Distributed-clock analysis (propagation delay, drift, sync error).
 - Live capture and master adapters only behind a feature with explicit opt-in (hardware rules).

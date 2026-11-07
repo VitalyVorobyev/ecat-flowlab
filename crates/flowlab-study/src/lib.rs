@@ -20,9 +20,11 @@
 //! }
 //! ```
 
+pub mod lab;
 mod run;
 mod spec;
 
+pub use lab::{LabInputs, PdiFit, fit_pdi, mailbox_policy, parse_samples};
 pub use run::{Residual, StudyResult, StudyRun, capture_metric, run_study, sim_metric};
 pub use spec::{CaptureMetric, Constraint, Goal, Metric, Objective, Parameter, Sampling, StudySpec, Target};
 

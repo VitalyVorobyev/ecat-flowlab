@@ -1,5 +1,6 @@
 //! `flowlab`: analyse captures, generate synthetic ones, simulate, run studies, plan networks,
-//! read ESI files and serve the UI. `flowlab help` lists the subcommands.
+//! read ESI files, turn lab measurements into simulator inputs and serve the UI. `flowlab help`
+//! lists the subcommands.
 
 use std::fs::File;
 use std::io::BufWriter;
@@ -133,9 +134,46 @@ enum Cmd {
     /// Print a JSON Schema.
     Schema {
         /// Which schema.
-        #[arg(value_parser = ["synth", "sim", "plan", "study"])]
+        #[arg(value_parser = ["synth", "sim", "plan", "study", "lab"])]
         which: String,
     },
+    /// Fit the simulator's PDI model (cost per access + effective rate) to timed ESC accesses.
+    PdiFit {
+        /// CSV with the header `direction,bytes,duration_ns`, one access per line.
+        samples: PathBuf,
+        /// Write the fit (with residuals per access size) as JSON.
+        #[arg(long)]
+        result: Option<PathBuf>,
+        /// Store the fitted values in this lab-inputs file (created or updated).
+        #[arg(long, value_name = "JSON")]
+        lab: Option<PathBuf>,
+    },
+    /// Read the master's mailbox service pattern from a capture, as a simulator policy.
+    Policy {
+        /// Capture of the real master serving the mailbox (e.g. during an FoE transfer).
+        capture: PathBuf,
+        /// Station whose pattern to use (default: the only one with a pattern).
+        #[arg(long, value_parser = parse_station)]
+        station: Option<u16>,
+        /// Mailbox addresses of a station whose SyncManager configuration is not in the
+        /// capture, `STATION=OUT,IN`. Repeatable.
+        #[arg(long = "mailbox", value_name = "STATION=OUT,IN")]
+        mailbox_hints: Vec<MailboxHint>,
+        /// Network configuration (ENI XML) for the analysis.
+        #[arg(long, value_name = "XML")]
+        eni: Option<PathBuf>,
+        /// Store the policy in this lab-inputs file (created or updated).
+        #[arg(long, value_name = "JSON")]
+        lab: Option<PathBuf>,
+    },
+}
+
+fn parse_station(s: &str) -> std::result::Result<u16, String> {
+    let r = match s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
+        Some(h) => u16::from_str_radix(h, 16),
+        None => s.parse(),
+    };
+    r.map_err(|_| format!("`{s}` is not a station address (e.g. 0x1003)"))
 }
 
 fn main() -> ExitCode {
@@ -237,6 +275,7 @@ fn run(cli: Cli) -> Result<()> {
                 "sim" => flowlab_sim::spec_schema(),
                 "plan" => flowlab_devices::plan_schema(),
                 "study" => flowlab_study::spec_schema(),
+                "lab" => flowlab_study::lab::schema(),
                 _ => flowlab_synth::spec_schema(),
             };
             println!("{}", serde_json::to_string_pretty(&schema)?);
@@ -287,6 +326,65 @@ fn run(cli: Cli) -> Result<()> {
             if let Some(p) = result {
                 ensure_parent(&p)?;
                 serde_json::to_writer_pretty(BufWriter::new(File::create(&p)?), &r)?;
+            }
+        }
+        Cmd::PdiFit { samples, result, lab } => {
+            let bytes = std::fs::read(&samples).map_err(|e| format!("{}: {e}", samples.display()))?;
+            let text = String::from_utf8_lossy(&bytes);
+            let parsed = flowlab_study::parse_samples(&text).map_err(|e| format!("{}: {e}", samples.display()))?;
+            let name = file_name(&samples);
+            let fit = flowlab_study::fit_pdi(&parsed, &name, &bytes)?;
+            print_pdi_fit(&fit);
+            if let Some(p) = result {
+                ensure_parent(&p)?;
+                serde_json::to_writer_pretty(BufWriter::new(File::create(&p)?), &fit)?;
+            }
+            if let Some(p) = lab {
+                let mut l = read_lab(&p)?;
+                let access = l.pdi.as_ref().and_then(|x| x.mailbox_access);
+                l.pdi = Some(flowlab_study::lab::PdiValues { mailbox_access: access, ..fit.pdi.clone() });
+                l.sources.push(format!("pdi: flowlab pdi-fit {name} (sha256 {})", &fit.meta.input.sha256[..16]));
+                write_lab(&p, &l)?;
+            }
+        }
+        Cmd::Policy { capture, station, mailbox_hints, eni, lab } => {
+            let file = CaptureFile::read(&capture).map_err(|e| format!("{}: {e}", capture.display()))?;
+            let name = file_name(&capture);
+            let trace = Trace::build(file, &name);
+            let opts = AnalysisOptions {
+                mailbox_hints,
+                network: eni.as_deref().map(read_eni).transpose()?,
+                ..Default::default()
+            };
+            let report = analyze(&trace, &opts).report;
+            println!("{name}  [{}]", report.meta.source.as_str().to_uppercase());
+            let served: Vec<_> = report.mailbox.channels.iter().filter(|c| c.service.is_some()).collect();
+            if served.is_empty() {
+                return Err("no mailbox service pattern: the capture needs known directions, a cyclic stream and \
+                    mailbox accesses in at least 10 cycles (pass --mailbox if the SyncManager setup is not in it)"
+                    .into());
+            }
+            for c in &served {
+                print_service(c.station, c.service.as_ref().expect("filtered"));
+            }
+            let chosen = match station {
+                Some(st) => {
+                    served.iter().find(|c| c.station == st).ok_or_else(|| format!("no pattern for 0x{st:04X}"))?
+                }
+                None if served.len() == 1 => served[0],
+                None => return Err("several stations have a pattern: choose one with --station".into()),
+            };
+            let policy = flowlab_study::mailbox_policy(&chosen.service.as_ref().expect("filtered").pattern);
+            println!("simulator policy: {}", serde_json::to_string(&policy)?);
+            if let Some(p) = lab {
+                let mut l = read_lab(&p)?;
+                l.mailbox_policy = Some(policy);
+                l.sources.push(format!(
+                    "mailbox_policy: flowlab policy {name}, station 0x{:04X} (sha256 {})",
+                    chosen.station,
+                    &report.meta.input.sha256[..16]
+                ));
+                write_lab(&p, &l)?;
             }
         }
         Cmd::Plan { spec, json } => {
@@ -382,6 +480,64 @@ fn print_study(r: &flowlab_study::StudyResult) {
             res.relative_error.map_or("-".into(), |e| format!("{:+.2} %", 100.0 * e))
         );
     }
+}
+
+fn file_name(p: &Path) -> String {
+    p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
+fn read_lab(p: &Path) -> Result<flowlab_study::LabInputs> {
+    if !p.exists() {
+        return Ok(flowlab_study::LabInputs::default());
+    }
+    let text = std::fs::read_to_string(p).map_err(|e| format!("{}: {e}", p.display()))?;
+    Ok(serde_json::from_str(&text).map_err(|e| format!("{}: {e}", p.display()))?)
+}
+
+fn write_lab(p: &Path, l: &flowlab_study::LabInputs) -> Result<()> {
+    ensure_parent(p)?;
+    std::fs::write(p, serde_json::to_string_pretty(l)? + "\n")?;
+    eprintln!("updated {}", p.display());
+    Ok(())
+}
+
+fn print_pdi_fit(f: &flowlab_study::PdiFit) {
+    println!("{}  [{}]", f.meta.input.name, f.meta.source.as_str().to_uppercase());
+    for (dir, line) in [("read", &f.read), ("write", &f.write)] {
+        let Some(l) = line else { continue };
+        println!(
+            "  {dir}: {} accesses, cost per access {}, effective rate {}, worst size off the line by {:.1} %",
+            l.samples,
+            ns(l.overhead_ns),
+            rate(l.rate_bps),
+            100.0 * l.max_relative_error
+        );
+        for s in &l.sizes {
+            println!(
+                "    {:>6} B  ×{:<5} median {:>10}  p95 {:>10}  line {:>10}  {:+.1} %",
+                s.bytes,
+                s.samples,
+                ns(s.median_ns),
+                ns(s.p95_ns),
+                ns(s.fitted_ns),
+                100.0 * s.relative_error
+            );
+        }
+    }
+    println!("simulator pdi: {}", serde_json::to_string(&f.pdi).unwrap_or_default());
+}
+
+fn print_service(station: u16, s: &flowlab_analysis::MailboxService) {
+    println!(
+        "  station 0x{station:04X}: {} cycles with mailbox accesses; per cycle p50 {} accesses in {} frames, \
+         last send at {:.0} % of the cycle (p95); {} accesses in cyclic frames{}",
+        s.cycles,
+        s.accesses_per_cycle.p50,
+        s.frames_per_cycle.p50,
+        s.last_send_percent.p95,
+        s.in_cyclic_frames,
+        s.turnaround.as_ref().map_or(String::new(), |t| format!("; turnaround p50 {}", ns(t.p50)))
+    );
 }
 
 fn read_eni(p: &Path) -> Result<flowlab_devices::NetworkConfig> {
@@ -515,6 +671,11 @@ fn print_summary(r: &CaptureReport) {
                 t.outcome,
                 t.goodput_bps.map_or(String::new(), |b| format!(", {:.1} kbit/s", b / 1e3))
             );
+        }
+        for c in &m.channels {
+            if let Some(sv) = &c.service {
+                print_service(c.station, sv);
+            }
         }
         if m.eoe.frames_total > 0 || m.eoe.reassembly_errors > 0 {
             println!(

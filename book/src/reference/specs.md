@@ -13,6 +13,8 @@ This page lists their fields, defaults and variants. What each tool does with th
 | `SimSpec` | `flowlab simulate`, `POST /api/simulate` | `flowlab schema sim` | `configs/sim/example.json`, `configs/studies/bulk-transfer/{smoke,large-payload,mixed-load}.json` |
 | `PlanSpec` | `flowlab plan`, `POST /api/plan` | `flowlab schema plan` | built in (`flowlab plan` without a file, `GET /api/plan/example`) |
 | `StudySpec` | `flowlab study`, `POST /api/study` | `flowlab schema study` | `configs/studies/bulk-transfer/foe-sweep.json` |
+| `LabInputs` | `scripts/bulk-transfer-report.py --lab`; written by `flowlab pdi-fit --lab`, `flowlab policy --lab` | `flowlab schema lab` | — |
+| PDI timing samples (CSV) | `flowlab pdi-fit` | — | below |
 | Mailbox hint | `analyze --mailbox`, `serve --mailbox` | — | `0x1001=0x1000,0x1080` |
 | ENI XML | `analyze --eni`, `serve --eni`, `study --eni`, `POST /api/captures/{id}/eni` | — | written by `flowlab synth --eni` |
 | ESI XML | `flowlab esi`, `POST /api/esi` | — | `crates/flowlab-devices/tests/fixtures/flowlab-demo.esi.xml` |
@@ -372,6 +374,53 @@ mailbox durations with `exchange_time_s`, which both sides observe:
   ]
 }
 ```
+
+## Lab inputs
+
+`LabInputs` carries measured values that replace the simulator's placeholders for one slave and
+the master. Every field is optional; `flowlab pdi-fit --lab` and `flowlab policy --lab` create
+the file or update their part of it and append to `sources`.
+
+| Field | Meaning |
+|---|---|
+| `description` | what was measured, on what |
+| `pdi` | `read_bps`, `write_bps`, `access_overhead_ns`, optionally `mailbox_access` (`"whole_buffer"` or `"message_only"`), as in `SimSpec` |
+| `app_processing_ns` | time the slave application takes per mailbox message |
+| `mailbox_policy` | a `SimSpec` mailbox policy, e.g. `{ "kind": "fixed_quota", "accesses_per_cycle": 2 }` |
+| `sources` | where each value came from: file, checksum, date, setup |
+
+```json
+{
+  "description": "Verdin iMX8M Plus, LAN9252 on SPI, kernel driver, 2026-11",
+  "pdi": { "read_bps": 16002244, "write_bps": 21991594, "access_overhead_ns": 11492 },
+  "mailbox_policy": { "kind": "fixed_quota", "accesses_per_cycle": 2 },
+  "sources": ["pdi: flowlab pdi-fit spi.csv (sha256 2ae72dab51e921c8)"]
+}
+```
+
+## PDI timing samples
+
+One timed ESC access by the slave application per line, after the header
+`direction,bytes,duration_ns`. `direction` is `read` or `write` (`r`, `w`); `bytes` is what the
+access moved; `duration_ns` is the wall time around the driver call. Blank lines and lines
+starting with `#` are ignored.
+
+```text
+# Verdin, LAN9252, spidev at 30 MHz
+direction,bytes,duration_ns
+read,6,17010
+read,1024,525970
+write,128,55400
+```
+
+Each direction needs at least two different access sizes; spread them over what the application
+does (mailbox headers, whole mailboxes, process data). `flowlab pdi-fit` takes the median duration
+per size, so occasional preempted calls do not move the fit, and fits a line through the
+medians: the intercept is `access_overhead_ns`, the slope gives the effective rate. Its result
+(`--result`) lists, per size, the median, the 95th percentile, the fitted value and the relative
+error. A large error at some sizes means a straight line does not describe the driver, for
+example because long accesses are split into chunks; then time the driver at the sizes the
+application actually uses.
 
 ## Mailbox hints
 

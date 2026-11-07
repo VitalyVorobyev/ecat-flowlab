@@ -507,6 +507,7 @@ pub(crate) fn analyze(
                 repeats: a.repeats,
                 poll_interval: Distribution::of(&iv, bins),
                 protocols: a.protocols.into_iter().map(str::to_owned).collect(),
+                service: None,
             })
         })
         .collect();

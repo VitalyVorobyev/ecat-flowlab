@@ -34,6 +34,7 @@ const seq = () => [1, 2, 3, 4, 5, 6, 7].map((i) => css(`--seq-${i}`));
 
 const fmtS = (s) =>
   !Number.isFinite(s) ? "—" : s >= 100 ? `${s.toFixed(0)} s` : s >= 10 ? `${s.toFixed(1)} s` : `${s.toFixed(2)} s`;
+const LOG_TICKS = [1, 2, 10, 20, 100, 200];
 const fmtPct = (p) => (Number.isFinite(p) ? `${p.toFixed(0)} %` : "—");
 
 function el(tag, attrs = {}, ...children) {
@@ -171,12 +172,13 @@ function stepsChart(data) {
       marginLeft,
       marginRight: 56,
       marginTop: 28,
+      marginBottom: 44,
       style: style(),
-      x: { type: "log", domain: [lo, 300], label: "10 MB transfer time, s →", grid: true, tickFormat: "~g" },
+      x: { type: "log", domain: [lo, 300], label: "10 MB transfer time, s →", labelAnchor: "center", labelOffset: 34, ticks: LOG_TICKS, tickFormat: (d) => `${d}` },
       y: { domain: rows.map((r) => r.label), label: null, axis: null, padding: narrow ? 0.62 : 0.3 },
       color: { domain: ["FoE", "PDO channel"], range: [c1, c3], legend: true },
       marks: [
-        Plot.gridX({ ...grid() }),
+        Plot.gridX(LOG_TICKS, { ...grid() }),
         Plot.barX(rows, {
           x1: lo,
           x2: "duration_s",
@@ -254,13 +256,14 @@ function policyChart(data) {
       height: 260,
       marginLeft: 120,
       marginRight: 24,
+      marginBottom: 44,
       style: style(),
-      x: { type: "log", label: "10 MB transfer time, s →", grid: true, tickFormat: "~g" },
+      x: { type: "log", label: "10 MB transfer time, s →", labelAnchor: "center", labelOffset: 34, ticks: LOG_TICKS, tickFormat: (d) => `${d}` },
       y: { domain: [...new Set(rows.map((r) => r.policy))], label: null },
       color: { domain: protocols, range: series(), legend: true },
       symbol: { domain: protocols, range: ["circle", "triangle", "square"] },
       marks: [
-        Plot.gridX(grid()),
+        Plot.gridX(LOG_TICKS, grid()),
         Plot.ruleY([...new Set(rows.map((r) => r.policy))], { stroke: css("--line") }),
         Plot.dot(rows, {
           x: "time",
@@ -300,12 +303,13 @@ function linesChart(targetId, title, sub, rows, { x, xLabel, series: key, xType 
       marginLeft: 48,
       marginRight: 24,
       marginTop: 24,
+      marginBottom: 44,
       style: style(),
-      x: { type: xType, label: xLabel, ticks: xTicks, tickFormat: xType === "log" ? "~g" : undefined, grid: false },
-      y: { type: "log", label: "↑ 10 MB time, s", grid: true, tickFormat: "~g" },
+      x: { type: xType, label: xLabel, labelAnchor: "center", labelOffset: 34, ticks: xTicks, tickFormat: xType === "log" ? "~g" : undefined, grid: false },
+      y: { type: "log", label: "↑ 10 MB time, s", ticks: LOG_TICKS, tickFormat: (d) => `${d}` },
       color: { domain: keys, range: series(), legend: true },
       marks: [
-        Plot.gridY(grid()),
+        Plot.gridY(LOG_TICKS, grid()),
         ...rules,
         Plot.line(rows, { x, y: "time", stroke: key, strokeWidth: 2, curve: "linear" }),
         Plot.dot(rows, {
@@ -368,10 +372,10 @@ function heatmap(targetId, title, sub, rows, domain) {
       width,
       height: 250,
       marginLeft: 64,
-      marginBottom: 40,
+      marginBottom: 44,
       padding: 0,
       style: style(),
-      x: { domain: rates, label: "PDI rate (effective) →", tickSize: 0 },
+      x: { domain: rates, label: "PDI rate (effective) →", labelAnchor: "center", labelOffset: 34, tickSize: 0 },
       y: { domain: overheads, label: "↑ cost per access", tickSize: 0 },
       marks: [
         Plot.cell(rows, {
@@ -513,8 +517,9 @@ function requirement(data, runs) {
       marginLeft: 48,
       marginRight: 24,
       marginTop: 24,
+      marginBottom: 44,
       style: style(),
-      x: { type: "log", label: "10 MB transfer time, s →", domain: [0.5, 300], tickFormat: "~g" },
+      x: { type: "log", label: "10 MB transfer time, s →", labelAnchor: "center", labelOffset: 34, domain: [0.5, 300], ticks: LOG_TICKS, tickFormat: (d) => `${d}` },
       y: { label: "↑ link share, %", domain: [0, 100], grid: true },
       color: { domain, range, legend: true },
       symbol: { domain, range: symbols },

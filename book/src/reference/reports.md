@@ -17,6 +17,7 @@ whenever `cargo test` runs.
 | Plan result | `flowlab plan [SPEC] --json`; `POST /api/plan` | `flowlab_devices::PlanResult` | arithmetic on the spec (no `meta`) | `PlanResult.ts` |
 | Study result | `flowlab study SPEC --result FILE`; `POST /api/study` | `flowlab_study::StudyResult` | `meta.source`: `simulated` | `StudyResult.ts` |
 | ESI summary | `flowlab esi FILE --json`; `POST /api/esi` (as `EsiImport`) | `flowlab_devices::EsiFile` | device description, not a result | `EsiFile.ts`, `EsiImport.ts` |
+| PDI fit | `flowlab pdi-fit SAMPLES --result FILE` | `flowlab_study::PdiFit` | `meta.source`: `measured` | not exported |
 
 `flowlab analyze --eoe-out FILE` and `GET /api/captures/{id}/eoe.pcapng` also write the
 Ethernet frames reassembled from EoE as a pcapng; it carries the provenance of the capture it
@@ -135,7 +136,7 @@ capture views read the same object.
 
 | Field | Meaning |
 |---|---|
-| `channels[]` | per station: `source` (`"sm_config"`, `"eni"`, `"hint"`, `"heuristic"`), `out_start`/`out_len`, `in_start`/`in_len`, accepted and rejected writes, reads and empty reads, status polls, messages and payload bytes each way, `repeats`, `poll_interval`, `protocols` |
+| `channels[]` | per station: `source` (`"sm_config"`, `"eni"`, `"hint"`, `"heuristic"`), `out_start`/`out_len`, `in_start`/`in_len`, accepted and rejected writes, reads and empty reads, status polls, messages and payload bytes each way, `repeats`, `poll_interval`, `protocols`, `service` (`MailboxService` or `null`: how the master served this mailbox per cycle, and the simulator policy that produces the pattern; see [Mailbox traffic](../guide/mailbox.md#how-the-master-serves-the-mailbox)) |
 | `protocols[]` | per protocol (`"CoE"`, `"FoE"`, `"EoE"`, `"SoE"`, `"VoE"`, `"AoE"`, `"Error"`, `"Reserved"`): messages and bytes each way, `first_ns`, `last_ns` |
 | `coe` | `transactions[]` (`SdoTransaction`: station, `kind` upload/download, index, subindex, `transfer` expedited/normal/segmented, `bytes`, `start_ns`, `end_ns`, `outcome` `ok`/`aborted`/`superseded`/`incomplete`/`protocol_error`, abort code and text), counts (`transactions_total`, `ok`, `aborted`, `unfinished`, `protocol_errors`), `duration`, `emergencies[]`, `sdo_info_messages` |
 | `foe[]` | `FoeTransfer`: station, `kind` (`"write"`/`"read"`), `file_name`, `bytes`, `packets`, `busy`, `start_ns`, `end_ns`, `goodput_bps`, `outcome` (`"ok"`, `"error"`, `"incomplete"`, `"protocol_error"`), error code and text |
@@ -358,6 +359,18 @@ with its `spec` left out:
   "pareto": true
 }
 ```
+
+## PdiFit
+
+Written by `flowlab pdi-fit SAMPLES --result FILE`. `meta.source` is `measured`, and `meta.input`
+names the samples file with its SHA-256.
+
+| Field | Meaning |
+|---|---|
+| `read`, `write` | `LineFit` or `null`: `samples`, `overhead_ns` (intercept), `rate_bps` (from the slope), `sizes[]` (`bytes`, `samples`, `median_ns`, `p95_ns`, `fitted_ns`, `relative_error`), `max_relative_error` |
+| `pdi` | the values for the simulator: `read_bps`, `write_bps`, `access_overhead_ns` (the access-weighted mean of the two intercepts) |
+
+A direction without samples takes the other direction's values, and the assumptions say so.
 
 ## EsiFile and EsiImport
 

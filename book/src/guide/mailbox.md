@@ -55,9 +55,35 @@ the last message of a transfer. This is the span a calibration compares with the
 ## The Mailbox view
 
 Per channel: addresses and their source, accepted and rejected writes, empty reads, polling
-cadence. Traffic per protocol, and tables of SDO transfers, emergencies, FoE transfers and EoE
+cadence. **How the master serves the mailbox** shows the service pattern per busy slave (below). Traffic per protocol, and tables of SDO transfers, emergencies, FoE transfers and EoE
 frames. In **Frames**, the *Mailbox* filter selects a protocol, and the detail pane shows each
 message's decoded fields.
+
+## How the master serves the mailbox
+
+Masters differ most in how often they touch a slave's mailbox, and the simulator has to be told
+which behaviour to model. When directions are known and the capture has a cyclic stream, the
+analysis measures, per slave whose mailbox buffers were read or written in at least 10 cycles of
+stream 0:
+
+| Field | Meaning |
+|---|---|
+| `cycles` | cycles with at least one read or write of the slave's mailbox buffers |
+| `accesses_per_cycle` | those reads and writes per cycle (distribution) |
+| `frames_per_cycle` | frames carrying them per cycle |
+| `in_cyclic_frames` | accesses that rode in a frame of a cyclic stream |
+| `turnaround` | time from a mailbox frame's return to the next mailbox frame's send in the same cycle |
+| `last_send_percent` | when the cycle's last mailbox frame was sent, as a share of the period |
+| `pattern` | the simulator policy that produces this pattern |
+
+The pattern is read like this: a median above 1.5 mailbox frames per cycle means back-to-back
+polling, `opportunistic` with the 95th percentile of `last_send_percent` as its budget and the
+median turnaround; otherwise a `fixed_quota` of the 95th percentile of accesses per cycle.
+Status-register polls are not counted. The quota is per slave: a master that shares one quota
+among several slaves needs the sum. The rule is written into the report's assumptions.
+
+`flowlab policy CAPTURE --lab lab.json` prints the pattern and stores the policy in a
+lab-inputs file for the simulator (see [Input files](../reference/specs.md#lab-inputs)).
 
 ## Agreement with Wireshark
 

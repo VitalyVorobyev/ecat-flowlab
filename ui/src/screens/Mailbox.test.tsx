@@ -52,6 +52,16 @@ describe("Mailbox", () => {
     expect(link.getAttribute("href")).toBe("/api/captures/1/eoe.pcapng");
   });
 
+  it("shows how the master serves the mailbox, as a simulator policy", () => {
+    renderMailbox();
+    const served = report.mailbox.channels.filter((c) => c.service !== null);
+    expect(served.length).toBe(1);
+    const pattern = served[0]?.service?.pattern;
+    expect(pattern?.kind).toBe("fixed_quota");
+    screen.getByText("How the master serves the mailbox");
+    expect(screen.getByText("fixed quota, 1 per cycle")).toBeInTheDocument();
+  });
+
   it("explains an empty mailbox", () => {
     renderMailbox({ ...report, mailbox: { ...report.mailbox, channels: [] } });
     expect(screen.getByText(/No mailbox traffic/)).toBeInTheDocument();

@@ -171,17 +171,18 @@
             standard FoE with sensible mailbox sizes is enough.
           </li>
           <li>
-            <b>Measure the SPI on the target</b> with the driver that will ship: effective read and
-            write rates and the fixed cost per access, in both directions. See
-            <a href="../book/studies/bulk-transfer/lab.html">the lab plan</a>.
+            <b>Measure the SPI on the target</b> with the driver that will ship: time every ESC read
+            and write, then fit the rate and the cost per access with <code>flowlab pdi-fit</code>.
+            See <a href="../book/studies/bulk-transfer/lab.html#measuring-the-spi">the lab plan</a>.
           </li>
           <li>
-            <b>Capture the real master's mailbox polling</b> during an FoE transfer and open it in
-            FlowLab's <a href="../book/guide/mailbox.html">Mailbox view</a>: polling cadence, empty
-            reads and rejected writes decide whether the fixed-rate or the SPI-bound results apply.
+            <b>Capture the real master's mailbox polling</b> during an FoE transfer.
+            <code>flowlab policy</code> reads how it serves the mailbox and stores the simulator
+            policy that reproduces it.
           </li>
           <li>
-            <b>Calibrate, then re-run the report</b> with the measured values, and check the best
+            <b>Calibrate, then re-run the report</b> with the measured values:
+            <code>scripts/bulk-transfer-report.py --lab lab.json --out DIR</code>. Check the best
             candidates in the lab against the baseline and a plain-Ethernet transfer.
           </li>
         </ol>

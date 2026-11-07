@@ -344,6 +344,49 @@ pub struct MailboxChannel {
     pub poll_interval: Option<Distribution>,
     /// Protocols seen on this channel.
     pub protocols: Vec<String>,
+    /// How the master served this mailbox, per cycle of stream 0 (known directions only).
+    pub service: Option<MailboxService>,
+}
+
+/// How the master serves one slave's mailbox, measured per cycle of cyclic stream 0 over the
+/// cycles in which it accessed the slave's mailbox buffers.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct MailboxService {
+    /// Cycles with at least one read or write of this slave's mailbox buffers.
+    pub cycles: u64,
+    /// Reads and writes of the mailbox buffers per such cycle.
+    pub accesses_per_cycle: Distribution,
+    /// Frames carrying them per such cycle.
+    pub frames_per_cycle: Distribution,
+    /// Accesses that rode in a frame of a cyclic stream.
+    pub in_cyclic_frames: u64,
+    /// Time from a mailbox frame's return to the next mailbox frame's send in the same cycle, ns.
+    pub turnaround: Option<Distribution>,
+    /// Send time of the cycle's last mailbox frame, percent of the period after the cycle start.
+    pub last_send_percent: Distribution,
+    /// The simulator mailbox policy that produces this pattern.
+    pub pattern: ServicePattern,
+}
+
+/// A master mailbox policy in the simulator's terms (`flowlab_sim::MailboxPolicy`), as read
+/// from a capture.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[ts(export)]
+pub enum ServicePattern {
+    /// A fixed number of mailbox datagrams per cycle, in one frame.
+    FixedQuota {
+        /// Mailbox datagrams per cycle.
+        accesses_per_cycle: u32,
+    },
+    /// Mailbox frames back to back while the cycle has spare time.
+    Opportunistic {
+        /// Share of the cycle within which mailbox frames are still sent, percent.
+        bus_budget_percent: f64,
+        /// Time from a mailbox frame's return to the next send, ns.
+        turnaround_ns: f64,
+    },
 }
 
 /// Traffic per mailbox protocol.
