@@ -12,7 +12,7 @@
     "assumptions": [
       "Utilization assumes a 100 Mbit/s link; wire bytes include padding to 64 bytes, preamble, FCS and the 12-byte inter-frame gap.",
       "A cyclic stream is a datagram layout (command, address, length) sent at least 20 times with ≥ 60 % of intervals within ±50 % of the median.",
-      "Expected working counters are the most frequent value per datagram position; no ENI/ESI network configuration was used.",
+      "Expected working counters are the most frequent value per datagram position; no ENI network configuration was given.",
       "Timestamps are taken as recorded by the capture tool; their accuracy is not known to FlowLab.",
       "Directions: source MAC without the locally-administered bit is TX, with it RX (ESCs set the bit on returning frames).",
       "Mailbox SyncManagers come from SyncManager configuration writes in the capture (mailbox mode); messages are taken from returning datagrams at their start address with WKC > 0.",
@@ -196,6 +196,7 @@
           "expected": 6,
           "mismatches": 0,
           "zero": 0,
+          "expected_from": "most_frequent",
           "mailbox": false
         },
         {
@@ -204,6 +205,7 @@
           "expected": 10,
           "mismatches": 6,
           "zero": 0,
+          "expected_from": "most_frequent",
           "mailbox": false
         },
         {
@@ -212,6 +214,7 @@
           "expected": 6,
           "mismatches": 0,
           "zero": 0,
+          "expected_from": "most_frequent",
           "mailbox": false
         }
       ],
@@ -10411,6 +10414,7 @@
   "stations": [
     {
       "station": 4097,
+      "name": null,
       "position": 0,
       "datagrams": 411,
       "reads": 407,
@@ -10440,6 +10444,7 @@
     },
     {
       "station": 4098,
+      "name": null,
       "position": 1,
       "datagrams": 11,
       "reads": 7,
@@ -10465,6 +10470,7 @@
     },
     {
       "station": 4099,
+      "name": null,
       "position": 2,
       "datagrams": 11,
       "reads": 7,
@@ -10490,6 +10496,7 @@
     },
     {
       "station": 4100,
+      "name": null,
       "position": 3,
       "datagrams": 306,
       "reads": 200,
@@ -10523,6 +10530,7 @@
     },
     {
       "station": 4101,
+      "name": null,
       "position": 4,
       "datagrams": 44,
       "reads": 31,
@@ -10556,6 +10564,7 @@
     },
     {
       "station": 4102,
+      "name": null,
       "position": 5,
       "datagrams": 45,
       "reads": 32,

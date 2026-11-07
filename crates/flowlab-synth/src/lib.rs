@@ -458,6 +458,62 @@ fn state_change<W: Write>(
     Ok(())
 }
 
+/// The network configuration (ENI subset) a master would use for `spec`: station addresses,
+/// mailboxes and the cyclic commands with their expected working counters.
+pub fn network_config(spec: &SynthSpec) -> flowlab_devices::NetworkConfig {
+    use flowlab_devices::{CyclicCmd, CyclicFrame, MailboxConfig, NetworkConfig, SlaveConfig};
+    let n = spec.slaves.len() as u16;
+    let image: u32 = spec.slaves.iter().map(|s| s.outputs_bytes as u32 + s.inputs_bytes as u32).sum();
+    let lrw_wkc: u16 = spec
+        .slaves
+        .iter()
+        .map(|s| if s.outputs_bytes > 0 { 2 } else { 0 } + if s.inputs_bytes > 0 { 1 } else { 0 })
+        .sum();
+    let mut cmds = Vec::new();
+    if spec.distributed_clocks {
+        cmds.push(CyclicCmd {
+            command: Command::Frmw.code(),
+            address: FIRST_STATION as u32 | 0x0910 << 16,
+            length: 8,
+            expected_wkc: n,
+        });
+    }
+    cmds.push(CyclicCmd {
+        command: Command::Lrw.code(),
+        address: LOGICAL_BASE,
+        length: image as u16,
+        expected_wkc: lrw_wkc,
+    });
+    cmds.push(CyclicCmd { command: Command::Brd.code(), address: 0x0130 << 16, length: 2, expected_wkc: n });
+    NetworkConfig {
+        master: Some(concat!("flowlab-synth ", env!("CARGO_PKG_VERSION")).to_owned()),
+        cycle_time_ns: Some(spec.cycle_time_us as u64 * 1000),
+        slaves: spec
+            .slaves
+            .iter()
+            .enumerate()
+            .map(|(p, s)| SlaveConfig {
+                name: s.name.clone(),
+                station: FIRST_STATION + p as u16,
+                position: Some(p as u16),
+                vendor_id: None,
+                product_code: None,
+                revision: None,
+                outputs_bits: s.outputs_bytes as u32 * 8,
+                inputs_bits: s.inputs_bytes as u32 * 8,
+                mailbox: s.mailbox.then(|| MailboxConfig {
+                    out_start: SM0_START,
+                    out_len: MBX_LEN as u16,
+                    in_start: SM1_START,
+                    in_len: MBX_LEN as u16,
+                    protocols: vec!["CoE".into(), "FoE".into(), "EoE".into()],
+                }),
+            })
+            .collect(),
+        cyclic: vec![CyclicFrame { cmds }],
+    }
+}
+
 /// JSON Schema of [`SynthSpec`] (draft 2020-12), for editors and the UI.
 pub fn spec_schema() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(SynthSpec)).unwrap_or_default()

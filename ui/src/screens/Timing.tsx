@@ -53,7 +53,18 @@ const WKC_COLUMNS: Column<WkcSlot>[] = [
           varies (mailbox)
         </span>
       ) : (
-        w.expected
+        <span
+          title={
+            w.expected_from === "eni"
+              ? "Configured in the ENI"
+              : "Most frequent value in the capture"
+          }
+        >
+          {w.expected}
+          <span className="ml-1 text-xs text-fg-subtle">
+            {w.expected_from === "eni" ? "ENI" : "mode"}
+          </span>
+        </span>
       ),
   },
   {

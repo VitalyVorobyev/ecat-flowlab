@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hand-written for FlowLab tests in the layout TwinCAT exports (not a vendor file). -->
+<EtherCATConfig Version="1.3">
+  <Config>
+    <Master>
+      <Info><Name>Device 1 (EtherCAT)</Name><Destination>FFFFFFFFFFFF</Destination><EtherType>A488</EtherType></Info>
+    </Master>
+    <Slave>
+      <Info>
+        <Name>Term 1 (FL-DI16)</Name>
+        <PhysAddr>1001</PhysAddr>
+        <AutoIncAddr>0</AutoIncAddr>
+        <Physics>YY</Physics>
+        <VendorId>4095</VendorId>
+        <ProductCode>65537</ProductCode>
+        <RevisionNo>131072</RevisionNo>
+      </Info>
+      <ProcessData>
+        <Recv><BitStart>0</BitStart><BitLength>16</BitLength></Recv>
+      </ProcessData>
+    </Slave>
+    <Slave>
+      <Info>
+        <Name>Box 2 (FL-BULK)</Name>
+        <PhysAddr>1002</PhysAddr>
+        <AutoIncAddr>65535</AutoIncAddr>
+        <VendorId>#x00000fff</VendorId>
+        <ProductCode>#x00020001</ProductCode>
+      </Info>
+      <ProcessData>
+        <Send><BitStart>0</BitStart><BitLength>64</BitLength></Send>
+        <Recv><BitStart>16</BitStart><BitLength>64</BitLength></Recv>
+      </ProcessData>
+      <Mailbox DataLinkLayer="true">
+        <Send><Start>4096</Start><Length>512</Length></Send>
+        <Recv><Start>4608</Start><Length>512</Length><PollTime>10</PollTime></Recv>
+        <Protocol>CoE</Protocol>
+        <Protocol>FoE</Protocol>
+        <Protocol>EoE</Protocol>
+      </Mailbox>
+    </Slave>
+    <Cyclic>
+      <CycleTime>1000</CycleTime>
+      <Frame>
+        <Comment>Frame 1</Comment>
+        <Cmd>
+          <State>PREOP</State><State>SAFEOP</State><State>OP</State>
+          <Comment>DC</Comment>
+          <Cmd>14</Cmd>
+          <Adp>1001</Adp>
+          <Ado>2320</Ado>
+          <DataLength>8</DataLength>
+          <Cnt>2</Cnt>
+        </Cmd>
+        <Cmd>
+          <State>SAFEOP</State><State>OP</State>
+          <Cmd>12</Cmd>
+          <Addr>#x00010000</Addr>
+          <Data>0000000000000000000000000000000000000000</Data>
+          <Cnt>4</Cnt>
+          <InputOffs>26</InputOffs>
+          <OutputOffs>26</OutputOffs>
+        </Cmd>
+        <Cmd>
+          <State>PREOP</State><State>SAFEOP</State><State>OP</State>
+          <Cmd>7</Cmd>
+          <Adp>0</Adp>
+          <Ado>304</Ado>
+          <DataLength>2</DataLength>
+          <Cnt>2</Cnt>
+        </Cmd>
+      </Frame>
+    </Cyclic>
+  </Config>
+</EtherCATConfig>

@@ -57,4 +57,8 @@ sha256: string,
 /**
  * A simulation result is attached (`/api/captures/{id}/simulation`).
  */
-has_simulation: boolean, };
+has_simulation: boolean, 
+/**
+ * Name of the master in the attached network configuration (ENI), if any.
+ */
+eni: string | null, };

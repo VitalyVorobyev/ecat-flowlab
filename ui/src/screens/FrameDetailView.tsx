@@ -42,6 +42,8 @@ function MailboxPanel({ m }: { m: MailboxInfo }) {
           </span>
         ) : m.source === "hint" ? (
           <span className="text-fg-subtle">(address from hint)</span>
+        ) : m.source === "eni" ? (
+          <span className="text-fg-subtle">(address from ENI)</span>
         ) : null}
         {m.repeat ? <Badge tone="neutral">repeat</Badge> : null}
       </div>

@@ -54,11 +54,16 @@ No dates. Each milestone ends with a running, demonstrable artifact. Studies (e.
 - [ ] TCP over EoE, VoE, priority/weighted mailbox policies, the application session protocol of the study.
 - [ ] Calibration of PDI and master parameters against lab captures (M6/M7).
 
-## M5 — Planner and device descriptions
+## M5 — Planner and device descriptions ✅
 
-- [ ] ESI XML import (PDOs, SyncManagers, mailbox sizes, supported protocols); ENI import for expected WKCs.
-- [ ] Bus budget: frame layout, wire time, utilization and mailbox headroom for a cycle time.
-- [ ] Capability gating: a configuration a device cannot support is rejected with the reason.
+- [x] ESI import (identity, SyncManagers, PDOs and default assignment, mailbox protocols, DC) — `flowlab esi`, `POST /api/esi`.
+- [x] ENI import: expected WKCs per cyclic datagram (falling back to the most frequent value, reported per
+      datagram), mailboxes for stations without SM configuration in the capture, station names —
+      `analyze --eni`, `serve --eni`, Attach ENI in the UI. `synth --eni` writes the generator's network as ENI.
+- [x] Bus budget: frame layout, wire time, ring delay, idle time, bus-side mailbox headroom — `flowlab plan`, Planner view.
+- [x] Capability gating: cycle overrun, ESC RAM, mailbox size limits, missing mailbox protocols, each with its reason.
+- [ ] Validate the ENI reader on exports from TwinCAT and at least one other configurator (none available yet).
+- [ ] Planner → simulator: run a plan with a workload in one step.
 
 ## M6 — Compare and optimize
 

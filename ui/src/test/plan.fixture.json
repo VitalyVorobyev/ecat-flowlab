@@ -1,0 +1,67 @@
+{
+  "cycle_ns": 1000000.0,
+  "link_bps": 100000000.0,
+  "image_out_bytes": 34,
+  "image_in_bytes": 42,
+  "frames": [
+    {
+      "datagrams": [
+        {
+          "label": "DC system time",
+          "command": "FRMW",
+          "data_bytes": 8
+        },
+        {
+          "label": "process image part 0",
+          "command": "LRW",
+          "data_bytes": 76
+        },
+        {
+          "label": "AL status",
+          "command": "BRD",
+          "data_bytes": 2
+        }
+      ],
+      "frame_bytes": 138,
+      "wire_bytes": 162,
+      "wire_ns": 12960.0
+    }
+  ],
+  "cyclic_wire_ns": 12960.0,
+  "cyclic_percent": 1.296,
+  "ring_delay_ns": 4200.0,
+  "cyclic_done_ns": 17160.0,
+  "idle_ns": 982840.0,
+  "idle_percent": 98.284,
+  "mailbox_frame_ns": 87040.0,
+  "mailbox_frames_per_cycle": 10,
+  "mailbox_bytes_per_s": 5060000.0,
+  "checks": [
+    {
+      "severity": "info",
+      "subject": "Servo-1",
+      "message": "CoE support is unknown (no ESI)."
+    },
+    {
+      "severity": "info",
+      "subject": "Servo-2",
+      "message": "CoE support is unknown (no ESI)."
+    },
+    {
+      "severity": "info",
+      "subject": "bulk-endpoint",
+      "message": "EoE support is unknown (no ESI)."
+    },
+    {
+      "severity": "info",
+      "subject": "bulk-endpoint",
+      "message": "FoE support is unknown (no ESI)."
+    }
+  ],
+  "assumptions": [
+    "Frames are sent back to back at cycle start and occupy the link for their wire time (incl. preamble, FCS, padding and inter-frame gap).",
+    "Each slave forwards with a fixed delay; the ring delay is their sum.",
+    "Mailbox headroom assumes the master waits for each mailbox frame to return before sending the next, and one message per direction per frame. Slave-side PDI time is not included — use the simulator for that.",
+    "ESC RAM: both mailboxes plus three buffers each for outputs and inputs."
+  ]
+}

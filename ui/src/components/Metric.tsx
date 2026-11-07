@@ -40,6 +40,23 @@ export function Metric({
   );
 }
 
-export function MetricGrid({ children }: { children: ReactNode }) {
-  return <div className="grid grid-cols-2 gap-3 md:grid-cols-4 2xl:grid-cols-8">{children}</div>;
+/** Headline numbers in a grid; `compact` for a half-width column (at most four across). */
+export function MetricGrid({
+  children,
+  compact = false,
+}: {
+  children: ReactNode;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={
+        compact
+          ? "grid grid-cols-2 gap-3 2xl:grid-cols-4"
+          : "grid grid-cols-2 gap-3 md:grid-cols-4 2xl:grid-cols-8"
+      }
+    >
+      {children}
+    </div>
+  );
 }

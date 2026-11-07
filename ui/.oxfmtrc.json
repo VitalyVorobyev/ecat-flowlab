@@ -8,6 +8,7 @@
     "dist/**",
     "src/api/gen/**",
     "src/test/report.fixture.json",
-    "src/test/sim.fixture.json"
+    "src/test/sim.fixture.json",
+    "src/test/plan.fixture.json"
   ]
 }

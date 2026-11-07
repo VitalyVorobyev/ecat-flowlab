@@ -68,6 +68,19 @@ Architecture decisions, newest last. A decision is changed by a new entry that s
 - **ADR-024 PDI access is a parameter.** Whether a slave stack moves whole mailbox buffers or only
   messages changes PDI-bound results severalfold; both are modelled and the spec says which.
 
+## 2026-11-07 — M5 device descriptions and planner
+
+- **ADR-025 Read the ESI/ENI subset FlowLab uses, with `roxmltree`.** Read-only DOM, no
+  dependencies, MIT OR Apache-2.0; DTDs are rejected. Unknown elements are ignored, so vendor
+  extensions do not break import. No vendor ESI files are committed: the test fixtures are
+  hand-written in ETG layout.
+- **ADR-026 ENI before heuristics for expected working counters** (refines ADR-015). With an ENI,
+  a datagram the ENI lists (same command, address, length) is judged against its configured
+  `Cnt`; others still use the most frequent value. Every WKC slot reports which basis it used,
+  and the finding text names it.
+- **ADR-027 The planner is arithmetic.** Frame layout, wire time and bus-side headroom only; PDI
+  and slave timing belong to the simulator. Its assumptions travel with each result.
+
 ## Open questions
 
 - Do TwinCAT / other masters' captures always show the ESC-set source-MAC bit, or are
@@ -92,4 +105,8 @@ Architecture decisions, newest last. A decision is changed by a new entry that s
 - Which mailbox policy does each candidate master implement (EtherCrab, SOEM, IgH, TwinCAT), and
   does it poll mailboxes every cycle? *Test:* captures of an FoE write per master; compare with
   the policies' signatures (accesses per cycle, frames per cycle).
+- ENI `<Cyclic><CycleTime>` is read as µs. Is that what TwinCAT and other configurators write,
+  and do they all address cyclic datagrams with `<Addr>` / `<Adp>`+`<Ado>` as assumed?
+  *Test:* ENI exports from TwinCAT and one other tool against their captures (the expected-WKC
+  basis should be "eni" for every cyclic datagram).
 

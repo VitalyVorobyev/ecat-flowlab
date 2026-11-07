@@ -4,6 +4,8 @@ import type { CaptureReport } from "./gen/CaptureReport";
 import type { FrameDetail } from "./gen/FrameDetail";
 import type { FrameFilter } from "./gen/FrameFilter";
 import type { FramePage } from "./gen/FramePage";
+import type { EsiImport } from "./gen/EsiImport";
+import type { PlanResult } from "./gen/PlanResult";
 import type { SimResult } from "./gen/SimResult";
 
 export type { CaptureInfo } from "./gen/CaptureInfo";
@@ -39,6 +41,12 @@ export type { SdoTransaction } from "./gen/SdoTransaction";
 export type { SimResult } from "./gen/SimResult";
 export type { SlaveResult } from "./gen/SlaveResult";
 export type { TransferResult } from "./gen/TransferResult";
+export type { DeviceDescription } from "./gen/DeviceDescription";
+export type { EsiImport } from "./gen/EsiImport";
+export type { PlanCheck } from "./gen/PlanCheck";
+export type { PlannedFrame } from "./gen/PlannedFrame";
+export type { PlanResult } from "./gen/PlanResult";
+export type { PlanSlave } from "./gen/PlanSlave";
 
 /** An error the server answered with `{ "error": "..." }`, or a transport failure. */
 export class ApiError extends Error {
@@ -141,4 +149,20 @@ export const api = {
   simExample: () => request<Record<string, unknown>>("/api/sim/example"),
   simulate: (spec: unknown) => request<CaptureInfo>("/api/simulate", json("POST", spec)),
   simulation: (id: number) => request<SimResult>(`/api/captures/${id}/simulation`),
+  attachEni: (id: number, file: File) =>
+    request<CaptureInfo>(`/api/captures/${id}/eni`, {
+      method: "POST",
+      headers: { "content-type": "application/xml" },
+      body: file,
+    }),
+  detachEni: (id: number) => request<CaptureInfo>(`/api/captures/${id}/eni`, { method: "DELETE" }),
+  importEsi: (file: File) =>
+    request<EsiImport>("/api/esi", {
+      method: "POST",
+      headers: { "content-type": "application/xml" },
+      body: file,
+    }),
+  planSchema: () => request<Record<string, unknown>>("/api/plan/schema"),
+  planExample: () => request<Record<string, unknown>>("/api/plan/example"),
+  plan: (spec: unknown) => request<PlanResult>("/api/plan", json("POST", spec)),
 };

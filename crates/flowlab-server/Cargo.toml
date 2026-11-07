@@ -13,6 +13,7 @@ flowlab-capture.workspace = true
 flowlab-analysis.workspace = true
 flowlab-synth.workspace = true
 flowlab-sim.workspace = true
+flowlab-devices.workspace = true
 axum.workspace = true
 tokio.workspace = true
 tower-http.workspace = true

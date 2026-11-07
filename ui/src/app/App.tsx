@@ -8,6 +8,7 @@ import {
   Mail,
   Network,
   Rows3,
+  Ruler,
   Sparkles,
   Waypoints,
 } from "lucide-react";
@@ -22,6 +23,7 @@ import { CAPTURE_ACCEPT, Captures } from "../screens/Captures";
 import { Frames, type FramesTarget } from "../screens/Frames";
 import { Mailbox } from "../screens/Mailbox";
 import { Overview } from "../screens/Overview";
+import { Planner } from "../screens/Planner";
 import { Simulation } from "../screens/Simulation";
 import { Stations } from "../screens/Stations";
 import { Timing } from "../screens/Timing";
@@ -33,7 +35,8 @@ export type View =
   | "frames"
   | "stations"
   | "mailbox"
-  | "simulation";
+  | "simulation"
+  | "planner";
 
 const DIRECTIONS = {
   mac_local_bit: "directions: MAC bit",
@@ -52,6 +55,7 @@ export function App() {
   const [frameFilter, setFrameFilter] = useState<FrameFilter>(NO_FILTER);
   const [frameTarget, setFrameTarget] = useState<FramesTarget | null>(null);
   const [version, setVersion] = useState<string | null>(null);
+  const [reloads, setReloads] = useState(0);
 
   useEffect(() => {
     api.health().then(
@@ -75,7 +79,7 @@ export function App() {
   const selected = captures.find((c) => c.id === selectedId) ?? null;
   const report = useAsync(
     () => (selectedId === null ? Promise.resolve(null) : api.report(selectedId)),
-    [selectedId],
+    [selectedId, reloads],
   );
   const hasSimulation = selected?.has_simulation ?? false;
   const simulation = useAsync(
@@ -133,6 +137,35 @@ export function App() {
       }
     } catch (e) {
       toast({ tone: "error", title: "Could not close the capture", description: errorMessage(e) });
+    }
+  };
+
+  const updated = (info: CaptureInfo) => {
+    setCaptures((list) => list.map((c) => (c.id === info.id ? info : c)));
+    setReloads((n) => n + 1);
+  };
+
+  const attachEni = async (file: File) => {
+    if (selectedId === null) return;
+    try {
+      const info = await api.attachEni(selectedId, file);
+      updated(info);
+      toast({ tone: "success", title: `Network configuration from ${file.name} applied` });
+    } catch (e) {
+      toast({ tone: "error", title: `Could not apply ${file.name}`, description: errorMessage(e) });
+    }
+  };
+
+  const detachEni = async () => {
+    if (selectedId === null) return;
+    try {
+      updated(await api.detachEni(selectedId));
+    } catch (e) {
+      toast({
+        tone: "error",
+        title: "Could not remove the configuration",
+        description: errorMessage(e),
+      });
     }
   };
 
@@ -208,6 +241,7 @@ export function App() {
       <NavRailItem value="frames" label="Frames" icon={<Rows3 />} disabled={!hasReport} />
       <NavRailItem value="stations" label="Stations" icon={<Network />} disabled={!hasReport} />
       <NavRailItem value="mailbox" label="Mailbox" icon={<Mail />} disabled={!hasReport} />
+      <NavRailItem value="planner" label="Planner" icon={<Ruler />} />
       <NavRailItem
         value="simulation"
         label="Sim run"
@@ -218,7 +252,9 @@ export function App() {
   );
 
   let main;
-  if (view === "captures" || selectedId === null) {
+  if (view === "planner") {
+    main = <Planner />;
+  } else if (view === "captures" || selectedId === null) {
     main = (
       <Captures
         captures={captures}
@@ -239,6 +275,9 @@ export function App() {
     main = (
       <Overview
         report={report.data}
+        eni={selected?.eni ?? null}
+        onAttachEni={(f) => void attachEni(f)}
+        onDetachEni={() => void detachEni()}
         onOpenStream={(id) => {
           setStreamId(id);
           setView("timing");

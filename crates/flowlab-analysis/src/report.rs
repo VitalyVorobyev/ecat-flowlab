@@ -90,6 +90,8 @@ pub struct WkcSlot {
     pub mismatches: u64,
     /// Returning frames with WKC 0.
     pub zero: u64,
+    /// `"eni"`: the configured value; `"most_frequent"`: inferred from the capture.
+    pub expected_from: String,
     /// The datagram accesses a mailbox; its WKC varies by design (0 = mailbox full/empty)
     /// and is not counted as a mismatch.
     pub mailbox: bool,
@@ -195,6 +197,8 @@ pub struct AreaCount {
 pub struct StationSummary {
     /// Configured station address.
     pub station: u16,
+    /// Name from the network configuration (ENI), if one was given.
+    pub name: Option<String>,
     /// Ring position, when the master assigned the address with APWR 0x0010.
     pub position: Option<u16>,
     /// TX datagrams addressed to it.
@@ -291,6 +295,8 @@ pub enum MailboxDirection {
 pub enum ChannelSource {
     /// From SyncManager configuration writes in the capture.
     SmConfig,
+    /// From the network configuration (ENI).
+    Eni,
     /// From a user-supplied hint.
     Hint,
     /// From datagrams whose data parses as a mailbox header (no configuration seen).

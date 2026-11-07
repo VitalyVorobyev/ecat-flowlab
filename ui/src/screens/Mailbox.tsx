@@ -31,6 +31,7 @@ import { bitRate, bytes, captureTime, count, hex, ns } from "../lib/format";
 
 const SOURCE: Record<ChannelSource, string> = {
   sm_config: "SM config",
+  eni: "ENI",
   hint: "hint",
   heuristic: "heuristic",
 };

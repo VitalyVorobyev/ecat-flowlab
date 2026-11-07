@@ -3,4 +3,4 @@
 /**
  * Where the analysis learned a station's mailbox SyncManager addresses.
  */
-export type ChannelSource = "sm_config" | "hint" | "heuristic";
+export type ChannelSource = "sm_config" | "eni" | "hint" | "heuristic";

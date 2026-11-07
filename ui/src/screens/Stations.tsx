@@ -22,6 +22,11 @@ const STATION_COLUMNS: Column<StationSummary>[] = [
     sortValue: (s) => s.station,
   },
   {
+    key: "name",
+    header: "Name",
+    cell: (s) => <span className="text-xs">{s.name ?? "–"}</span>,
+  },
+  {
     key: "pos",
     header: "Position",
     numeric: true,
