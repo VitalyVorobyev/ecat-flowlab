@@ -5,7 +5,7 @@ answers the UI's queries and serves the built UI. `flowlab-cli` builds the `flow
 exposes every pipeline stage — synthesis, analysis, ESI summary, planning, simulation, studies,
 schemas — and starts the server. Both are thin: the work happens in the library crates.
 
-API: [`flowlab_server`](../api/flowlab_server/index.html) ·
+API: [`flowlab_server`](../../api/flowlab_server/index.html) ·
 source: [crates/flowlab-server](https://github.com/VitalyVorobyev/ecat-flowlab/blob/main/crates/flowlab-server),
 [crates/flowlab-cli](https://github.com/VitalyVorobyev/ecat-flowlab/blob/main/crates/flowlab-cli)
 

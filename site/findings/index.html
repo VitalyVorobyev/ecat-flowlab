@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bulk-transfer findings</title>
+    <meta
+      name="description"
+      content="Interactive simulated results: what limits a 10 MB transfer to an application behind a LAN9252-class EtherCAT slave controller on SPI, and which changes help."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../assets/site.css" />
+    <link rel="stylesheet" href="findings.css" />
+    <link rel="icon" href="../assets/logo.svg" type="image/svg+xml" />
+    <script src="../assets/theme.js"></script>
+    <script type="module" src="findings.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="wrap">
+        <a class="brand" href="../"><img src="../assets/logo.svg" width="24" height="24" alt="" />ECAT FlowLab</a>
+        <nav class="topnav" aria-label="Site">
+          <a href="../book/">Book</a>
+          <a href="./" aria-current="page">Findings</a>
+          <a href="../api/">API</a>
+          <a class="wide" href="https://github.com/VitalyVorobyev/ecat-flowlab">GitHub</a>
+        </nav>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle colour theme">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M8 1.5a6.5 6.5 0 1 0 0 13z" fill="currentColor" />
+            <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.2" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section class="intro">
+        <p class="eyebrow">Study · bulk transfer over EtherCAT</p>
+        <h1>10 MB through an ESC on SPI</h1>
+        <p class="lede">
+          A PC master moves 10,000,000 bytes to an application behind a LAN9252-class EtherCAT slave
+          controller (4 KiB RAM) on SPI. What limits the transfer, and which changes help, by how
+          much, on what conditions?
+        </p>
+        <div class="provenance" role="note">
+          <span class="badge">simulated</span>
+          <p>
+            Every number on this page is a simulation result. No lab measurement exists yet. The SPI's
+            effective rate and per-access cost, which matter most, are placeholders until they are
+            measured. Read the results as how the outcome depends on the system, not as predictions.
+            The full argument is in the <a href="../book/studies/bulk-transfer/report.html">report</a>.
+          </p>
+        </div>
+        <div class="tiles" id="tiles" aria-live="polite"></div>
+      </section>
+
+      <section>
+        <h2>Where the time goes</h2>
+        <p class="secondary narrow">
+          Each step changes one thing from the step before. Every run delivered all 10,000,000 bytes
+          and matched the payload's SHA-256. The time axis is logarithmic.
+        </p>
+        <figure class="chart" id="chart-steps"></figure>
+        <details class="table-view"><summary>Table</summary><div class="table-scroll" id="table-steps"></div></details>
+      </section>
+
+      <section id="requirement">
+        <h2>Start from the requirement</h2>
+        <p class="secondary narrow">
+          The first decision is not a parameter: how long may the transfer take, and how much of the
+          link and of the SPI may it use? Set the limits; every simulated configuration below is
+          checked against them.
+        </p>
+        <form class="controls" id="req" onsubmit="return false">
+          <label>
+            <span>Deadline for 10 MB</span>
+            <span class="field"><input type="number" id="deadline" min="0.5" max="900" step="any" value="10" /> s</span>
+          </label>
+          <label>
+            <span>Link share at most</span>
+            <span class="field"><input type="number" id="maxlink" min="1" max="100" step="1" value="100" /> %</span>
+          </label>
+          <label>
+            <span>SPI (PDI) busy at most</span>
+            <span class="field"><input type="number" id="maxpdi" min="1" max="100" step="1" value="100" /> %</span>
+          </label>
+          <fieldset>
+            <legend>Paths</legend>
+            <label class="chip"><input type="checkbox" value="mailbox" checked /> FoE / CoE</label>
+            <label class="chip"><input type="checkbox" value="eoe" checked /> EoE</label>
+            <label class="chip"><input type="checkbox" value="pdo" checked /> PDO channel</label>
+          </fieldset>
+        </form>
+        <div class="verdict" id="verdict" aria-live="polite"></div>
+        <figure class="chart" id="chart-req"></figure>
+        <div class="table-scroll" id="table-req"></div>
+      </section>
+
+      <section>
+        <h2>1. The master's mailbox scheduling sets the order of magnitude</h2>
+        <p class="secondary narrow">
+          FoE and CoE are stop-and-wait. A master that serves the mailbox a fixed number of times per
+          cycle moves one mailbox of data every two cycles, whatever the SPI does: about
+          (mailbox − 12 B) / (2 × cycle). More datagrams per cycle do not help with one bulk slave,
+          because the mailbox holds one message. A master that polls in idle bus time is 1.5–12×
+          faster, at the cost of link load.
+        </p>
+        <figure class="chart" id="chart-policy"></figure>
+        <details class="table-view"><summary>Table</summary><div class="table-scroll" id="table-policy"></div></details>
+      </section>
+
+      <section>
+        <h2>2. Mailbox size: bigger helps FoE; EoE has a trap</h2>
+        <p class="secondary narrow">
+          At a fixed service rate FoE time falls in proportion to the mailbox's data size. EoE fragments
+          other than the last carry multiples of 32 bytes, so a 1,514-byte frame needs four fragments
+          with a 512 B mailbox, three with 522 B and two with 778 B. With whole-buffer SPI reads, larger
+          EoE mailboxes can even be slower.
+        </p>
+        <div class="multiples">
+          <figure class="chart" id="chart-mbx-foe"></figure>
+          <figure class="chart" id="chart-mbx-eoe"></figure>
+        </div>
+        <details class="table-view"><summary>Table</summary><div class="table-scroll" id="table-mbx"></div></details>
+      </section>
+
+      <section>
+        <h2>3. Once the master polls freely, the SPI decides</h2>
+        <p class="secondary narrow">
+          With an idle-time master, transfer time is close to inversely proportional to the SPI's
+          effective rate. Reading only the message (header, then the announced length, then the byte
+          that releases the buffer) instead of the whole SyncManager buffer gains about as much as
+          doubling the rate. Across the plausible range, the same configuration spans more than an
+          order of magnitude: this is why the SPI must be measured first.
+        </p>
+        <div class="multiples">
+          <figure class="chart" id="chart-pdi-whole"></figure>
+          <figure class="chart" id="chart-pdi-msg"></figure>
+        </div>
+        <details class="table-view"><summary>Table</summary><div class="table-scroll" id="table-pdi"></div></details>
+      </section>
+
+      <section>
+        <h2>4. A process-data channel is fast and fixed-rate, within ESC RAM and SPI limits</h2>
+        <p class="secondary narrow">
+          A sequence-numbered chunk per cycle in the outputs, cumulative acknowledgements in the inputs,
+          go-back-N on a stall. Its rate is bytes per cycle ÷ cycle time, and the 4 KiB of ESC RAM caps
+          it at 1,260 B per cycle here. If the SPI cannot copy every cycle's chunk (above about 90 %
+          PDI load), chunks are overwritten and throughput collapses erratically.
+        </p>
+        <div class="multiples">
+          <figure class="chart" id="chart-pdo-size"></figure>
+          <figure class="chart" id="chart-pdo-pdi"></figure>
+        </div>
+        <details class="table-view"><summary>Table</summary><div class="table-scroll" id="table-pdo"></div></details>
+      </section>
+
+      <section>
+        <h2>What to do, in order</h2>
+        <ol class="steps">
+          <li>
+            <b>Fix the requirement.</b> Moved once (configuration, firmware), periodically, or
+            continuously; which direction; by when. If it must take under about 3 s, or recur often,
+            plan a separate Ethernet path instead of tuning EtherCAT. If tens of seconds are fine,
+            standard FoE with sensible mailbox sizes is enough.
+          </li>
+          <li>
+            <b>Measure the SPI on the target</b> with the driver that will ship: effective read and
+            write rates and the fixed cost per access, in both directions. See
+            <a href="../book/studies/bulk-transfer/lab.html">the lab plan</a>.
+          </li>
+          <li>
+            <b>Capture the real master's mailbox polling</b> during an FoE transfer and open it in
+            FlowLab's <a href="../book/guide/mailbox.html">Mailbox view</a>: polling cadence, empty
+            reads and rejected writes decide whether the fixed-rate or the SPI-bound results apply.
+          </li>
+          <li>
+            <b>Calibrate, then re-run the report</b> with the measured values, and check the best
+            candidates in the lab against the baseline and a plain-Ethernet transfer.
+          </li>
+        </ol>
+      </section>
+
+      <section class="small">
+        <p class="muted">
+          Data: <code>book/src/studies/bulk-transfer/generated/findings.json</code>, written by
+          <code>scripts/bulk-transfer-report.py</code> from the study and simulator specs in
+          <a href="https://github.com/VitalyVorobyev/ecat-flowlab/tree/main/configs/studies/bulk-transfer/report"><code>configs/studies/bulk-transfer/report/</code></a>.
+          CI re-runs it on every change and fails if the committed results are stale.
+        </p>
+      </section>
+    </main>
+
+  </body>
+</html>

@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ECAT FlowLab</title>
+    <meta
+      name="description"
+      content="EtherCAT capture analysis, simulation and transport studies: the book, the API reference and the bulk-transfer findings."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/site.css" />
+    <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
+    <script src="assets/theme.js"></script>
+    <style>
+      .hero {
+        padding: 64px 0 48px;
+      }
+
+      .hero .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 24px;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        height: 40px;
+        padding: 0 16px;
+        border-radius: 8px;
+        font-weight: 500;
+        font-size: 15px;
+        text-decoration: none;
+        border: 1px solid var(--line);
+        color: var(--text-primary);
+        background: var(--surface-1);
+      }
+
+      .btn.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+
+      .pipeline {
+        margin-top: 40px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 8px;
+      }
+
+      .stage {
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: var(--surface-1);
+        border: 1px solid var(--line);
+        font-size: 14px;
+      }
+
+      .stage b {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 2px;
+      }
+
+      .stage span {
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1.4;
+        display: block;
+      }
+
+      .split {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 32px;
+        align-items: start;
+      }
+
+      @media (max-width: 760px) {
+        .split {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+
+      .kv {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 14px;
+        font-size: 15px;
+        margin: 12px 0 0;
+      }
+
+      .kv dt {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--text-secondary);
+        padding-top: 2px;
+      }
+
+      .kv dd {
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="wrap">
+        <a class="brand" href="./">
+          <img src="assets/logo.svg" width="24" height="24" alt="" />
+          ECAT FlowLab
+        </a>
+        <nav class="topnav" aria-label="Site">
+          <a href="book/">Book</a>
+          <a href="findings/">Findings</a>
+          <a href="api/">API</a>
+          <a class="wide" href="https://github.com/VitalyVorobyev/ecat-flowlab">GitHub</a>
+        </nav>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle colour theme">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M8 1.5a6.5 6.5 0 1 0 0 13z" fill="currentColor" />
+            <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.2" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section class="hero">
+        <p class="eyebrow">EtherCAT analysis workbench · Rust + React · MIT OR Apache-2.0</p>
+        <h1>See what an EtherCAT segment is doing, and what it could do.</h1>
+        <p class="lede">
+          FlowLab reads pcap and pcapng captures of a running segment and explains the cycle,
+          working counters, bus load, state machines and mailbox conversations. It simulates segments
+          that do not exist yet, through the same decoder and analysis, so measured and simulated
+          traffic compare view for view.
+        </p>
+        <div class="actions">
+          <a class="btn primary" href="book/getting-started.html">Get started</a>
+          <a class="btn" href="findings/">Bulk-transfer findings</a>
+          <a class="btn" href="https://github.com/VitalyVorobyev/ecat-flowlab">Source on GitHub</a>
+        </div>
+
+        <div class="pipeline" aria-label="Pipeline">
+          <div class="stage"><b>Capture</b><span>pcap / pcapng, Ethernet or UDP, no libpcap</span></div>
+          <div class="stage"><b>Decode</b><span>frames, datagrams, mailbox: CoE, FoE, EoE, SoE</span></div>
+          <div class="stage"><b>Analyse</b><span>cycle, jitter, round trip, WKC, load, AL states</span></div>
+          <div class="stage"><b>Simulate</b><span>master, link, ESC and PDI emitting real frames</span></div>
+          <div class="stage"><b>Study</b><span>sweeps, Pareto frontier, calibration on captures</span></div>
+        </div>
+      </section>
+
+      <section>
+        <p class="eyebrow">Documentation</p>
+        <div class="cards">
+          <a class="card" href="book/">
+            <div class="icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M3 3.5h4.5A1.5 1.5 0 0 1 9 5v10a1.5 1.5 0 0 0-1.5-1.5H3zM15 3.5h-4.5A1.5 1.5 0 0 0 9 5v10a1.5 1.5 0 0 1 1.5-1.5H15z" />
+              </svg>
+            </div>
+            <h3>The book</h3>
+            <p>
+              User guide for every view and command, file and API reference, one page per crate,
+              the design decisions, and the bulk-transfer study.
+            </p>
+            <span class="go">Read the book →</span>
+          </a>
+          <a class="card" href="findings/">
+            <div class="icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M3 15V3M3 15h12M6 12V9M9.5 12V6M13 12V4" stroke-linecap="round" />
+              </svg>
+            </div>
+            <h3>Findings: 10 MB through an ESC on SPI</h3>
+            <p>
+              Interactive results of 128 simulations: what limits a bulk transfer to an application
+              behind a LAN9252-class ESC, and which changes help. Filter by your deadline.
+            </p>
+            <span class="go">Explore the findings →</span>
+          </a>
+          <a class="card" href="api/">
+            <div class="icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M6.5 5 3 9l3.5 4M11.5 5 15 9l-3.5 4" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <h3>API reference</h3>
+            <p>
+              Rustdoc for all ten crates: the wire codec, capture reader, analysis, generator,
+              simulator, devices, studies, server and CLI.
+            </p>
+            <span class="go">Browse the API →</span>
+          </a>
+        </div>
+      </section>
+
+      <section>
+        <div class="cols">
+          <div>
+            <h3>User guide</h3>
+            <ul class="linklist">
+              <li><a href="book/guide/ui.html">The workbench</a></li>
+              <li><a href="book/guide/analysis.html">Analysing a capture</a></li>
+              <li><a href="book/guide/mailbox.html">Mailbox traffic</a></li>
+              <li><a href="book/guide/devices.html">Network configuration and planning</a></li>
+              <li><a href="book/guide/synth.html">Synthetic captures</a></li>
+              <li><a href="book/guide/simulation.html">Simulation</a></li>
+              <li><a href="book/guide/studies.html">Studies, calibration and comparison</a></li>
+              <li><a href="book/guide/cli.html">Command line</a></li>
+            </ul>
+          </div>
+          <div>
+            <h3>Reference</h3>
+            <ul class="linklist">
+              <li><a href="book/reference/provenance.html">Provenance and assumptions</a></li>
+              <li><a href="book/reference/specs.html">Input files</a></li>
+              <li><a href="book/reference/reports.html">Report and result files</a></li>
+              <li><a href="book/reference/api.html">HTTP API</a></li>
+              <li><a href="book/reference/limitations.html">Limitations</a></li>
+              <li><a href="book/reference/glossary.html">Glossary</a></li>
+              <li><a href="book/reference/sources.html">Sources</a></li>
+            </ul>
+          </div>
+          <div>
+            <h3>Workspace</h3>
+            <ul class="linklist">
+              <li><a href="book/workspace/overview.html">Overview of the crates</a></li>
+              <li><a href="book/workspace/testing.html">Testing and validation</a></li>
+              <li><a href="book/workspace/contributing.html">Contributing</a></li>
+              <li><a href="book/workspace/decisions.html">Design decisions</a></li>
+              <li><a href="book/workspace/ui.html">The UI</a></li>
+            </ul>
+            <h3 style="margin-top: 20px">Bulk-transfer study</h3>
+            <ul class="linklist">
+              <li><a href="book/studies/bulk-transfer/report.html">Report</a></li>
+              <li><a href="book/studies/bulk-transfer/method.html">Method</a></li>
+              <li><a href="book/studies/bulk-transfer/lab.html">Lab plan</a></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="split">
+          <div>
+            <h2>Try it on a laptop</h2>
+            <p class="secondary">
+              No EtherCAT hardware, network adapter, root or libpcap needed. Generate a synthetic
+              capture with known faults, analyse it, and open the workbench.
+            </p>
+            <dl class="kv">
+              <dt>measured</dt>
+              <dd>a capture recorded from a real network</dd>
+              <dt>simulated</dt>
+              <dd>produced by the discrete-event simulator</dd>
+              <dt>synthetic</dt>
+              <dd>generated with exact ground truth, to test the analysis</dd>
+            </dl>
+            <p class="muted" style="font-size: 14px">
+              Every result carries one of these labels; they are never combined into one number.
+            </p>
+          </div>
+          <pre><code>git clone https://github.com/VitalyVorobyev/ecat-flowlab
+cd ecat-flowlab
+cargo run -p flowlab-cli -- synth configs/synth/demo.json \
+    -o results/demo.pcapng
+cargo run -p flowlab-cli -- analyze results/demo.pcapng
+(cd ui &amp;&amp; bun install &amp;&amp; bun run build)
+cargo run -p flowlab-cli -- serve results/demo.pcapng
+# open http://127.0.0.1:7878</code></pre>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap">
+        ECAT FlowLab · MIT OR Apache-2.0 ·
+        <a href="https://github.com/VitalyVorobyev/ecat-flowlab">github.com/VitalyVorobyev/ecat-flowlab</a>
+      </div>
+    </footer>
+  </body>
+</html>

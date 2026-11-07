@@ -95,16 +95,16 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: mdbook@0.4
-      - name: Rust API docs build without warnings
-        run: cargo doc --no-deps --workspace
+      - name: Site builds (book, rustdoc without warnings, start and findings pages)
+        run: scripts/build-site.sh
         env:
           RUSTDOCFLAGS: -D warnings
-      - name: Book builds
-        run: mdbook build book
-      - name: Links inside the book and README resolve
+      - name: Links in the book sources, README and site pages resolve
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --offline --no-progress --exclude-path book/build --exclude 'api/' 'book/src/**/*.md' README.md
+          args: >-
+            --offline --no-progress --exclude-path book/build --exclude-path _site/api --exclude-path _site/book
+            --exclude 'api/' 'book/src/**/*.md' README.md _site/index.html _site/api/index.html _site/findings/index.html
           fail: true
 
   report:

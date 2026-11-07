@@ -6,7 +6,7 @@ line of slaves and writes what a capture at the master's NIC would show, togethe
 jitter, faults, topology and mailbox traffic are known exactly. Every capture it writes is
 labelled `synthetic`.
 
-API reference: [`flowlab_synth`](../api/flowlab_synth/index.html) ·
+API reference: [`flowlab_synth`](../../api/flowlab_synth/index.html) ·
 source: [`crates/flowlab-synth`](https://github.com/VitalyVorobyev/ecat-flowlab/blob/main/crates/flowlab-synth) ·
 user guide: [Synthetic captures](../guide/synth.md)
 

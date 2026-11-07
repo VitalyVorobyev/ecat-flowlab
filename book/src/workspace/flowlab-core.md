@@ -4,7 +4,7 @@
 (`Provenance`), the metadata every report carries (`ReportMeta`, `InputRef`), and unit
 constants. It is deliberately small so that every other crate can depend on it.
 
-API reference: [`flowlab_core`](../api/flowlab_core/index.html) ·
+API reference: [`flowlab_core`](../../api/flowlab_core/index.html) ·
 source: [`crates/flowlab-core`](https://github.com/VitalyVorobyev/ecat-flowlab/blob/main/crates/flowlab-core)
 
 ## Position in the pipeline

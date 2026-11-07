@@ -6,7 +6,7 @@ It runs bulk transfers over EoE, FoE, CoE or a process-data channel and writes e
 `ecat-wire` into a pcapng labelled `simulated`, so a simulated run is analysed by the same code as
 a capture. Every result follows from the spec's parameters; nothing it produces is a measurement.
 
-API: [`flowlab_sim`](../api/flowlab_sim/index.html) ·
+API: [`flowlab_sim`](../../api/flowlab_sim/index.html) ·
 source: [crates/flowlab-sim](https://github.com/VitalyVorobyev/ecat-flowlab/blob/main/crates/flowlab-sim)
 
 ## Position in the pipeline

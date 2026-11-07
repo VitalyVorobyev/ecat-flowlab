@@ -6,7 +6,10 @@ conversations (CoE, FoE, EoE). It runs in a browser UI or as a JSON report. A di
 simulator, a capture generator with ground truth, a bus-budget planner and parameter studies
 build on the same decoder, so measured and simulated traffic compare like for like.
 
-**Documentation:** <https://vitalyvorobyev.github.io/ecat-flowlab/> (source in [`book/`](book/src/SUMMARY.md)).
+**Documentation:** <https://vitalyvorobyev.github.io/ecat-flowlab/>: the
+[book](https://vitalyvorobyev.github.io/ecat-flowlab/book/) (source in [`book/`](book/src/SUMMARY.md)),
+the [API reference](https://vitalyvorobyev.github.io/ecat-flowlab/api/) and the interactive
+[bulk-transfer findings](https://vitalyvorobyev.github.io/ecat-flowlab/findings/).
 
 ## Quick start
 

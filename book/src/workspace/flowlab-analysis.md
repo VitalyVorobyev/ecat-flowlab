@@ -5,7 +5,7 @@ plus per-frame side tables used to list, filter and explain individual frames. I
 are pure functions of the trace and the options: the same capture gives the same report,
 whether the capture is measured, synthetic or simulated.
 
-API reference: [`flowlab_analysis`](../api/flowlab_analysis/index.html) ·
+API reference: [`flowlab_analysis`](../../api/flowlab_analysis/index.html) ·
 source: [`crates/flowlab-analysis`](https://github.com/VitalyVorobyev/ecat-flowlab/blob/main/crates/flowlab-analysis) ·
 user guide: [Analysing a capture](../guide/analysis.md), [Mailbox traffic](../guide/mailbox.md)
 

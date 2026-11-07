@@ -5,7 +5,7 @@ the EtherCAT header, the datagram chain, mailbox headers and the protocols they 
 SyncManager registers and AL states). Every frame FlowLab reads or writes, whether
 measured, synthetic or simulated, goes through this crate.
 
-API reference: [`ecat_wire`](../api/ecat_wire/index.html) ·
+API reference: [`ecat_wire`](../../api/ecat_wire/index.html) ·
 source: [`crates/ecat-wire`](https://github.com/VitalyVorobyev/ecat-flowlab/blob/main/crates/ecat-wire)
 
 ## Position in the pipeline
@@ -19,7 +19,7 @@ The crate does no I/O and knows nothing about captures, time or analysis.
 
 ## Encapsulations
 
-[`parse_frame`](../api/ecat_wire/fn.parse_frame.html) takes the bytes of one Ethernet II frame
+[`parse_frame`](../../api/ecat_wire/fn.parse_frame.html) takes the bytes of one Ethernet II frame
 (without FCS) and returns `Ok(None)` for well-formed Ethernet that does not carry EtherCAT,
 `Ok(Some(ParsedFrame))` for EtherCAT, and an error when the frame claims EtherCAT but is
 malformed.

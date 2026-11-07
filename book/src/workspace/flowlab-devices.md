@@ -5,7 +5,7 @@ plan fits. It holds subset readers for ESI (EtherCAT Slave Information, ETG.2000
 (EtherCAT Network Information, ETG.2100) files, an ENI writer, and a bus-budget planner that lays
 out the cyclic frames of a network with arithmetic only.
 
-API: [`flowlab_devices`](../api/flowlab_devices/index.html) ·
+API: [`flowlab_devices`](../../api/flowlab_devices/index.html) ·
 source: [crates/flowlab-devices](https://github.com/VitalyVorobyev/ecat-flowlab/blob/main/crates/flowlab-devices)
 
 ## Position in the pipeline

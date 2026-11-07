@@ -17,6 +17,7 @@ cargo run --release -p flowlab-cli -- study configs/studies/bulk-transfer/foe-sw
 cargo run -p flowlab-cli -- serve results/demo.pcapng      # UI from ui/dist on :7878
 python3 scripts/crosscheck-tshark.py results/demo.pcapng results/demo.json   # needs tshark
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace && mdbook build book
+scripts/build-site.sh                        # Pages site in _site/: site/ + book at /book + rustdoc at /api
 python3 scripts/bulk-transfer-report.py      # after a release build; regenerates the report's tables
 ```
 
@@ -73,6 +74,8 @@ the report schema changed, regenerate `ui/src/test/report.fixture.json` (see `ui
 - `book/` (mdBook) is the user-facing documentation; `README.md` stays a short entry point.
   Both describe what the code does now: no milestones, plans or "will". Update the matching
   book page with every user-visible change.
+- `site/` holds the start page and the findings page (reads `generated/findings.json`); same
+  rules as the book.
 - `book/src/studies/bulk-transfer/generated/` and `configs/studies/bulk-transfer/report/` are
   written by `scripts/bulk-transfer-report.py`; CI fails if they are stale. After a model change,
   regenerate and reread the report's prose, which quotes some of the numbers.

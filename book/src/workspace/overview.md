@@ -58,6 +58,6 @@ the Rust result types by ts-rs.
 ## API documentation
 
 The rustdoc of every crate is published with this book: start at
-[`ecat_wire`](../api/ecat_wire/index.html), [`flowlab_analysis`](../api/flowlab_analysis/index.html),
-[`flowlab_sim`](../api/flowlab_sim/index.html) or [`flowlab_study`](../api/flowlab_study/index.html).
+[`ecat_wire`](../../api/ecat_wire/index.html), [`flowlab_analysis`](../../api/flowlab_analysis/index.html),
+[`flowlab_sim`](../../api/flowlab_sim/index.html) or [`flowlab_study`](../../api/flowlab_study/index.html).
 Locally: `cargo doc --no-deps --open`.
