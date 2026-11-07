@@ -116,7 +116,7 @@ capture views read the same object.
 | `frames`, `frame_bytes`, `first_ns`, `last_ns` | TX frames in the stream, bytes per frame, first and last send time |
 | `period_ns` | least-squares slope of send time over cycle number |
 | `interval`, `phase_jitter`, `phase_jitter_abs_p99_ns` | cycle-to-cycle intervals (gaps excluded); deviation from the ideal grid `t0 + k·period`; p99 of its absolute value |
-| `gaps`, `missed_cycles` | intervals longer than 1.5 periods; cycles missing inside them |
+| `gaps`, `missed_cycles` | intervals longer than `gap_factor` periods (1.5); cycles missing inside them |
 | `round_trip`, `unanswered` | TX → RX time at the capture point; TX frames that did not return |
 | `wkc` | `WkcSlot` per datagram position: `label`, `expected`, `expected_from` (`"eni"` or `"most_frequent"`), `mismatches`, `zero`, `mailbox` (mailbox positions are not counted as mismatches) |
 | `wkc_events`, `unanswered_events` | `{ frame, t_ns }` of the affected frames |
@@ -161,7 +161,7 @@ the first and the last message.
   {
     "severity": "warn",
     "title": "Stream 0 (1.000 ms): 6 missed cycles",
-    "detail": "6 gaps longer than 1.5 periods in the master's send times."
+    "detail": "6 gaps longer than 1.5 periods in the master's send times. Threshold: any."
   }
 ]
 ```

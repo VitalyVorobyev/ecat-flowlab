@@ -136,13 +136,13 @@ pub struct CyclicStream {
     pub last_ns: f64,
     /// Nominal period: least-squares slope of send time over cycle number, ns.
     pub period_ns: f64,
-    /// Cycle-to-cycle intervals, excluding gaps (> 1.5 periods).
+    /// Cycle-to-cycle intervals, excluding gaps (longer than `gap_factor` periods, default 1.5).
     pub interval: Option<Distribution>,
     /// Deviation of each send time from the ideal grid `t0 + k·period`, ns.
     pub phase_jitter: Option<Distribution>,
     /// 99th percentile of |phase jitter|, ns.
     pub phase_jitter_abs_p99_ns: Option<f64>,
-    /// Intervals longer than 1.5 periods.
+    /// Intervals longer than `gap_factor` periods (default 1.5).
     pub gaps: u64,
     /// Cycles missing inside those gaps.
     pub missed_cycles: u64,

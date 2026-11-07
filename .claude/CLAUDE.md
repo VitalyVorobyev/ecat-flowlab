@@ -95,6 +95,4 @@ the report schema changed, regenerate `ui/src/test/report.fixture.json` (see `ui
 - Live capture and master adapters only behind a feature with explicit opt-in (hardware rules).
 - Upstream `HexView` and `StateTimeline` to lab-ui; an item editor for arrays of objects in
   `@vitavision/forms`.
-- Thresholds still hard-coded in analysis (1.5-period gap, stream regularity 60 % / ±50 %) belong
-  in `AnalysisOptions`; `GET /report` serialises on the async runtime.
 

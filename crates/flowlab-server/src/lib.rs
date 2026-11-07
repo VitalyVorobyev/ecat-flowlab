@@ -37,7 +37,7 @@ use std::sync::{Arc, RwLock};
 use axum::extract::{DefaultBodyLimit, Path as UrlPath, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get, post};
+use axum::routing::{any, delete, get, post};
 use axum::{Json, Router};
 use flowlab_analysis::frames::{FrameFilter, detail, query};
 use flowlab_analysis::{Analysis, AnalysisOptions, Severity, analyze};
@@ -303,7 +303,15 @@ async fn remove(State(s): State<AppState>, UrlPath(id): UrlPath<u32>) -> Result<
 
 async fn report(State(s): State<AppState>, UrlPath(id): UrlPath<u32>) -> Result<Response, ApiError> {
     let e = s.get(id)?;
-    Ok(Json(&e.analysis.report).into_response())
+    // A large report takes a while to serialise: keep it off the async runtime.
+    let body =
+        blocking(move || serde_json::to_vec(&e.analysis.report).map_err(|err| ApiError::internal(err.to_string())))
+            .await?;
+    Ok(([(axum::http::header::CONTENT_TYPE, "application/json")], body).into_response())
+}
+
+async fn api_not_found(uri: axum::http::Uri) -> ApiError {
+    ApiError::not_found(format!("no API endpoint {}", uri.path()))
 }
 
 /// Query string of `/frames`. Spelled out instead of `#[serde(flatten)]`, which breaks
@@ -351,6 +359,7 @@ async fn frames(
     let e = s.get(id)?;
     let limit = q.limit.min(5000);
     let filter = q.filter();
+    filter.validate().map_err(ApiError::bad_request)?;
     let page = blocking(move || Ok(query(&e.trace, &e.analysis, &filter, q.offset, limit))).await?;
     Ok(Json(page).into_response())
 }
@@ -511,6 +520,9 @@ pub fn api(state: AppState) -> Router {
         .route("/api/study/schema", get(study_schema))
         .route("/api/study/example", get(study_example))
         .route("/api/study", post(study))
+        // Unknown API paths get a JSON 404, not the UI's index.html.
+        .route("/api", any(api_not_found))
+        .route("/api/{*rest}", any(api_not_found))
         .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES))
         .with_state(state)
 }
@@ -605,6 +617,12 @@ mod tests {
         let (st, page) = call(&app, Request::get(uri).body(Body::empty()).unwrap()).await;
         assert_eq!(st, StatusCode::OK);
         assert!(page["total"].as_u64().unwrap() > 0, "{page}");
+        for bad in ["mailbox=eeo", "direction=up", "command=LRX"] {
+            let uri = format!("/api/captures/{id}/frames?{bad}");
+            let (st, e) = call(&app, Request::get(uri).body(Body::empty()).unwrap()).await;
+            assert_eq!(st, StatusCode::BAD_REQUEST, "{bad}");
+            assert!(e["error"].as_str().unwrap().starts_with("unknown"), "{e}");
+        }
         let res = app
             .clone()
             .oneshot(Request::get(format!("/api/captures/{id}/eoe.pcapng")).body(Body::empty()).unwrap())
@@ -731,6 +749,23 @@ mod tests {
                 .await;
         assert_eq!(st, StatusCode::OK);
         assert_eq!(info["name"], "demo.pcapng", "directories are stripped from names");
+    }
+
+    #[tokio::test]
+    async fn unknown_api_paths_are_json_404_even_with_the_ui() {
+        let dir = std::env::temp_dir().join(format!("flowlab-ui-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("index.html"), "<!doctype html><title>ui</title>").unwrap();
+        let app = app(AppState::new(AnalysisOptions::default()), Some(&dir));
+        for uri in ["/api/nope", "/api/captures/1/nope", "/api"] {
+            let (st, e) = call(&app, Request::get(uri).body(Body::empty()).unwrap()).await;
+            assert_eq!(st, StatusCode::NOT_FOUND, "{uri}");
+            assert!(e["error"].as_str().unwrap().contains("no API endpoint"), "{e}");
+        }
+        // Everything else still falls back to the UI.
+        let res = app.clone().oneshot(Request::get("/timing").body(Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[tokio::test]

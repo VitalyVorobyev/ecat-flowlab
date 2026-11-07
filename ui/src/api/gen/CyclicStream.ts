@@ -37,7 +37,7 @@ last_ns: number,
  */
 period_ns: number, 
 /**
- * Cycle-to-cycle intervals, excluding gaps (> 1.5 periods).
+ * Cycle-to-cycle intervals, excluding gaps (longer than `gap_factor` periods, default 1.5).
  */
 interval: Distribution | null, 
 /**
@@ -49,7 +49,7 @@ phase_jitter: Distribution | null,
  */
 phase_jitter_abs_p99_ns: number | null, 
 /**
- * Intervals longer than 1.5 periods.
+ * Intervals longer than `gap_factor` periods (default 1.5).
  */
 gaps: number, 
 /**

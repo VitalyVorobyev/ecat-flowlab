@@ -92,10 +92,11 @@ the UI's `index.html`.
 | `stream` | u16 | — | the frame belongs to this cyclic stream; `65535` = in no stream |
 | `problems_only` | bool | `false` | only frames with a WKC mismatch, no answer, or a parse error |
 | `include_other` | bool | `false` | include non-EtherCAT frames |
-| `mailbox` | string | — | `any`: a datagram accesses a mailbox; `coe`, `foe`, `eoe`, `soe`, `voe`, `aoe` or `error`: the frame carries a message of that protocol. An unknown name matches nothing |
+| `mailbox` | string | — | `any`: a datagram accesses a mailbox; `coe`, `foe`, `eoe`, `soe`, `voe`, `aoe` or `error`: the frame carries a message of that protocol |
 
 An empty string parameter (`command=`) means no condition; an empty or non-decimal numeric
-parameter (`station=`, `station=0x1001`) is rejected with 400.
+parameter (`station=`, `station=0x1001`) is rejected with 400, and so is an unknown command,
+direction or mailbox name (`{"error":"unknown mailbox filter `eeo`: …"}`).
 
 The response is a `FramePage`: `total` (rows matching the filter), `offset`, and `rows`, each a
 `FrameRow` with `no` (1-based frame number), `t_ns` (since capture start), `direction`, `kind`
@@ -135,8 +136,8 @@ Errors raised by the handlers are JSON with an HTTP status:
 
 | Status | When |
 |---|---|
-| 400 | bad input: a file that is not pcap/pcapng, an unreadable path, XML that is not an ENI/ESI, a spec the generator, simulator or study rejects |
-| 404 | unknown capture id or frame number; `/simulation` of a capture that is not a simulation run |
+| 400 | bad input: a file that is not pcap/pcapng, an unreadable path, XML that is not an ENI/ESI, a spec the generator, simulator or study rejects, an unknown frame filter name |
+| 404 | unknown capture id or frame number; `/simulation` of a capture that is not a simulation run; any other path under `/api` (never the UI's `index.html`) |
 | 500 | internal error |
 
 Requests that axum rejects before a handler runs get a **plain-text** body instead:
