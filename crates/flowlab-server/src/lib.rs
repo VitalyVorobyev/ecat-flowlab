@@ -20,6 +20,9 @@
 //! | GET | `/api/plan/schema` | | JSON Schema of `PlanSpec` |
 //! | GET | `/api/plan/example` | | `PlanSpec` |
 //! | POST | `/api/plan` | `PlanSpec` | `PlanResult` |
+//! | GET | `/api/study/schema` | | JSON Schema of `StudySpec` |
+//! | GET | `/api/study/example` | | `StudySpec` |
+//! | POST | `/api/study?capture=` | `StudySpec` | `StudyResult` (calibrated against capture `capture`, if given) |
 //! | GET | `/api/synth/schema` | | JSON Schema of `SynthSpec` |
 //! | GET | `/api/synth/example` | | `SynthSpec` |
 //! | POST | `/api/synth` | `SynthSpec` | `CaptureInfo` |
@@ -427,6 +430,33 @@ async fn plan(Json(spec): Json<PlanSpec>) -> Json<PlanResult> {
     Json(flowlab_devices::plan(&spec))
 }
 
+async fn study_schema() -> Json<serde_json::Value> {
+    Json(flowlab_study::spec_schema())
+}
+
+async fn study_example() -> Json<flowlab_study::StudySpec> {
+    Json(flowlab_study::StudySpec::example())
+}
+
+#[derive(Deserialize)]
+struct StudyQuery {
+    capture: Option<u32>,
+}
+
+async fn study(
+    State(s): State<AppState>,
+    Query(q): Query<StudyQuery>,
+    Json(spec): Json<flowlab_study::StudySpec>,
+) -> Result<Json<flowlab_study::StudyResult>, ApiError> {
+    let entry = q.capture.map(|id| s.get(id)).transpose()?;
+    let r = blocking(move || {
+        flowlab_study::run_study(&spec, entry.as_ref().map(|e| &e.analysis.report))
+            .map_err(|e| ApiError::bad_request(e.to_string()))
+    })
+    .await?;
+    Ok(Json(r))
+}
+
 async fn sim_schema() -> Json<serde_json::Value> {
     Json(flowlab_sim::spec_schema())
 }
@@ -481,6 +511,9 @@ pub fn api(state: AppState) -> Router {
         .route("/api/plan/schema", get(plan_schema))
         .route("/api/plan/example", get(plan_example))
         .route("/api/plan", post(plan))
+        .route("/api/study/schema", get(study_schema))
+        .route("/api/study/example", get(study_example))
+        .route("/api/study", post(study))
         .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES))
         .with_state(state)
 }
@@ -652,6 +685,35 @@ mod tests {
         let (st, plan) = call(&app, json_post("/api/plan", &example)).await;
         assert_eq!(st, StatusCode::OK);
         assert_eq!(plan["frames"].as_array().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn study_runs_and_calibrates_against_a_loaded_capture() {
+        let app = api(AppState::default());
+        let (_, example) = call(&app, Request::get("/api/study/example").body(Body::empty()).unwrap()).await;
+        let mut spec: flowlab_study::StudySpec = serde_json::from_value(example).unwrap();
+        spec.parameters.truncate(1);
+        let (st, r) = call(&app, json_post("/api/study", &spec)).await;
+        assert_eq!(st, StatusCode::OK, "{r}");
+        assert_eq!(r["runs"].as_array().unwrap().len(), 4);
+        assert_eq!(r["meta"]["source"], "simulated");
+
+        spec.targets = vec![flowlab_study::Target {
+            metric: flowlab_study::Metric::ExchangeTimeS { transfer: 0 },
+            measured: None,
+            from_capture: Some(flowlab_study::CaptureMetric::FoeDurationS { index: 0 }),
+            weight: 1.0,
+        }];
+        let (st, err) = call(&app, json_post("/api/study", &spec)).await;
+        assert_eq!(st, StatusCode::BAD_REQUEST, "no capture given: {err}");
+        let mut synth = SynthSpec::example();
+        synth.cycles = 400;
+        let (_, info) = call(&app, json_post("/api/synth", &synth)).await;
+        let id = info["id"].as_u64().unwrap();
+        let (st, r) = call(&app, json_post(&format!("/api/study?capture={id}"), &spec)).await;
+        assert_eq!(st, StatusCode::OK, "{r}");
+        assert_eq!(r["residuals"].as_array().unwrap().len(), 1);
+        assert_eq!(r["calibrated_against"]["name"], info["name"]);
     }
 
     #[tokio::test]

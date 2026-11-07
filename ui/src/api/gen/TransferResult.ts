@@ -61,6 +61,12 @@ end_ns: number | null,
  */
 duration_ns: number | null, 
 /**
+ * From the return of the frame carrying the transfer's first mailbox message to the
+ * return of the frame carrying its last, ns — the span a capture at the master shows
+ * (and `flowlab analyze` reports). Mailbox protocols only.
+ */
+exchange_ns: number | null, 
+/**
  * Payload bits / duration, bit/s.
  */
 goodput_bps: number | null, 

@@ -191,6 +191,8 @@ struct Counts {
 }
 
 struct Transfer {
+    first_msg_ns: Option<u64>,
+    last_msg_ns: Option<u64>,
     seed: u64,
     eligible: bool,
     started_at: Option<u64>,
@@ -546,7 +548,10 @@ impl<'a, W: Write> Sim<'a, W> {
                     if !f.lost && d.wkc > 0 {
                         self.mbx[p].pending = None;
                         if let Some(k) = k {
-                            self.transfers[k].counts.to_slave += 1;
+                            let t = &mut self.transfers[k];
+                            t.counts.to_slave += 1;
+                            t.first_msg_ns.get_or_insert(now);
+                            t.last_msg_ns = Some(now);
                         }
                     } else if !f.lost
                         && let Some(k) = k
@@ -562,7 +567,10 @@ impl<'a, W: Write> Sim<'a, W> {
                         && d.wkc > 0
                         && let Some(k) = k
                     {
-                        self.transfers[k].counts.from_slave += 1;
+                        let t = &mut self.transfers[k];
+                        t.counts.from_slave += 1;
+                        t.first_msg_ns.get_or_insert(now);
+                        t.last_msg_ns = Some(now);
                         if let Ok(h) = MailboxHeader::parse(&d.rx) {
                             let end = (MAILBOX_HEADER_LEN + h.length as usize).min(d.rx.len());
                             if let Some(Kind::Mailbox { master, .. }) = self.transfers[k].kind.as_mut() {
@@ -1048,6 +1056,8 @@ pub fn simulate<W: Write>(spec: &SimSpec, capture: Option<W>) -> Result<SimResul
     }
     let transfers = (0..spec.transfers.len())
         .map(|k| Transfer {
+            first_msg_ns: None,
+            last_msg_ns: None,
             seed: spec.seed ^ (k as u64 + 1).wrapping_mul(0xA24B_AED4_963E_E407),
             eligible: false,
             started_at: None,
@@ -1137,6 +1147,7 @@ pub fn simulate<W: Write>(spec: &SimSpec, capture: Option<W>) -> Result<SimResul
                 first_byte_ns: sink.and_then(|s| s.first_ns).map(|v| v as f64),
                 end_ns: end,
                 duration_ns: duration,
+                exchange_ns: tr.first_msg_ns.zip(tr.last_msg_ns).map(|(a, b)| (b - a) as f64),
                 goodput_bps: duration.filter(|d| *d > 0.0).map(|d| bits / (d / 1e9)),
                 messages_to_slave: tr.counts.to_slave,
                 messages_from_slave: tr.counts.from_slave,

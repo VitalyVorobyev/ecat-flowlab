@@ -65,10 +65,14 @@ No dates. Each milestone ends with a running, demonstrable artifact. Studies (e.
 - [ ] Validate the ENI reader on exports from TwinCAT and at least one other configurator (none available yet).
 - [ ] Planner → simulator: run a plan with a workload in one step.
 
-## M6 — Compare and optimize
+## M6 — Compare and optimize ✅
 
-- [ ] Simulated vs measured comparison on the same views; calibration of model parameters with residuals.
-- [ ] Grid / Latin-hypercube sweeps, constraints, Pareto frontier.
+- [x] Studies (`flowlab-study`): parameters by JSON pointer (linked pointers, ranges, log spacing), grid or
+      Latin-hypercube sampling, objectives, constraints with reasons, Pareto frontier — `flowlab study`, Study view.
+- [x] Calibration: targets measured directly or read from an analysed capture; best fit and residuals. The
+      simulator reports message spans at the master so model and capture are compared like for like.
+- [x] Compare view: two captures (e.g. measured and simulated) side by side, each column with its provenance.
+- [ ] Calibrate against real lab captures (needs M7 hardware); local optimization beyond grid/LHS if sweeps get large.
 
 ## M7 — Live and lab
 

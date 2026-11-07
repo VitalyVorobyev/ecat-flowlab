@@ -6,8 +6,10 @@ in a browser UI or as a JSON report. Synthetic captures with known ground truth 
 so every number can be checked against what was put in. Simulation and transport studies
 (EoE, FoE, PDO bulk transfer) build on the same pipeline.
 
-**Status:** M0–M5 — capture analysis, mailbox analysis, a discrete-event simulator, ESI/ENI
-import and a bus-budget planner; CLI, local server and UI. See [the roadmap](docs/roadmap.md).
+**Status:** M0–M6 — capture analysis, mailbox analysis, a discrete-event simulator, ESI/ENI
+import, a bus-budget planner, parameter studies with calibration and side-by-side comparison;
+CLI, local server and UI. M7 (live capture, master adapters, lab) needs hardware. See
+[the roadmap](docs/roadmap.md).
 
 ## Quick start
 
@@ -79,7 +81,7 @@ their wire time, idle time, mailbox headroom and capability checks.
 ## Simulation
 
 ```bash
-cargo run --release -p flowlab-cli -- simulate configs/studies/bulk-transfer/*.json
+cargo run --release -p flowlab-cli -- simulate configs/studies/bulk-transfer/{smoke,large-payload,mixed-load}.json
 cargo run --release -p flowlab-cli -- simulate configs/sim/example.json -o results/sim.pcapng --result results/sim.json
 ```
 
@@ -93,6 +95,20 @@ In the UI: **Simulate** in the header, then the **Sim run** view. Every number i
 output that depends on the spec's parameters — PDI rate and overhead above all — until it is
 calibrated against measurements.
 
+## Studies and calibration
+
+```bash
+cargo run --release -p flowlab-cli -- study configs/studies/bulk-transfer/foe-sweep.json
+cargo run --release -p flowlab-cli -- study calibrate.json --capture lab.pcapng --result fit.json
+```
+
+A study varies fields of a simulator spec (JSON pointers; grid or Latin hypercube), checks
+constraints and reports the Pareto frontier of its objectives. With targets — values measured
+directly or read from an analysed capture (FoE/SDO durations, EoE frame times, cycle period) —
+it is a calibration: the best run and its residuals. In the UI: the **Study** view (scatter of
+the runs, *Simulate this run*) and **Compare**, which puts two captures — say a lab measurement
+and a simulation of it — side by side, each column with its provenance.
+
 ## What it analyses
 
 | View | From the capture |
@@ -102,6 +118,8 @@ calibrated against measurements.
 | **Frames** | Every frame, filterable by direction, command, stream, station, mailbox protocol or problems; decoded datagrams (register names, AL states, mailbox messages) beside a hex view |
 | **Stations** | Configured station addresses, ring positions, reads/writes, no-response counts, AL state over time |
 | **Planner** | Frame layout, wire time, ring delay, idle time and bus-side mailbox headroom of a network; ESC RAM, mailbox size and protocol checks; devices imported from ESI |
+| **Study** | Runs of a parameter study: Pareto frontier scatter, all runs with objectives and reasons for rejection, calibration residuals |
+| **Compare** | Two captures side by side: timing, losses, WKC, load, mailbox and transfer quantities, ratio B/A |
 | **Sim run** | For a simulated run: transfers with time, goodput, link bound, TCP reference and integrity; protocol work; PDI load and ESC RAM per slave; model assumptions |
 | **Mailbox** | Per-slave mailbox SyncManagers and their use (accepted/rejected writes, empty reads, polling cadence); traffic per protocol; CoE SDO transfers with outcome, abort codes and duration; emergencies; FoE transfers with goodput; EoE frames reassembled (downloadable as pcapng) |
 
@@ -127,8 +145,9 @@ crates/
   flowlab-synth/     deterministic synthetic captures with ground truth
   flowlab-sim/       discrete-event simulator: master, link, ESC, PDI; bulk transfers
   flowlab-devices/   ESI/ENI readers, ENI writer, bus-budget planner
+  flowlab-study/     parameter studies: sweeps, Pareto frontier, calibration
   flowlab-server/    local HTTP API + static UI (axum)
-  flowlab-cli/       `flowlab synth | analyze | simulate | plan | esi | serve | schema`
+  flowlab-cli/       `flowlab synth | analyze | simulate | study | plan | esi | serve | schema`
 ui/                  React 19 + Vite + Tailwind 4 on the @vitavision lab-ui packages
 configs/synth/       example generator specs
 configs/sim/         example simulator spec; configs/studies/: study scenarios

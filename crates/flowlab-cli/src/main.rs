@@ -71,6 +71,20 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
+    /// Run a parameter study (sweep, Pareto frontier, calibration) over the simulator.
+    Study {
+        /// Study spec (see `flowlab schema study`). Omit to use the built-in example.
+        spec: Option<PathBuf>,
+        /// Capture to calibrate against (targets with `from_capture`).
+        #[arg(long)]
+        capture: Option<PathBuf>,
+        /// Network configuration (ENI) for analysing that capture.
+        #[arg(long, value_name = "XML")]
+        eni: Option<PathBuf>,
+        /// Write the result JSON.
+        #[arg(long)]
+        result: Option<PathBuf>,
+    },
     /// Lay out the cyclic frames of a network and check its budget.
     Plan {
         /// Plan spec (see `flowlab schema plan`). Omit to use the built-in example.
@@ -118,7 +132,7 @@ enum Cmd {
     /// Print a JSON Schema.
     Schema {
         /// Which schema.
-        #[arg(value_parser = ["synth", "sim", "plan"])]
+        #[arg(value_parser = ["synth", "sim", "plan", "study"])]
         which: String,
     },
 }
@@ -221,6 +235,7 @@ fn run(cli: Cli) -> Result<()> {
             let schema = match which.as_str() {
                 "sim" => flowlab_sim::spec_schema(),
                 "plan" => flowlab_devices::plan_schema(),
+                "study" => flowlab_study::spec_schema(),
                 _ => flowlab_synth::spec_schema(),
             };
             println!("{}", serde_json::to_string_pretty(&schema)?);
@@ -248,6 +263,29 @@ fn run(cli: Cli) -> Result<()> {
                         d.name
                     );
                 }
+            }
+        }
+        Cmd::Study { spec, capture, eni, result } => {
+            let spec: flowlab_study::StudySpec = match spec {
+                Some(p) => serde_json::from_reader(File::open(&p).map_err(|e| format!("{}: {e}", p.display()))?)
+                    .map_err(|e| format!("{}: {e}", p.display()))?,
+                None => flowlab_study::StudySpec::example(),
+            };
+            let report = match &capture {
+                Some(c) => {
+                    let file = CaptureFile::read(c).map_err(|e| format!("{}: {e}", c.display()))?;
+                    let name = c.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                    let opts =
+                        AnalysisOptions { network: eni.as_deref().map(read_eni).transpose()?, ..Default::default() };
+                    Some(analyze(&Trace::build(file, &name), &opts).report)
+                }
+                None => None,
+            };
+            let r = flowlab_study::run_study(&spec, report.as_ref())?;
+            print_study(&r);
+            if let Some(p) = result {
+                ensure_parent(&p)?;
+                serde_json::to_writer_pretty(BufWriter::new(File::create(&p)?), &r)?;
             }
         }
         Cmd::Plan { spec, json } => {
@@ -304,6 +342,45 @@ fn run(cli: Cli) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn print_study(r: &flowlab_study::StudyResult) {
+    println!(
+        "{}  [SIMULATED]  {} runs, {} feasible, {} Pareto-optimal",
+        r.description,
+        r.runs.len(),
+        r.feasible,
+        r.pareto.len()
+    );
+    let head: Vec<String> = r.parameters.iter().chain(&r.objectives).cloned().collect();
+    println!("  {:>4}  {}", "run", head.join("  |  "));
+    let mut shown: Vec<u32> = r.pareto.clone();
+    shown.sort_by(|a, b| {
+        let k = |i: &u32| r.runs[*i as usize].objectives.first().copied().flatten().unwrap_or(f64::INFINITY);
+        k(a).total_cmp(&k(b))
+    });
+    for i in shown.iter().take(15) {
+        let run = &r.runs[*i as usize];
+        let objs: Vec<String> = run.objectives.iter().map(|v| v.map_or("-".into(), |v| format!("{v:.4}"))).collect();
+        let mark = if r.best == Some(*i) { "*" } else { " " };
+        println!("  {:>3}{mark}  {}  |  {}", i, run.values.join("  |  "), objs.join("  |  "));
+    }
+    if r.pareto.len() > 15 {
+        println!("  … {} more Pareto-optimal runs in the result JSON", r.pareto.len() - 15);
+    }
+    for x in r.runs.iter().filter(|x| !x.feasible).take(3) {
+        println!("  infeasible run {}: {}", x.index, x.reason.as_deref().unwrap_or("?"));
+    }
+    for res in &r.residuals {
+        println!(
+            "  fit {}: measured {:.6} ({}), simulated {}, error {}",
+            res.label,
+            res.measured,
+            res.source,
+            res.simulated.map_or("-".into(), |v| format!("{v:.6}")),
+            res.relative_error.map_or("-".into(), |e| format!("{:+.2} %", 100.0 * e))
+        );
+    }
 }
 
 fn read_eni(p: &Path) -> Result<flowlab_devices::NetworkConfig> {

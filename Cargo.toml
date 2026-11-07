@@ -18,6 +18,7 @@ flowlab-analysis = { path = "crates/flowlab-analysis" }
 flowlab-synth = { path = "crates/flowlab-synth" }
 flowlab-sim = { path = "crates/flowlab-sim" }
 flowlab-devices = { path = "crates/flowlab-devices" }
+flowlab-study = { path = "crates/flowlab-study" }
 flowlab-server = { path = "crates/flowlab-server" }
 
 serde = { version = "1", features = ["derive"] }

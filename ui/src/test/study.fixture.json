@@ -1,0 +1,761 @@
+{
+  "meta": {
+    "schema_version": 1,
+    "tool": "ecat-flowlab",
+    "tool_version": "0.1.0",
+    "source": "simulated",
+    "input": {
+      "name": "study.json",
+      "bytes": 2072,
+      "sha256": "faf01a5bf49405dd524cb3fe4012fa8da288c996c8f9155ef77cd52df3f395d7"
+    },
+    "assumptions": [
+      "Every run is a simulation of the base spec with the listed parameters changed; the simulator's own assumptions apply to each.",
+      "A run is feasible when its spec is valid, every transfer finishes verified, and every constraint holds.",
+      "Pareto-optimal: no other feasible run is at least as good on every objective and better on one."
+    ]
+  },
+  "description": "FoE write: mailbox size × PDI rate × policy",
+  "parameters": [
+    "/slaves/2/mailbox_out_bytes",
+    "/mailbox_policy"
+  ],
+  "objectives": [
+    "transfer 0 time (s)",
+    "link utilization (%)"
+  ],
+  "goals": [
+    "minimize",
+    "minimize"
+  ],
+  "runs": [
+    {
+      "index": 0,
+      "values": [
+        "128",
+        "{\"kind\":\"fixed_quota\",\"accesses_per_cycle\":2}"
+      ],
+      "numeric": [
+        128.0,
+        null
+      ],
+      "objectives": [
+        1.726118763,
+        2.6891681920647326
+      ],
+      "feasible": true,
+      "reason": null,
+      "pareto": true,
+      "spec": {
+        "seed": 1,
+        "description": "Study base: one FoE write of 100 kB at 1 ms",
+        "link_bps": 100000000,
+        "cycle_time_us": 1000,
+        "master_jitter_ns": 2000,
+        "slaves": [
+          {
+            "name": "coupler",
+            "outputs_bytes": 0,
+            "inputs_bytes": 0,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 0,
+            "mailbox_in_bytes": 0,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          },
+          {
+            "name": "io-16",
+            "outputs_bytes": 2,
+            "inputs_bytes": 2,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 0,
+            "mailbox_in_bytes": 0,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          },
+          {
+            "name": "bulk-endpoint",
+            "outputs_bytes": 8,
+            "inputs_bytes": 8,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 128,
+            "mailbox_in_bytes": 128,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          }
+        ],
+        "mailbox_policy": {
+          "kind": "fixed_quota",
+          "accesses_per_cycle": 2
+        },
+        "transfers": [
+          {
+            "slave": 2,
+            "direction": "master_to_slave",
+            "payload_bytes": 100000,
+            "protocol": {
+              "kind": "foe"
+            },
+            "start_ms": 0.0
+          }
+        ],
+        "max_duration_ms": 60000,
+        "faults": {
+          "frame_loss_probability": 0.0
+        },
+        "capture": {
+          "enabled": false,
+          "max_frames": 200000
+        },
+        "start_unix_s": 1767225600
+      }
+    },
+    {
+      "index": 1,
+      "values": [
+        "128",
+        "{\"kind\":\"opportunistic\",\"bus_budget_percent\":60.0,\"turnaround_ns\":10000}"
+      ],
+      "numeric": [
+        128.0,
+        null
+      ],
+      "objectives": [
+        0.215618704,
+        36.38645630011844
+      ],
+      "feasible": true,
+      "reason": null,
+      "pareto": false,
+      "spec": null
+    },
+    {
+      "index": 2,
+      "values": [
+        "256",
+        "{\"kind\":\"fixed_quota\",\"accesses_per_cycle\":2}"
+      ],
+      "numeric": [
+        256.0,
+        null
+      ],
+      "objectives": [
+        0.820169347,
+        4.222699946666496
+      ],
+      "feasible": true,
+      "reason": null,
+      "pareto": true,
+      "spec": {
+        "seed": 1,
+        "description": "Study base: one FoE write of 100 kB at 1 ms",
+        "link_bps": 100000000,
+        "cycle_time_us": 1000,
+        "master_jitter_ns": 2000,
+        "slaves": [
+          {
+            "name": "coupler",
+            "outputs_bytes": 0,
+            "inputs_bytes": 0,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 0,
+            "mailbox_in_bytes": 0,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          },
+          {
+            "name": "io-16",
+            "outputs_bytes": 2,
+            "inputs_bytes": 2,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 0,
+            "mailbox_in_bytes": 0,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          },
+          {
+            "name": "bulk-endpoint",
+            "outputs_bytes": 8,
+            "inputs_bytes": 8,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 256,
+            "mailbox_in_bytes": 256,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          }
+        ],
+        "mailbox_policy": {
+          "kind": "fixed_quota",
+          "accesses_per_cycle": 2
+        },
+        "transfers": [
+          {
+            "slave": 2,
+            "direction": "master_to_slave",
+            "payload_bytes": 100000,
+            "protocol": {
+              "kind": "foe"
+            },
+            "start_ms": 0.0
+          }
+        ],
+        "max_duration_ms": 60000,
+        "faults": {
+          "frame_loss_probability": 0.0
+        },
+        "capture": {
+          "enabled": false,
+          "max_frames": 200000
+        },
+        "start_unix_s": 1767225600
+      }
+    },
+    {
+      "index": 3,
+      "values": [
+        "256",
+        "{\"kind\":\"opportunistic\",\"bus_budget_percent\":60.0,\"turnaround_ns\":10000}"
+      ],
+      "numeric": [
+        256.0,
+        null
+      ],
+      "objectives": [
+        0.136738685,
+        45.621944812369065
+      ],
+      "feasible": true,
+      "reason": null,
+      "pareto": true,
+      "spec": {
+        "seed": 1,
+        "description": "Study base: one FoE write of 100 kB at 1 ms",
+        "link_bps": 100000000,
+        "cycle_time_us": 1000,
+        "master_jitter_ns": 2000,
+        "slaves": [
+          {
+            "name": "coupler",
+            "outputs_bytes": 0,
+            "inputs_bytes": 0,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 0,
+            "mailbox_in_bytes": 0,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          },
+          {
+            "name": "io-16",
+            "outputs_bytes": 2,
+            "inputs_bytes": 2,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 0,
+            "mailbox_in_bytes": 0,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          },
+          {
+            "name": "bulk-endpoint",
+            "outputs_bytes": 8,
+            "inputs_bytes": 8,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 256,
+            "mailbox_in_bytes": 256,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          }
+        ],
+        "mailbox_policy": {
+          "kind": "opportunistic",
+          "bus_budget_percent": 60.0,
+          "turnaround_ns": 10000
+        },
+        "transfers": [
+          {
+            "slave": 2,
+            "direction": "master_to_slave",
+            "payload_bytes": 100000,
+            "protocol": {
+              "kind": "foe"
+            },
+            "start_ms": 0.0
+          }
+        ],
+        "max_duration_ms": 60000,
+        "faults": {
+          "frame_loss_probability": 0.0
+        },
+        "capture": {
+          "enabled": false,
+          "max_frames": 200000
+        },
+        "start_unix_s": 1767225600
+      }
+    },
+    {
+      "index": 4,
+      "values": [
+        "512",
+        "{\"kind\":\"fixed_quota\",\"accesses_per_cycle\":2}"
+      ],
+      "numeric": [
+        512.0,
+        null
+      ],
+      "objectives": [
+        0.400282798,
+        7.27822056579031
+      ],
+      "feasible": true,
+      "reason": null,
+      "pareto": true,
+      "spec": {
+        "seed": 1,
+        "description": "Study base: one FoE write of 100 kB at 1 ms",
+        "link_bps": 100000000,
+        "cycle_time_us": 1000,
+        "master_jitter_ns": 2000,
+        "slaves": [
+          {
+            "name": "coupler",
+            "outputs_bytes": 0,
+            "inputs_bytes": 0,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 0,
+            "mailbox_in_bytes": 0,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          },
+          {
+            "name": "io-16",
+            "outputs_bytes": 2,
+            "inputs_bytes": 2,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 0,
+            "mailbox_in_bytes": 0,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          },
+          {
+            "name": "bulk-endpoint",
+            "outputs_bytes": 8,
+            "inputs_bytes": 8,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 512,
+            "mailbox_in_bytes": 512,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          }
+        ],
+        "mailbox_policy": {
+          "kind": "fixed_quota",
+          "accesses_per_cycle": 2
+        },
+        "transfers": [
+          {
+            "slave": 2,
+            "direction": "master_to_slave",
+            "payload_bytes": 100000,
+            "protocol": {
+              "kind": "foe"
+            },
+            "start_ms": 0.0
+          }
+        ],
+        "max_duration_ms": 60000,
+        "faults": {
+          "frame_loss_probability": 0.0
+        },
+        "capture": {
+          "enabled": false,
+          "max_frames": 200000
+        },
+        "start_unix_s": 1767225600
+      }
+    },
+    {
+      "index": 5,
+      "values": [
+        "512",
+        "{\"kind\":\"opportunistic\",\"bus_budget_percent\":60.0,\"turnaround_ns\":10000}"
+      ],
+      "numeric": [
+        512.0,
+        null
+      ],
+      "objectives": [
+        0.133340805,
+        51.34196795932914
+      ],
+      "feasible": true,
+      "reason": null,
+      "pareto": true,
+      "spec": {
+        "seed": 1,
+        "description": "Study base: one FoE write of 100 kB at 1 ms",
+        "link_bps": 100000000,
+        "cycle_time_us": 1000,
+        "master_jitter_ns": 2000,
+        "slaves": [
+          {
+            "name": "coupler",
+            "outputs_bytes": 0,
+            "inputs_bytes": 0,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 0,
+            "mailbox_in_bytes": 0,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          },
+          {
+            "name": "io-16",
+            "outputs_bytes": 2,
+            "inputs_bytes": 2,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 0,
+            "mailbox_in_bytes": 0,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          },
+          {
+            "name": "bulk-endpoint",
+            "outputs_bytes": 8,
+            "inputs_bytes": 8,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 512,
+            "mailbox_in_bytes": 512,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          }
+        ],
+        "mailbox_policy": {
+          "kind": "opportunistic",
+          "bus_budget_percent": 60.0,
+          "turnaround_ns": 10000
+        },
+        "transfers": [
+          {
+            "slave": 2,
+            "direction": "master_to_slave",
+            "payload_bytes": 100000,
+            "protocol": {
+              "kind": "foe"
+            },
+            "start_ms": 0.0
+          }
+        ],
+        "max_duration_ms": 60000,
+        "faults": {
+          "frame_loss_probability": 0.0
+        },
+        "capture": {
+          "enabled": false,
+          "max_frames": 200000
+        },
+        "start_unix_s": 1767225600
+      }
+    },
+    {
+      "index": 6,
+      "values": [
+        "1024",
+        "{\"kind\":\"fixed_quota\",\"accesses_per_cycle\":2}"
+      ],
+      "numeric": [
+        1024.0,
+        null
+      ],
+      "objectives": [
+        0.198529285,
+        13.502152150057203
+      ],
+      "feasible": true,
+      "reason": null,
+      "pareto": true,
+      "spec": {
+        "seed": 1,
+        "description": "Study base: one FoE write of 100 kB at 1 ms",
+        "link_bps": 100000000,
+        "cycle_time_us": 1000,
+        "master_jitter_ns": 2000,
+        "slaves": [
+          {
+            "name": "coupler",
+            "outputs_bytes": 0,
+            "inputs_bytes": 0,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 0,
+            "mailbox_in_bytes": 0,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          },
+          {
+            "name": "io-16",
+            "outputs_bytes": 2,
+            "inputs_bytes": 2,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 0,
+            "mailbox_in_bytes": 0,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          },
+          {
+            "name": "bulk-endpoint",
+            "outputs_bytes": 8,
+            "inputs_bytes": 8,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 1024,
+            "mailbox_in_bytes": 1024,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          }
+        ],
+        "mailbox_policy": {
+          "kind": "fixed_quota",
+          "accesses_per_cycle": 2
+        },
+        "transfers": [
+          {
+            "slave": 2,
+            "direction": "master_to_slave",
+            "payload_bytes": 100000,
+            "protocol": {
+              "kind": "foe"
+            },
+            "start_ms": 0.0
+          }
+        ],
+        "max_duration_ms": 60000,
+        "faults": {
+          "frame_loss_probability": 0.0
+        },
+        "capture": {
+          "enabled": false,
+          "max_frames": 200000
+        },
+        "start_unix_s": 1767225600
+      }
+    },
+    {
+      "index": 7,
+      "values": [
+        "1024",
+        "{\"kind\":\"opportunistic\",\"bus_budget_percent\":60.0,\"turnaround_ns\":10000}"
+      ],
+      "numeric": [
+        1024.0,
+        null
+      ],
+      "objectives": [
+        0.099623152,
+        59.332912898722526
+      ],
+      "feasible": true,
+      "reason": null,
+      "pareto": true,
+      "spec": {
+        "seed": 1,
+        "description": "Study base: one FoE write of 100 kB at 1 ms",
+        "link_bps": 100000000,
+        "cycle_time_us": 1000,
+        "master_jitter_ns": 2000,
+        "slaves": [
+          {
+            "name": "coupler",
+            "outputs_bytes": 0,
+            "inputs_bytes": 0,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 0,
+            "mailbox_in_bytes": 0,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          },
+          {
+            "name": "io-16",
+            "outputs_bytes": 2,
+            "inputs_bytes": 2,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 0,
+            "mailbox_in_bytes": 0,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          },
+          {
+            "name": "bulk-endpoint",
+            "outputs_bytes": 8,
+            "inputs_bytes": 8,
+            "forwarding_delay_ns": 700,
+            "mailbox_out_bytes": 1024,
+            "mailbox_in_bytes": 1024,
+            "dpram_bytes": 4096,
+            "pdi": {
+              "read_bps": 20000000,
+              "write_bps": 20000000,
+              "access_overhead_ns": 5000,
+              "mailbox_access": "whole_buffer"
+            },
+            "app_processing_ns": 20000
+          }
+        ],
+        "mailbox_policy": {
+          "kind": "opportunistic",
+          "bus_budget_percent": 60.0,
+          "turnaround_ns": 10000
+        },
+        "transfers": [
+          {
+            "slave": 2,
+            "direction": "master_to_slave",
+            "payload_bytes": 100000,
+            "protocol": {
+              "kind": "foe"
+            },
+            "start_ms": 0.0
+          }
+        ],
+        "max_duration_ms": 60000,
+        "faults": {
+          "frame_loss_probability": 0.0
+        },
+        "capture": {
+          "enabled": false,
+          "max_frames": 200000
+        },
+        "start_unix_s": 1767225600
+      }
+    }
+  ],
+  "feasible": 8,
+  "pareto": [
+    0,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "best": 7,
+  "residuals": [],
+  "calibrated_against": null
+}

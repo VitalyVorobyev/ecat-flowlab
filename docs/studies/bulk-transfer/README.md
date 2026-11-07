@@ -10,7 +10,7 @@ behind an **external ESC** (e.g. LAN9252) on SPI. The Verdin's own Ethernet MAC 
 ESC. See [hardware-lab.md](hardware-lab.md) for the feasibility gate.
 
 **Status.** The simulator (M4) and mailbox analysis (M3) exist; the study's specs run with
-`flowlab simulate configs/studies/bulk-transfer/*.json`. Device descriptions (M5), sweeps (M6)
+`flowlab simulate configs/studies/bulk-transfer/{smoke,large-payload,mixed-load}.json`. Device descriptions (M5), sweeps (M6)
 and the lab work (M7) are still to come; until the model is calibrated against captures, its
 results answer "what does the outcome depend on", not "how fast will it be".
 
@@ -42,6 +42,9 @@ they describe the *tool* (architecture, milestones), `docs/architecture.md` and
 - Each simulated run reports per transfer: time, goodput, the time the payload alone needs on
   the link, a plain-Ethernet TCP reference, protocol work (messages, rejected writes, empty
   polls, resent chunks), PDI load and ESC RAM use, and a SHA-256 check of the received bytes.
+- `foe-sweep.json` is a study: mailbox size × PDI rate × master policy for a 100 kB FoE write,
+  with the Pareto frontier of transfer time against link load (`flowlab study …`). With a lab
+  capture, the same machinery fits PDI and policy parameters (calibration, M6).
 - Not modelled yet: TCP over EoE (EoE carries UDP-like datagrams), VoE, master CPU and OS
   scheduling beyond cycle jitter, several masters' real mailbox schedulers (see the policies).
 

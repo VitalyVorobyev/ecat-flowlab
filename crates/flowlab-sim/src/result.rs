@@ -36,6 +36,10 @@ pub struct TransferResult {
     pub end_ns: Option<f64>,
     /// `end − start`, ns.
     pub duration_ns: Option<f64>,
+    /// From the return of the frame carrying the transfer's first mailbox message to the
+    /// return of the frame carrying its last, ns — the span a capture at the master shows
+    /// (and `flowlab analyze` reports). Mailbox protocols only.
+    pub exchange_ns: Option<f64>,
     /// Payload bits / duration, bit/s.
     pub goodput_bps: Option<f64>,
     /// Mailbox messages master → slave (protocol messages, control included).
