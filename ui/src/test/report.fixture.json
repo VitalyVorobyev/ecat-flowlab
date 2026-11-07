@@ -16,7 +16,8 @@
       "Timestamps are taken as recorded by the capture tool; their accuracy is not known to FlowLab.",
       "Directions: source MAC without the locally-administered bit is TX, with it RX (ESCs set the bit on returning frames).",
       "Each station's mailbox SyncManagers come, in this order of preference, from SyncManager configuration writes in the capture (mailbox mode), the ENI, a user hint or a heuristic; the source is reported per channel. Messages are taken from returning datagrams at the mailbox start address with WKC > 0.",
-      "Logically mapped mailbox access and the SyncManager repeat mechanism are not interpreted; a message whose counter equals the previous one is treated as a repeat."
+      "Logically mapped mailbox access and the SyncManager repeat mechanism are not interpreted; a message whose counter equals the previous one is treated as a repeat.",
+      "Mailbox service pattern: cycles are those of cyclic stream 0; only sent reads and writes of the mailbox SyncManager buffers count, for slaves accessed in at least 10 cycles. A median above 1.5 mailbox frames per cycle is read as back-to-back polling (budget = 95th percentile of the last mailbox send in the cycle, turnaround = median return-to-send gap); otherwise as a fixed quota (95th percentile of accesses per cycle). The quota is per slave; a master that shares one quota among several slaves needs the sum."
     ]
   },
   "summary": {
@@ -11012,7 +11013,95 @@
           "CoE",
           "EoE",
           "FoE"
-        ]
+        ],
+        "service": {
+          "cycles": 262,
+          "accesses_per_cycle": {
+            "count": 262,
+            "min": 1.0,
+            "max": 1.0,
+            "mean": 1.0,
+            "std": 0.0,
+            "p50": 1.0,
+            "p1": 1.0,
+            "p5": 1.0,
+            "p95": 1.0,
+            "p99": 1.0,
+            "histogram": {
+              "lo": 0.9999999999999996,
+              "bin_width": 5e-16,
+              "counts": [
+                262
+              ]
+            }
+          },
+          "frames_per_cycle": {
+            "count": 262,
+            "min": 1.0,
+            "max": 1.0,
+            "mean": 1.0,
+            "std": 0.0,
+            "p50": 1.0,
+            "p1": 1.0,
+            "p5": 1.0,
+            "p95": 1.0,
+            "p99": 1.0,
+            "histogram": {
+              "lo": 0.9999999999999996,
+              "bin_width": 5e-16,
+              "counts": [
+                262
+              ]
+            }
+          },
+          "in_cyclic_frames": 0,
+          "turnaround": null,
+          "last_send_percent": {
+            "count": 262,
+            "min": 49.001256779950694,
+            "max": 51.33755471929105,
+            "mean": 50.013880314278225,
+            "std": 0.38785522913678433,
+            "p50": 50.01840588280565,
+            "p1": 49.107706686059835,
+            "p5": 49.39537643232959,
+            "p95": 50.645675329541945,
+            "p99": 51.03007499049407,
+            "histogram": {
+              "lo": 49.0,
+              "bin_width": 0.1,
+              "counts": [
+                3,
+                5,
+                4,
+                3,
+                6,
+                14,
+                16,
+                19,
+                32,
+                26,
+                27,
+                33,
+                17,
+                19,
+                9,
+                11,
+                8,
+                5,
+                1,
+                0,
+                2,
+                1,
+                1
+              ]
+            }
+          },
+          "pattern": {
+            "kind": "fixed_quota",
+            "accesses_per_cycle": 1
+          }
+        }
       },
       {
         "station": 4101,
@@ -11082,7 +11171,8 @@
         },
         "protocols": [
           "CoE"
-        ]
+        ],
+        "service": null
       },
       {
         "station": 4102,
@@ -11140,7 +11230,8 @@
         },
         "protocols": [
           "CoE"
-        ]
+        ],
+        "service": null
       }
     ],
     "protocols": [

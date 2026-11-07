@@ -29,6 +29,9 @@ source: [crates/flowlab-study](https://github.com/VitalyVorobyev/ecat-flowlab/bl
 | `Metric` | A number read from a `SimResult` |
 | `Objective` | `metric` + `goal` (`minimize` default, or `maximize`) |
 | `Constraint` | `metric` + optional `max` / `min` |
+| `lab::parse_samples`, `lab::fit_pdi` → `PdiFit` | PDI timing samples (CSV) → the PDI model's cost per access and effective rates, with residuals per access size; provenance `measured` |
+| `lab::mailbox_policy(&ServicePattern) -> MailboxPolicy` | the analysis's service pattern as a simulator policy |
+| `lab::LabInputs` (+ `apply(&mut SimSpec, slave)`, `lab::schema()`) | measured values replacing the placeholders of one slave and the master |
 | `Target`, `CaptureMetric` | A measured value to fit: `measured` directly, or `from_capture` |
 | `StudyResult`, `StudyRun`, `Residual` | Serialized results, exported to TypeScript |
 | `sim_metric(&SimResult, &Metric)`, `capture_metric(&CaptureReport, &CaptureMetric)` | The metric readers |
@@ -108,6 +111,21 @@ capture metric), measured and simulated values and `(sim − meas) / meas`.
 `calibrated_against` names the capture when a target read it. The assumptions state that a small
 error shows the model can reproduce these numbers, not that its parameters are the physical ones.
 
+## Lab inputs
+
+The PDI model charges every access a fixed cost plus its bytes at an effective rate.
+`fit_pdi` fits exactly that line: per access size the median duration (robust to preempted
+calls), then least squares through the medians. Intercept = cost per access, slope = 8 / rate;
+the simulator's single cost per access is the access-weighted mean of the read and write
+intercepts. Each direction needs two or more sizes; a slope ≤ 0 is an error. A direction without
+samples takes the other's values, and the assumptions say so.
+
+`mailbox_policy` maps the analysis's `ServicePattern` (see
+[flowlab-analysis § Mailbox](flowlab-analysis.md#mailbox)) one to one onto `MailboxPolicy`.
+`LabInputs::apply` writes `pdi`, `app_processing_ns` and `mailbox_policy` into a spec; fields
+left out keep the spec's values. CLI: `flowlab pdi-fit`, `flowlab policy`, `flowlab schema lab`;
+`scripts/bulk-transfer-report.py --lab` uses the file.
+
 ## Running
 
 `run_study` copies `base` to JSON, sets `/capture/enabled` to false (studies write no frames),
@@ -134,6 +152,9 @@ and the assumptions.
 | `sampling_rules` | `max_runs` refusal; Latin hypercube uses each value once and is deterministic; unknown pointer refused; log/integer range gives 10⁶, 10⁷, 10⁸ |
 | `calibration_recovers_hidden_pdi_parameters_from_a_capture` | A "measurement" simulated with hidden PDI rate and overhead, analysed as a capture; the grid's best run recovers both, fit error and residuals < 10⁻⁹, `calibrated_against` is the capture |
 | `shipped_study_is_the_example` | `foe-sweep.json` equals `StudySpec::example()` |
+| `analysis_reads_the_master_policy_back_from_a_simulated_capture` | A simulated FoE transfer with `fixed_quota` 2, then with `opportunistic` 60 % / 10 µs, captured and analysed: the service pattern gives back fixed quota 2, and back-to-back polling with a budget of 50–60 % and a 10 µs turnaround |
+| `lab::tests::fit_recovers_rate_and_overhead_despite_outliers` | Samples on known lines with spread and one preempted and one early call per size: rates and costs recovered exactly; combined cost is the access-weighted mean |
+| `lab::tests::bad_samples_are_rejected_with_their_line`, `lab_inputs_replace_placeholders` | Header, column and direction errors name the line; one size cannot be fitted; `apply` sets the slave's PDI, application time and the policy |
 
 ## Example
 

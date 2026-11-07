@@ -9,6 +9,7 @@ use flowlab_core::{Provenance, ReportMeta, units};
 
 use crate::mailbox::{self, Channels, MailboxAnalysis, MailboxHint};
 use crate::report::*;
+use crate::service;
 use crate::stats::{Distribution, decimate, nice_step};
 
 /// Tunables and declared thresholds.
@@ -189,6 +190,22 @@ pub fn analyze(trace: &Trace, opts: &AnalysisOptions) -> Analysis {
         ));
     }
 
+    let mut mailbox_report = mailbox_report;
+    if directions_known && let (Some((_, cycle_frames)), Some(s0)) = (candidates.first(), streams.first()) {
+        let mut service = service::analyze(
+            trace,
+            &order,
+            &pair_of,
+            &stream_of,
+            &mailbox.channels,
+            (cycle_frames, s0.period_ns),
+            opts.histogram_bins,
+        );
+        for c in &mut mailbox_report.channels {
+            c.service = service.remove(&c.station);
+        }
+    }
+
     let utilization = utilization(trace, opts, directions_known);
     let (mut stations, al_events, slaves_responding) = stations(trace, &order, directions_known);
     if let Some(n) = &opts.network {
@@ -201,6 +218,9 @@ pub fn analyze(trace: &Trace, opts: &AnalysisOptions) -> Analysis {
     mailbox::findings(&mailbox_report, &mut findings);
     let mut assumptions = assumptions(trace, opts);
     assumptions.extend(mailbox::assumptions(&mailbox_report));
+    if mailbox_report.channels.iter().any(|c| c.service.is_some()) {
+        assumptions.push(service::ASSUMPTION.to_owned());
+    }
     let meta = ReportMeta::new(trace.provenance, trace.input.clone(), assumptions);
     let report =
         CaptureReport { meta, summary, streams, utilization, stations, al_events, mailbox: mailbox_report, findings };

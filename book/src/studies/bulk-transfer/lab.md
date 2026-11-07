@@ -15,8 +15,8 @@ ports connect to the master. Before any transfer work:
 - Program the ESC's EEPROM/SII identity, and make the ESI match it. Check that the SyncManager,
   mailbox and PDO sizes fit the 4 KiB of ESC RAM (`flowlab plan` checks this).
 - Measure the SPI's effective read and write rates and per-access latency on the Verdin, both
-  with a kernel driver and with user-space spidev. The [report](report.md) shows why this comes
-  first.
+  with a kernel driver and with user-space spidev (see [Measuring the SPI](#measuring-the-spi)).
+  The [report](report.md) shows why this comes first.
 - Keep the lab network isolated. Never connect production equipment. Never run two masters on
   one segment.
 
@@ -38,9 +38,51 @@ The development Mac only runs FlowLab; it is not a lab master.
 | L1 | ESC bring-up: PDI register access, EEPROM, identity, state machine, small PDOs | capture → Stations (AL states), Timing (cycle, WKC) |
 | L2 | Basic transfer: 1 KB, 1 MB, 10 MB with integrity, timeouts and diagnostics | Mailbox view: messages, rejected writes, empty reads |
 | L3 | One protocol at a time: FoE, EoE, CoE, VoE, PDO channel, each verified on both ends | per-protocol transfer tables, Compare |
-| L4 | Calibration: fit PDI and master parameters to the captures; report residuals | `flowlab study --capture`, targets from FoE/SDO spans |
-| L5 | Optimisation: constrained sweeps; check the best candidates over several trials with control traffic present | the report's script, re-run with calibrated values |
+| L4 | Calibration: measured PDI timing and master policy as lab inputs; check against the captures and report residuals | `flowlab pdi-fit`, `flowlab policy`, `flowlab study --capture` |
+| L5 | Optimisation: constrained sweeps; check the best candidates over several trials with control traffic present | `scripts/bulk-transfer-report.py --lab lab.json --out DIR` |
 | L6 | Other masters, only once L0–L5 work | Compare per master |
+
+## Measuring the SPI
+
+The simulator charges every PDI access a fixed cost plus its bytes at an effective rate. Measure
+those on the target, with the driver and stack that will ship:
+
+1. Wrap the slave stack's ESC read and write functions (the hardware layer every access goes
+   through) with a monotonic clock, and log one line per call: direction, bytes, duration in ns.
+   Keep the logging out of the timed section, for example in a preallocated ring buffer written
+   out at the end.
+2. Run a representative workload: mailbox traffic with several message sizes (an FoE transfer,
+   some SDO uploads) and process data. Each direction needs at least two different access sizes.
+3. Save it as [PDI timing samples](../../reference/specs.md#pdi-timing-samples) and fit:
+
+   ```bash
+   flowlab pdi-fit spi.csv --result spi-fit.json --lab lab.json
+   ```
+
+   The output lists, per access size, the median, the 95th percentile and the fitted line. If
+   some sizes are far off the line (long accesses split into chunks, a DMA threshold), the line
+   is the wrong model for those sizes. Time the sizes the application actually uses, and note it
+   in `lab.json`'s `description`.
+4. Repeat with each driver variant (kernel driver, spidev, SPI clock) as its own file.
+
+Whether the application reads the whole mailbox buffer or only the message is a property of the
+stack. Set `pdi.mailbox_access` in `lab.json` to `"whole_buffer"` or `"message_only"`
+accordingly. Also measure the time from the mailbox interrupt to the reply being written, and set
+it as `app_processing_ns`.
+
+## Capturing the master's mailbox service
+
+Capture at the master's port, or with a tap, while it moves a file to the slave with FoE. Then:
+
+```bash
+flowlab policy master-foe.pcapng --lab lab.json        # --mailbox / --eni if SM setup is not in the capture
+python3 scripts/bulk-transfer-report.py --lab lab.json --out results/report-lab
+```
+
+`flowlab policy` needs known directions (the capture shows sent and returning frames), a cyclic
+stream, and mailbox accesses in at least 10 cycles. It prints accesses and frames per cycle, the
+turnaround and the last send in the cycle, and the policy it stores. The re-run report labels
+every table with the lab inputs it used.
 
 ## Stop/go decisions
 

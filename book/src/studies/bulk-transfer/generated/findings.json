@@ -2,6 +2,7 @@
  "source": "simulated",
  "generator": "scripts/bulk-transfer-report.py",
  "payload_bytes": 10000000,
+ "lab": null,
  "studies": {
   "01-protocol-policy": {
    "description": "Protocol × master mailbox policy, 512 B mailboxes, 1 ms cycle",

@@ -147,6 +147,16 @@ the first and last message.
 reassembled EoE frames as a pcapng that carries the source capture's provenance
 (`flowlab analyze --eoe-out`).
 
+**Service pattern** (`service.rs`). With known directions and a cyclic stream, every station
+whose mailbox buffers were read or written in at least 10 cycles of stream 0 gets a
+`MailboxService`: accesses and frames per cycle, accesses inside cyclic frames, the turnaround
+from a mailbox frame's return to the next send within a cycle, and the send time of the cycle's
+last mailbox frame as a percentage of the period. Only sent reads and writes of the buffers
+count, not status polls. `pattern` names the simulator policy: a median above 1.5 frames per
+cycle is `Opportunistic` (budget = 95th percentile of the last send, rounded up; turnaround =
+median), anything else `FixedQuota` (95th percentile of accesses per cycle, at least 1). The rule
+is added to the assumptions when a pattern is reported.
+
 ## Side tables and frames
 
 | `Analysis` field | Per frame / key |

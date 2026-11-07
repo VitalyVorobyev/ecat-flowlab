@@ -19,6 +19,8 @@
 //! * **Mailbox**: SyncManager configuration writes give each slave's mailbox addresses;
 //!   returning datagrams there carry the messages, which [`mailbox`] follows as CoE SDO
 //!   transfers, FoE file transfers and EoE fragment streams.
+//! * **Mailbox service**: per slave, how many mailbox accesses and frames the master sends per
+//!   cycle and how far into the cycle, read as the simulator policy that produces the pattern.
 //!
 //! Every heuristic is written into the report's `meta.assumptions`, and every threshold behind
 //! a finding is a field of [`AnalysisOptions`].
@@ -42,6 +44,7 @@ mod analyze;
 pub mod frames;
 pub mod mailbox;
 mod report;
+mod service;
 mod stats;
 
 pub use analyze::{Analysis, AnalysisOptions, analyze};

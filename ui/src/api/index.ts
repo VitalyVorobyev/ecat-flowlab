@@ -33,6 +33,8 @@ export type { EmergencyEvent } from "./gen/EmergencyEvent";
 export type { EoeFrame } from "./gen/EoeFrame";
 export type { FoeTransfer } from "./gen/FoeTransfer";
 export type { MailboxChannel } from "./gen/MailboxChannel";
+export type { MailboxService } from "./gen/MailboxService";
+export type { ServicePattern } from "./gen/ServicePattern";
 export type { MailboxErrorEvent } from "./gen/MailboxErrorEvent";
 export type { MailboxInfo } from "./gen/MailboxInfo";
 export type { MailboxReport } from "./gen/MailboxReport";
