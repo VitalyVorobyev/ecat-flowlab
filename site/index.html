@@ -270,11 +270,11 @@
           </div>
           <pre><code>git clone https://github.com/VitalyVorobyev/ecat-flowlab
 cd ecat-flowlab
-cargo ui               # builds the UI, serves a demo capture
+cargo ui               # builds the UI and opens Simulate
                        # on http://127.0.0.1:7878
 
-cargo run -p flowlab-cli -- analyze results/demo.pcapng
-cargo ui my-capture.pcapng</code></pre>
+cargo ui my-capture.pcapng   # analyse your capture
+cargo ui --demo              # …or a synthetic one</code></pre>
         </div>
       </section>
     </main>

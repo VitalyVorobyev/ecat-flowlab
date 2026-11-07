@@ -9,26 +9,28 @@ flowlab serve [CAPTURES…] [--eni network.xml] [--mailbox STATION=OUT,IN] [--op
 
 ## Layout
 
-The header holds the capture selector, **Synthesize…** (generator form) and **Simulate…**
-(simulator form). The status bar shows the selected capture's provenance, frame count and
-span. The navigation rail on the left leads to the views:
+The header holds the capture selector, **Generate** (generator form) and **Open capture…**. The
+status bar shows the selected capture's provenance, frame count and span. The navigation rail
+on the left leads to the views:
 
 | View | Shows |
 |---|---|
+| **Simulate** | Set up a segment and its transfers, see the simulated result after every edit, and which single change (or pair) would shorten it most ([Simulation](simulation.md#the-simulate-view)) |
+| **Study** | Parameter sweeps over the simulator: Pareto scatter, all runs, calibration residuals |
+| **Planner** | Frame layout and bus budget of a network; ESI import |
 | **Captures** | Loaded captures with provenance, size and duration; drop files here or open a local path |
 | **Overview** | Headline numbers, findings, link load over time, datagrams by command; Attach ENI… |
 | **Timing** | Per cyclic stream: period, phase jitter against the cycle grid, interval distribution, round trip, gaps and missed cycles, working counters per datagram |
 | **Frames** | Every frame, filtered by direction, command, stream, station, mailbox protocol or problems; decoded datagrams next to a hex view |
 | **Stations** | Station addresses, ring positions, reads and writes, no-response counts, AL state over time |
 | **Mailbox** | Mailbox channels and their use, traffic per protocol, SDO transfers, emergencies, FoE transfers, EoE frames |
-| **Planner** | Frame layout and bus budget of a network; ESI import |
-| **Study** | Parameter sweeps over the simulator: Pareto scatter, all runs, calibration residuals |
 | **Compare** | Two captures side by side, each column with its provenance |
-| **Sim run** | The simulator's result for a simulated capture: transfers, protocol work, PDI and ESC RAM per slave |
+| **Sim run** | For a simulated capture: the setup that was simulated, transfers, PDI and ESC RAM per slave, protocol work; *Edit in Simulate* |
 
 Views that need an analysed capture are disabled until one is selected. **Sim run** is
-available for simulated captures. Light and dark themes follow the system and can be switched
-in the header.
+available for simulated captures. The UI opens on **Simulate**, or on **Overview** when the
+server was started with captures; the view is kept in the address (`#simulate`, `#frames`, …).
+Light and dark themes follow the system and can be switched in the header.
 
 ## Reading the views
 
@@ -41,10 +43,11 @@ in the header.
 
 ## Generating captures from the UI
 
-**Synthesize…** and **Simulate…** open a form generated from the JSON Schema of the
-[generator](synth.md) or [simulator](simulation.md) spec, pre-filled with an example. The
-resulting capture is added to the list and analysed like a file. **Study** has the same form for
-study specs, plus *Simulate this run* for any Pareto-optimal or best run.
+**Generate** opens a form generated from the JSON Schema of the [generator](synth.md) spec,
+pre-filled with an example; *Open frames* in **Simulate** writes the
+[simulator](simulation.md)'s frames. The resulting capture is added to the list and analysed
+like a file. **Study** has a schema form for study specs, plus *Simulate this run* for any
+Pareto-optimal or best run.
 
 ## Security
 

@@ -109,6 +109,18 @@ enum Cmd {
         #[arg(long)]
         result: Option<PathBuf>,
     },
+    /// Rank one-change variants of a scenario by how much they shorten its transfers.
+    ///
+    /// Each variant doubles or halves one parameter (cycle, PDI rate and overhead, mailboxes,
+    /// mailbox policy, application time) or switches one choice (protocol, mailbox access);
+    /// pairs of non-protocol changes are tried too.
+    WhatIf {
+        /// Spec file (see `flowlab schema sim`). Omit to use the built-in example.
+        spec: Option<PathBuf>,
+        /// Write the result JSON.
+        #[arg(long)]
+        result: Option<PathBuf>,
+    },
     /// Serve the web UI and API on localhost.
     Serve {
         /// Captures to load at start.
@@ -405,6 +417,19 @@ fn run(cli: Cli) -> Result<()> {
                 print_plan(&r);
             }
         }
+        Cmd::WhatIf { spec, result } => {
+            let spec: SimSpec = match &spec {
+                Some(p) => serde_json::from_reader(File::open(p).map_err(|e| format!("{}: {e}", p.display()))?)
+                    .map_err(|e| format!("{}: {e}", p.display()))?,
+                None => SimSpec::example(),
+            };
+            let r = flowlab_study::what_if(&spec)?;
+            print_what_if(&spec, &r);
+            if let Some(p) = result {
+                ensure_parent(&p)?;
+                serde_json::to_writer_pretty(BufWriter::new(File::create(&p)?), &r)?;
+            }
+        }
         Cmd::Simulate { specs, out, result } => {
             if specs.len() > 1 && out.is_some() {
                 return Err("--out takes one spec; run the specs separately to keep their captures".into());
@@ -447,6 +472,49 @@ fn run(cli: Cli) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn print_what_if(spec: &SimSpec, r: &flowlab_study::WhatIfResult) {
+    let secs = |v: Option<f64>| v.map_or("–".to_owned(), |ns| format!("{:.3} s", ns / 1e9));
+    let singles = r.changes.iter().filter(|c| c.parts.is_empty()).count();
+    println!("{}  [SIMULATED]  {singles} single changes, {} pairs", spec.description, r.changes.len() - singles);
+    match r.base.finish_ns {
+        Some(f) => println!("  as given: all transfers done after {}", secs(Some(f))),
+        None => println!("  as given: {}", r.base.reason.as_deref().unwrap_or("not feasible")),
+    }
+    println!("  {:>10}  {:>8}  change", "done after", "vs. now");
+    for c in r.changes.iter().filter(|c| c.parts.is_empty()) {
+        let delta = match (c.run.finish_ns, r.base.finish_ns) {
+            (Some(x), Some(b)) if b > 0.0 => format!("{:+.1} %", 100.0 * (x - b) / b),
+            _ => "–".into(),
+        };
+        let tail = c.run.reason.as_deref().map(|r| format!("  ({r})")).unwrap_or_default();
+        println!("  {:>10}  {:>8}  {}{tail}", secs(c.run.finish_ns), delta, c.label);
+    }
+    // Pairs worth showing: better than either change alone by more than 1 % of the base.
+    let alone = |label: &str| {
+        r.changes.iter().find(|c| c.label == label).and_then(|c| c.run.finish_ns).unwrap_or(f64::INFINITY)
+    };
+    let together: Vec<_> = r
+        .changes
+        .iter()
+        .filter(|c| c.parts.len() == 2)
+        .filter(|c| match (c.run.finish_ns, r.base.finish_ns) {
+            (Some(x), Some(b)) => x < alone(&c.parts[0]).min(alone(&c.parts[1])) - 0.01 * b,
+            _ => false,
+        })
+        .take(5)
+        .collect();
+    if !together.is_empty() {
+        println!("  two changes together, better than either alone:");
+        for c in together {
+            let delta = match (c.run.finish_ns, r.base.finish_ns) {
+                (Some(x), Some(b)) if b > 0.0 => format!("{:+.1} %", 100.0 * (x - b) / b),
+                _ => "–".into(),
+            };
+            println!("  {:>10}  {:>8}  {}", secs(c.run.finish_ns), delta, c.label);
+        }
+    }
 }
 
 fn print_study(r: &flowlab_study::StudyResult) {

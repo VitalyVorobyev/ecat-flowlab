@@ -16,15 +16,16 @@ cd ecat-flowlab
 cargo ui
 ```
 
-`cargo ui` installs the UI's dependencies and builds it when the sources changed, generates the
-synthetic demo capture on first use, and serves both on <http://127.0.0.1:7878>, opening a
-browser. Drop a `.pcap` or `.pcapng` onto it, open a path on this machine, or generate a capture
-from the header.
+`cargo ui` installs the UI's dependencies and builds it when the sources changed, serves it on
+<http://127.0.0.1:7878> and opens a browser on **Simulate**: pick a preset such as *10 MB
+download over SPI*, change the setup, and read what limits the transfers
+([Simulation](guide/simulation.md#the-simulate-view)). To analyse traffic, drop a `.pcap` or
+`.pcapng` onto the page, open a path on this machine, or start with `cargo ui --demo`.
 
 | Command | Does |
 |---|---|
-| `cargo ui [--no-open] [CAPTURES…] [-- SERVE OPTIONS]` | build the UI if needed and serve it with the given captures (default: the demo), e.g. `cargo ui run.pcapng -- --eni network.xml --port 8080` |
-| `cargo ui-dev [--no-open] [CAPTURES…]` | the API server plus Vite's dev server on <http://localhost:5173>, reloading on UI changes |
+| `cargo ui [--no-open] [--demo] [CAPTURES…] [-- SERVE OPTIONS]` | build the UI if needed and serve it with the given captures, e.g. `cargo ui run.pcapng -- --eni network.xml --port 8080`; `--demo` adds the synthetic demo capture (generated once) |
+| `cargo ui-dev [--no-open] [--demo] [CAPTURES…]` | the API server plus Vite's dev server on <http://localhost:5173>, reloading on UI changes |
 | `cargo ci` | the checks CI runs: rustfmt, clippy, tests, generated types, rustdoc, UI lint/types/tests/build, the book |
 | `cargo site` | the Pages site (start page, findings, book, API docs) in `_site/` |
 

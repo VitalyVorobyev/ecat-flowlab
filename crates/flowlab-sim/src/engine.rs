@@ -1207,5 +1207,6 @@ pub fn simulate<W: Write>(spec: &SimSpec, capture: Option<W>) -> Result<SimResul
         slaves,
         capture_frames: sim.capture.written,
         capture_truncated: sim.capture.truncated,
+        spec: spec.clone(),
     })
 }

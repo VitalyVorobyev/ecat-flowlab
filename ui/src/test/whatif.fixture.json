@@ -1,0 +1,1453 @@
+{
+  "meta": {
+    "schema_version": 1,
+    "tool": "ecat-flowlab",
+    "tool_version": "0.1.0",
+    "source": "simulated",
+    "input": {
+      "name": "scenario.json",
+      "bytes": 1729,
+      "sha256": "06cfd3a418e7b4ef8423036e50881769b6f2ccc4f9964375f45390afc33c334b"
+    },
+    "assumptions": [
+      "Each change is a separate simulation of the scenario with one parameter doubled or halved, or one choice switched; the simulator's own assumptions apply to each run.",
+      "Pairs of the first 8 changes that are not protocol switches are also simulated together, since two limits can coincide; larger combinations are not tried.",
+      "The opportunistic policy tried uses 60 % of the cycle and a 10 µs master turnaround; a PDO channel tried in place of a mailbox protocol carries 256 B per cycle with a window of 2. These are model choices, not properties of a particular master.",
+      "Whether a slave or master supports a change (a faster SPI clock, larger mailboxes, another protocol) is not checked beyond the ESC RAM the SyncManagers need."
+    ]
+  },
+  "base": {
+    "feasible": true,
+    "reason": null,
+    "transfer_ns": [21366447.0, 33002139.0, 31297258.0, 32135456.0],
+    "finish_ns": 90369642.0,
+    "link_utilization_percent": 8.751285228170318,
+    "pdi_busy_percent_max": 32.302103339969875,
+    "dpram_used_percent_max": 45.21484375
+  },
+  "changes": [
+    {
+      "label": "Cycle time 1000 µs → 500 µs + Opportunistic mailbox policy (60 % of the cycle, 10 µs turnaround)",
+      "lever": "combined",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/cycle_time_us",
+          "value": 500
+        },
+        {
+          "path": "/mailbox_policy",
+          "value": {
+            "kind": "opportunistic",
+            "bus_budget_percent": 60.0,
+            "turnaround_ns": 10000
+          }
+        }
+      ],
+      "parts": [
+        "Cycle time 1000 µs → 500 µs",
+        "Opportunistic mailbox policy (60 % of the cycle, 10 µs turnaround)"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [10866447.0, 10101922.0, 9321634.0, 17186828.0],
+        "finish_ns": 32565974.0,
+        "link_utilization_percent": 51.79086891934966,
+        "pdi_busy_percent_max": 79.3741184356209,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "Cycle time 1000 µs → 500 µs + Mailboxes on bulk-endpoint ×2 (out 512 → 1024 B, in 512 → 1024 B)",
+      "lever": "combined",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/cycle_time_us",
+          "value": 500
+        },
+        {
+          "path": "/slaves/2/mailbox_out_bytes",
+          "value": 1024
+        },
+        {
+          "path": "/slaves/2/mailbox_in_bytes",
+          "value": 1024
+        }
+      ],
+      "parts": [
+        "Cycle time 1000 µs → 500 µs",
+        "Mailboxes on bulk-endpoint ×2 (out 512 → 1024 B, in 512 → 1024 B)"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [7108224.0, 12964545.0, 11457437.0, 23171652.0],
+        "finish_ns": 33572676.0,
+        "link_utilization_percent": 25.971674532307606,
+        "pdi_busy_percent_max": 77.11877257446874,
+        "dpram_used_percent_max": 70.21484375
+      }
+    },
+    {
+      "label": "Opportunistic mailbox policy (60 % of the cycle, 10 µs turnaround) + PDI rate ×2 on bulk-endpoint (read 20 Mbit/s → 40 Mbit/s, write 20 Mbit/s → 40 Mbit/s)",
+      "lever": "combined",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/mailbox_policy",
+          "value": {
+            "kind": "opportunistic",
+            "bus_budget_percent": 60.0,
+            "turnaround_ns": 10000
+          }
+        },
+        {
+          "path": "/slaves/2/pdi/read_bps",
+          "value": 40000000
+        },
+        {
+          "path": "/slaves/2/pdi/write_bps",
+          "value": 40000000
+        }
+      ],
+      "parts": [
+        "Opportunistic mailbox policy (60 % of the cycle, 10 µs turnaround)",
+        "PDI rate ×2 on bulk-endpoint (read 20 Mbit/s → 40 Mbit/s, write 20 Mbit/s → 40 Mbit/s)"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [4367738.0, 8891510.0, 7505746.0, 32082656.0],
+        "finish_ns": 34082656.0,
+        "link_utilization_percent": 32.09147421070645,
+        "pdi_busy_percent_max": 33.00312342062204,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "Opportunistic mailbox policy (60 % of the cycle, 10 µs turnaround) + bulk-endpoint reads and writes only the message, not the whole mailbox buffer",
+      "lever": "combined",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/mailbox_policy",
+          "value": {
+            "kind": "opportunistic",
+            "bus_budget_percent": 60.0,
+            "turnaround_ns": 10000
+          }
+        },
+        {
+          "path": "/slaves/2/pdi/mailbox_access",
+          "value": "message_only"
+        }
+      ],
+      "parts": [
+        "Opportunistic mailbox policy (60 % of the cycle, 10 µs turnaround)",
+        "bulk-endpoint reads and writes only the message, not the whole mailbox buffer"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [5756234.0, 7938634.0, 7447706.0, 32135456.0],
+        "finish_ns": 34135456.0,
+        "link_utilization_percent": 33.21931515380456,
+        "pdi_busy_percent_max": 42.84395781183859,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "Opportunistic mailbox policy (60 % of the cycle, 10 µs turnaround) + Mailboxes on bulk-endpoint ×2 (out 512 → 1024 B, in 512 → 1024 B)",
+      "lever": "combined",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/mailbox_policy",
+          "value": {
+            "kind": "opportunistic",
+            "bus_budget_percent": 60.0,
+            "turnaround_ns": 10000
+          }
+        },
+        {
+          "path": "/slaves/2/mailbox_out_bytes",
+          "value": 1024
+        },
+        {
+          "path": "/slaves/2/mailbox_in_bytes",
+          "value": 1024
+        }
+      ],
+      "parts": [
+        "Opportunistic mailbox policy (60 % of the cycle, 10 µs turnaround)",
+        "Mailboxes on bulk-endpoint ×2 (out 512 → 1024 B, in 512 → 1024 B)"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [5572394.0, 9072437.0, 7523561.0, 32135456.0],
+        "finish_ns": 34135456.0,
+        "link_utilization_percent": 38.919844554144404,
+        "pdi_busy_percent_max": 63.187199960716654,
+        "dpram_used_percent_max": 70.21484375
+      }
+    },
+    {
+      "label": "Opportunistic mailbox policy (60 % of the cycle, 10 µs turnaround) + Application processing on bulk-endpoint 20 µs → 10 µs",
+      "lever": "combined",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/mailbox_policy",
+          "value": {
+            "kind": "opportunistic",
+            "bus_budget_percent": 60.0,
+            "turnaround_ns": 10000
+          }
+        },
+        {
+          "path": "/slaves/2/app_processing_ns",
+          "value": 10000
+        }
+      ],
+      "parts": [
+        "Opportunistic mailbox policy (60 % of the cycle, 10 µs turnaround)",
+        "Application processing on bulk-endpoint 20 µs → 10 µs"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [7354265.0, 17004086.0, 15734061.0, 32135456.0],
+        "finish_ns": 43357069.0,
+        "link_utilization_percent": 48.91124020021639,
+        "pdi_busy_percent_max": 54.40390062340814,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "Opportunistic mailbox policy (60 % of the cycle, 10 µs turnaround) + PDI access overhead on bulk-endpoint 5 µs → 2.5 µs",
+      "lever": "combined",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/mailbox_policy",
+          "value": {
+            "kind": "opportunistic",
+            "bus_budget_percent": 60.0,
+            "turnaround_ns": 10000
+          }
+        },
+        {
+          "path": "/slaves/2/pdi/access_overhead_ns",
+          "value": 2500
+        }
+      ],
+      "parts": [
+        "Opportunistic mailbox policy (60 % of the cycle, 10 µs turnaround)",
+        "PDI access overhead on bulk-endpoint 5 µs → 2.5 µs"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [7359265.0, 17004086.0, 15739061.0, 32132956.0],
+        "finish_ns": 43362069.0,
+        "link_utilization_percent": 48.91124020021639,
+        "pdi_busy_percent_max": 53.41530901601,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "Opportunistic mailbox policy (60 % of the cycle, 10 µs turnaround)",
+      "lever": "mailbox_policy",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/mailbox_policy",
+          "value": {
+            "kind": "opportunistic",
+            "bus_budget_percent": 60.0,
+            "turnaround_ns": 10000
+          }
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [7364265.0, 17004086.0, 15744061.0, 32135456.0],
+        "finish_ns": 43367069.0,
+        "link_utilization_percent": 48.91124020021639,
+        "pdi_busy_percent_max": 54.40390062340814,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "bulk-endpoint reads and writes only the message, not the whole mailbox buffer + Mailboxes on bulk-endpoint ×2 (out 512 → 1024 B, in 512 → 1024 B)",
+      "lever": "combined",
+      "slave": 2,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/slaves/2/pdi/mailbox_access",
+          "value": "message_only"
+        },
+        {
+          "path": "/slaves/2/mailbox_out_bytes",
+          "value": 1024
+        },
+        {
+          "path": "/slaves/2/mailbox_in_bytes",
+          "value": 1024
+        }
+      ],
+      "parts": [
+        "bulk-endpoint reads and writes only the message, not the whole mailbox buffer",
+        "Mailboxes on bulk-endpoint ×2 (out 512 → 1024 B, in 512 → 1024 B)"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [10450438.0, 16095188.0, 15421036.0, 32135456.0],
+        "finish_ns": 44538722.0,
+        "link_utilization_percent": 14.222976910162002,
+        "pdi_busy_percent_max": 34.38703443762023,
+        "dpram_used_percent_max": 70.21484375
+      }
+    },
+    {
+      "label": "PDI rate ×2 on bulk-endpoint (read 20 Mbit/s → 40 Mbit/s, write 20 Mbit/s → 40 Mbit/s) + Mailboxes on bulk-endpoint ×2 (out 512 → 1024 B, in 512 → 1024 B)",
+      "lever": "combined",
+      "slave": 2,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/slaves/2/pdi/read_bps",
+          "value": 40000000
+        },
+        {
+          "path": "/slaves/2/pdi/write_bps",
+          "value": 40000000
+        },
+        {
+          "path": "/slaves/2/mailbox_out_bytes",
+          "value": 1024
+        },
+        {
+          "path": "/slaves/2/mailbox_in_bytes",
+          "value": 1024
+        }
+      ],
+      "parts": [
+        "PDI rate ×2 on bulk-endpoint (read 20 Mbit/s → 40 Mbit/s, write 20 Mbit/s → 40 Mbit/s)",
+        "Mailboxes on bulk-endpoint ×2 (out 512 → 1024 B, in 512 → 1024 B)"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [10344638.0, 17001478.0, 15227724.0, 32082656.0],
+        "finish_ns": 45344950.0,
+        "link_utilization_percent": 14.162807175753082,
+        "pdi_busy_percent_max": 26.32994297285418,
+        "dpram_used_percent_max": 70.21484375
+      }
+    },
+    {
+      "label": "Mailboxes on bulk-endpoint ×2 (out 512 → 1024 B, in 512 → 1024 B) + Application processing on bulk-endpoint 20 µs → 10 µs",
+      "lever": "combined",
+      "slave": 2,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/slaves/2/mailbox_out_bytes",
+          "value": 1024
+        },
+        {
+          "path": "/slaves/2/mailbox_in_bytes",
+          "value": 1024
+        },
+        {
+          "path": "/slaves/2/app_processing_ns",
+          "value": 10000
+        }
+      ],
+      "parts": [
+        "Mailboxes on bulk-endpoint ×2 (out 512 → 1024 B, in 512 → 1024 B)",
+        "Application processing on bulk-endpoint 20 µs → 10 µs"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [10562838.0, 17001478.0, 15445924.0, 32135456.0],
+        "finish_ns": 45563150.0,
+        "link_utilization_percent": 14.162807175753082,
+        "pdi_busy_percent_max": 51.22370723809813,
+        "dpram_used_percent_max": 70.21484375
+      }
+    },
+    {
+      "label": "PDI access overhead on bulk-endpoint 5 µs → 2.5 µs + Mailboxes on bulk-endpoint ×2 (out 512 → 1024 B, in 512 → 1024 B)",
+      "lever": "combined",
+      "slave": 2,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/slaves/2/pdi/access_overhead_ns",
+          "value": 2500
+        },
+        {
+          "path": "/slaves/2/mailbox_out_bytes",
+          "value": 1024
+        },
+        {
+          "path": "/slaves/2/mailbox_in_bytes",
+          "value": 1024
+        }
+      ],
+      "parts": [
+        "PDI access overhead on bulk-endpoint 5 µs → 2.5 µs",
+        "Mailboxes on bulk-endpoint ×2 (out 512 → 1024 B, in 512 → 1024 B)"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [10567838.0, 17001478.0, 15450924.0, 32132956.0],
+        "finish_ns": 45568150.0,
+        "link_utilization_percent": 14.162807175753082,
+        "pdi_busy_percent_max": 50.50561788429302,
+        "dpram_used_percent_max": 70.21484375
+      }
+    },
+    {
+      "label": "Mailboxes on bulk-endpoint ×2 (out 512 → 1024 B, in 512 → 1024 B)",
+      "lever": "mailbox",
+      "slave": 2,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/slaves/2/mailbox_out_bytes",
+          "value": 1024
+        },
+        {
+          "path": "/slaves/2/mailbox_in_bytes",
+          "value": 1024
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [10572838.0, 17001478.0, 15455924.0, 32135456.0],
+        "finish_ns": 45573150.0,
+        "link_utilization_percent": 14.162807175753082,
+        "pdi_busy_percent_max": 51.22370723809813,
+        "dpram_used_percent_max": 70.21484375
+      }
+    },
+    {
+      "label": "Mailbox datagrams per cycle 2 → 4 + Mailboxes on bulk-endpoint ×2 (out 512 → 1024 B, in 512 → 1024 B)",
+      "lever": "combined",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/mailbox_policy",
+          "value": {
+            "kind": "fixed_quota",
+            "accesses_per_cycle": 4
+          }
+        },
+        {
+          "path": "/slaves/2/mailbox_out_bytes",
+          "value": 1024
+        },
+        {
+          "path": "/slaves/2/mailbox_in_bytes",
+          "value": 1024
+        }
+      ],
+      "parts": [
+        "Mailbox datagrams per cycle 2 → 4",
+        "Mailboxes on bulk-endpoint ×2 (out 512 → 1024 B, in 512 → 1024 B)"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [10572838.0, 17001478.0, 15455924.0, 32135456.0],
+        "finish_ns": 45573150.0,
+        "link_utilization_percent": 14.162807175753082,
+        "pdi_busy_percent_max": 51.22370723809813,
+        "dpram_used_percent_max": 70.21484375
+      }
+    },
+    {
+      "label": "Cycle time 1000 µs → 500 µs + PDI rate ×2 on bulk-endpoint (read 20 Mbit/s → 40 Mbit/s, write 20 Mbit/s → 40 Mbit/s)",
+      "lever": "combined",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/cycle_time_us",
+          "value": 500
+        },
+        {
+          "path": "/slaves/2/pdi/read_bps",
+          "value": 40000000
+        },
+        {
+          "path": "/slaves/2/pdi/write_bps",
+          "value": 40000000
+        }
+      ],
+      "parts": [
+        "Cycle time 1000 µs → 500 µs",
+        "PDI rate ×2 on bulk-endpoint (read 20 Mbit/s → 40 Mbit/s, write 20 Mbit/s → 40 Mbit/s)"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [10711247.0, 16502139.0, 15642058.0, 16082656.0],
+        "finish_ns": 45714442.0,
+        "link_utilization_percent": 17.314333759546546,
+        "pdi_busy_percent_max": 33.40630721144625,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "Cycle time 1000 µs → 500 µs + Application processing on bulk-endpoint 20 µs → 10 µs",
+      "lever": "combined",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/cycle_time_us",
+          "value": 500
+        },
+        {
+          "path": "/slaves/2/app_processing_ns",
+          "value": 10000
+        }
+      ],
+      "parts": [
+        "Cycle time 1000 µs → 500 µs",
+        "Application processing on bulk-endpoint 20 µs → 10 µs"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [10856447.0, 16502139.0, 15787258.0, 16135456.0],
+        "finish_ns": 45859642.0,
+        "link_utilization_percent": 17.314333759546546,
+        "pdi_busy_percent_max": 63.909401165814316,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "Cycle time 1000 µs → 500 µs + bulk-endpoint reads and writes only the message, not the whole mailbox buffer",
+      "lever": "combined",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/cycle_time_us",
+          "value": 500
+        },
+        {
+          "path": "/slaves/2/pdi/mailbox_access",
+          "value": "message_only"
+        }
+      ],
+      "parts": [
+        "Cycle time 1000 µs → 500 µs",
+        "bulk-endpoint reads and writes only the message, not the whole mailbox buffer"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [10756847.0, 16621739.0, 15791258.0, 16135456.0],
+        "finish_ns": 45863642.0,
+        "link_utilization_percent": 17.314333759546546,
+        "pdi_busy_percent_max": 47.673772420897706,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "Cycle time 1000 µs → 500 µs + PDI access overhead on bulk-endpoint 5 µs → 2.5 µs",
+      "lever": "combined",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/cycle_time_us",
+          "value": 500
+        },
+        {
+          "path": "/slaves/2/pdi/access_overhead_ns",
+          "value": 2500
+        }
+      ],
+      "parts": [
+        "Cycle time 1000 µs → 500 µs",
+        "PDI access overhead on bulk-endpoint 5 µs → 2.5 µs"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [10861447.0, 16502139.0, 15792258.0, 16132956.0],
+        "finish_ns": 45864642.0,
+        "link_utilization_percent": 17.28617297663047,
+        "pdi_busy_percent_max": 62.042977119864844,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "Cycle time 1000 µs → 500 µs",
+      "lever": "master",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/cycle_time_us",
+          "value": 500
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [10866447.0, 23502668.0, 21794304.0, 16189189.0],
+        "finish_ns": 59868244.0,
+        "link_utilization_percent": 16.660258790752174,
+        "pdi_busy_percent_max": 54.443884351862096,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "Cycle time 1000 µs → 500 µs + Mailbox datagrams per cycle 2 → 4",
+      "lever": "combined",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/cycle_time_us",
+          "value": 500
+        },
+        {
+          "path": "/mailbox_policy",
+          "value": {
+            "kind": "fixed_quota",
+            "accesses_per_cycle": 4
+          }
+        }
+      ],
+      "parts": ["Cycle time 1000 µs → 500 µs", "Mailbox datagrams per cycle 2 → 4"],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [10866447.0, 23502668.0, 21794304.0, 16189189.0],
+        "finish_ns": 59868244.0,
+        "link_utilization_percent": 16.660258790752174,
+        "pdi_busy_percent_max": 54.443884351862096,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "transfer 1 (FoE ↓) by EoE instead",
+      "lever": "protocol",
+      "slave": 2,
+      "transfer": 1,
+      "edits": [
+        {
+          "path": "/transfers/1/protocol",
+          "value": {
+            "kind": "eoe",
+            "mtu_bytes": 1500
+          }
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21366447.0, 22001903.0, 30997182.0, 32135456.0],
+        "finish_ns": 76365532.0,
+        "link_utilization_percent": 8.048345150186249,
+        "pdi_busy_percent_max": 32.17471313353118,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "transfer 2 (CoE ↓) by EoE instead",
+      "lever": "protocol",
+      "slave": 2,
+      "transfer": 2,
+      "edits": [
+        {
+          "path": "/transfers/2/protocol",
+          "value": {
+            "kind": "eoe",
+            "mtu_bytes": 1500
+          }
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21366447.0, 33002139.0, 22294063.0, 32135456.0],
+        "finish_ns": 81366447.0,
+        "link_utilization_percent": 8.112432642522304,
+        "pdi_busy_percent_max": 32.213252904912025,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "transfer 1 (FoE ↓) by CoE instead",
+      "lever": "protocol",
+      "slave": 2,
+      "transfer": 1,
+      "edits": [
+        {
+          "path": "/transfers/1/protocol",
+          "value": {
+            "kind": "coe_segmented"
+          }
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21366447.0, 30998487.0, 31289286.0, 32135456.0],
+        "finish_ns": 86365707.0,
+        "link_utilization_percent": 8.723137974154344,
+        "pdi_busy_percent_max": 32.27039218563132,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "PDI rate ×2 on bulk-endpoint (read 20 Mbit/s → 40 Mbit/s, write 20 Mbit/s → 40 Mbit/s) + Application processing on bulk-endpoint 20 µs → 10 µs",
+      "lever": "combined",
+      "slave": 2,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/slaves/2/pdi/read_bps",
+          "value": 40000000
+        },
+        {
+          "path": "/slaves/2/pdi/write_bps",
+          "value": 40000000
+        },
+        {
+          "path": "/slaves/2/app_processing_ns",
+          "value": 10000
+        }
+      ],
+      "parts": [
+        "PDI rate ×2 on bulk-endpoint (read 20 Mbit/s → 40 Mbit/s, write 20 Mbit/s → 40 Mbit/s)",
+        "Application processing on bulk-endpoint 20 µs → 10 µs"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21201247.0, 33002139.0, 31132058.0, 32082656.0],
+        "finish_ns": 90204442.0,
+        "link_utilization_percent": 8.751285228170318,
+        "pdi_busy_percent_max": 16.884745719196854,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "PDI rate ×2 on bulk-endpoint (read 20 Mbit/s → 40 Mbit/s, write 20 Mbit/s → 40 Mbit/s) + PDI access overhead on bulk-endpoint 5 µs → 2.5 µs",
+      "lever": "combined",
+      "slave": 2,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/slaves/2/pdi/read_bps",
+          "value": 40000000
+        },
+        {
+          "path": "/slaves/2/pdi/write_bps",
+          "value": 40000000
+        },
+        {
+          "path": "/slaves/2/pdi/access_overhead_ns",
+          "value": 2500
+        }
+      ],
+      "parts": [
+        "PDI rate ×2 on bulk-endpoint (read 20 Mbit/s → 40 Mbit/s, write 20 Mbit/s → 40 Mbit/s)",
+        "PDI access overhead on bulk-endpoint 5 µs → 2.5 µs"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21206247.0, 33002139.0, 31137058.0, 32080156.0],
+        "finish_ns": 90209442.0,
+        "link_utilization_percent": 8.751285228170318,
+        "pdi_busy_percent_max": 16.151051669984938,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "PDI rate ×2 on bulk-endpoint (read 20 Mbit/s → 40 Mbit/s, write 20 Mbit/s → 40 Mbit/s)",
+      "lever": "pdi",
+      "slave": 2,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/slaves/2/pdi/read_bps",
+          "value": 40000000
+        },
+        {
+          "path": "/slaves/2/pdi/write_bps",
+          "value": 40000000
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21211247.0, 33002139.0, 31142058.0, 32082656.0],
+        "finish_ns": 90214442.0,
+        "link_utilization_percent": 8.751285228170318,
+        "pdi_busy_percent_max": 16.884745719196854,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "Mailbox datagrams per cycle 2 → 4 + PDI rate ×2 on bulk-endpoint (read 20 Mbit/s → 40 Mbit/s, write 20 Mbit/s → 40 Mbit/s)",
+      "lever": "combined",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/mailbox_policy",
+          "value": {
+            "kind": "fixed_quota",
+            "accesses_per_cycle": 4
+          }
+        },
+        {
+          "path": "/slaves/2/pdi/read_bps",
+          "value": 40000000
+        },
+        {
+          "path": "/slaves/2/pdi/write_bps",
+          "value": 40000000
+        }
+      ],
+      "parts": [
+        "Mailbox datagrams per cycle 2 → 4",
+        "PDI rate ×2 on bulk-endpoint (read 20 Mbit/s → 40 Mbit/s, write 20 Mbit/s → 40 Mbit/s)"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21211247.0, 33002139.0, 31142058.0, 32082656.0],
+        "finish_ns": 90214442.0,
+        "link_utilization_percent": 8.751285228170318,
+        "pdi_busy_percent_max": 16.884745719196854,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "PDI rate ×2 on bulk-endpoint (read 20 Mbit/s → 40 Mbit/s, write 20 Mbit/s → 40 Mbit/s) + bulk-endpoint reads and writes only the message, not the whole mailbox buffer",
+      "lever": "combined",
+      "slave": 2,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/slaves/2/pdi/read_bps",
+          "value": 40000000
+        },
+        {
+          "path": "/slaves/2/pdi/write_bps",
+          "value": 40000000
+        },
+        {
+          "path": "/slaves/2/pdi/mailbox_access",
+          "value": "message_only"
+        }
+      ],
+      "parts": [
+        "PDI rate ×2 on bulk-endpoint (read 20 Mbit/s → 40 Mbit/s, write 20 Mbit/s → 40 Mbit/s)",
+        "bulk-endpoint reads and writes only the message, not the whole mailbox buffer"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21161447.0, 33061939.0, 31144058.0, 32082656.0],
+        "finish_ns": 90216442.0,
+        "link_utilization_percent": 8.751285228170318,
+        "pdi_busy_percent_max": 13.178449468822356,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "PDI access overhead on bulk-endpoint 5 µs → 2.5 µs + bulk-endpoint reads and writes only the message, not the whole mailbox buffer",
+      "lever": "combined",
+      "slave": 2,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/slaves/2/pdi/access_overhead_ns",
+          "value": 2500
+        },
+        {
+          "path": "/slaves/2/pdi/mailbox_access",
+          "value": "message_only"
+        }
+      ],
+      "parts": [
+        "PDI access overhead on bulk-endpoint 5 µs → 2.5 µs",
+        "bulk-endpoint reads and writes only the message, not the whole mailbox buffer"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21246847.0, 33121739.0, 31281258.0, 32132956.0],
+        "finish_ns": 90353642.0,
+        "link_utilization_percent": 8.751285228170318,
+        "pdi_busy_percent_max": 22.965601999065196,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "bulk-endpoint reads and writes only the message, not the whole mailbox buffer + Application processing on bulk-endpoint 20 µs → 10 µs",
+      "lever": "combined",
+      "slave": 2,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/slaves/2/pdi/mailbox_access",
+          "value": "message_only"
+        },
+        {
+          "path": "/slaves/2/app_processing_ns",
+          "value": 10000
+        }
+      ],
+      "parts": [
+        "bulk-endpoint reads and writes only the message, not the whole mailbox buffer",
+        "Application processing on bulk-endpoint 20 µs → 10 µs"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21246847.0, 33121739.0, 31281258.0, 32135456.0],
+        "finish_ns": 90353642.0,
+        "link_utilization_percent": 8.751285228170318,
+        "pdi_busy_percent_max": 24.096034311925035,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "PDI access overhead on bulk-endpoint 5 µs → 2.5 µs + Application processing on bulk-endpoint 20 µs → 10 µs",
+      "lever": "combined",
+      "slave": 2,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/slaves/2/pdi/access_overhead_ns",
+          "value": 2500
+        },
+        {
+          "path": "/slaves/2/app_processing_ns",
+          "value": 10000
+        }
+      ],
+      "parts": [
+        "PDI access overhead on bulk-endpoint 5 µs → 2.5 µs",
+        "Application processing on bulk-endpoint 20 µs → 10 µs"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21351447.0, 33002139.0, 31282258.0, 32132956.0],
+        "finish_ns": 90354642.0,
+        "link_utilization_percent": 8.751285228170318,
+        "pdi_busy_percent_max": 31.568409290757963,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "Application processing on bulk-endpoint 20 µs → 10 µs",
+      "lever": "application",
+      "slave": 2,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/slaves/2/app_processing_ns",
+          "value": 10000
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21356447.0, 33002139.0, 31287258.0, 32135456.0],
+        "finish_ns": 90359642.0,
+        "link_utilization_percent": 8.751285228170318,
+        "pdi_busy_percent_max": 32.302103339969875,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "Mailbox datagrams per cycle 2 → 4 + Application processing on bulk-endpoint 20 µs → 10 µs",
+      "lever": "combined",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/mailbox_policy",
+          "value": {
+            "kind": "fixed_quota",
+            "accesses_per_cycle": 4
+          }
+        },
+        {
+          "path": "/slaves/2/app_processing_ns",
+          "value": 10000
+        }
+      ],
+      "parts": [
+        "Mailbox datagrams per cycle 2 → 4",
+        "Application processing on bulk-endpoint 20 µs → 10 µs"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21356447.0, 33002139.0, 31287258.0, 32135456.0],
+        "finish_ns": 90359642.0,
+        "link_utilization_percent": 8.751285228170318,
+        "pdi_busy_percent_max": 32.302103339969875,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "bulk-endpoint reads and writes only the message, not the whole mailbox buffer",
+      "lever": "pdi",
+      "slave": 2,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/slaves/2/pdi/mailbox_access",
+          "value": "message_only"
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21256847.0, 33121739.0, 31291258.0, 32135456.0],
+        "finish_ns": 90363642.0,
+        "link_utilization_percent": 8.751285228170318,
+        "pdi_busy_percent_max": 24.096034311925035,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "Mailbox datagrams per cycle 2 → 4 + bulk-endpoint reads and writes only the message, not the whole mailbox buffer",
+      "lever": "combined",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/mailbox_policy",
+          "value": {
+            "kind": "fixed_quota",
+            "accesses_per_cycle": 4
+          }
+        },
+        {
+          "path": "/slaves/2/pdi/mailbox_access",
+          "value": "message_only"
+        }
+      ],
+      "parts": [
+        "Mailbox datagrams per cycle 2 → 4",
+        "bulk-endpoint reads and writes only the message, not the whole mailbox buffer"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21256847.0, 33121739.0, 31291258.0, 32135456.0],
+        "finish_ns": 90363642.0,
+        "link_utilization_percent": 8.751285228170318,
+        "pdi_busy_percent_max": 24.096034311925035,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "PDI access overhead on bulk-endpoint 5 µs → 2.5 µs",
+      "lever": "pdi",
+      "slave": 2,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/slaves/2/pdi/access_overhead_ns",
+          "value": 2500
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21361447.0, 33002139.0, 31292258.0, 32132956.0],
+        "finish_ns": 90364642.0,
+        "link_utilization_percent": 8.751285228170318,
+        "pdi_busy_percent_max": 31.568409290757963,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "Mailbox datagrams per cycle 2 → 4 + PDI access overhead on bulk-endpoint 5 µs → 2.5 µs",
+      "lever": "combined",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/mailbox_policy",
+          "value": {
+            "kind": "fixed_quota",
+            "accesses_per_cycle": 4
+          }
+        },
+        {
+          "path": "/slaves/2/pdi/access_overhead_ns",
+          "value": 2500
+        }
+      ],
+      "parts": [
+        "Mailbox datagrams per cycle 2 → 4",
+        "PDI access overhead on bulk-endpoint 5 µs → 2.5 µs"
+      ],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21361447.0, 33002139.0, 31292258.0, 32132956.0],
+        "finish_ns": 90364642.0,
+        "link_utilization_percent": 8.751285228170318,
+        "pdi_busy_percent_max": 31.568409290757963,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "Mailbox datagrams per cycle 2 → 4",
+      "lever": "mailbox_policy",
+      "slave": null,
+      "transfer": null,
+      "edits": [
+        {
+          "path": "/mailbox_policy",
+          "value": {
+            "kind": "fixed_quota",
+            "accesses_per_cycle": 4
+          }
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21366447.0, 33002139.0, 31297258.0, 32135456.0],
+        "finish_ns": 90369642.0,
+        "link_utilization_percent": 8.751285228170318,
+        "pdi_busy_percent_max": 32.302103339969875,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "transfer 3 (PDO channel 256 B/cycle ↓): window 2 → 4 chunks",
+      "lever": "protocol",
+      "slave": 2,
+      "transfer": 3,
+      "edits": [
+        {
+          "path": "/transfers/3/protocol",
+          "value": {
+            "kind": "pdo_channel",
+            "bytes_per_cycle": 256,
+            "window": 4,
+            "retransmit_after_cycles": 8
+          }
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21366447.0, 33002139.0, 31297258.0, 32135456.0],
+        "finish_ns": 90369642.0,
+        "link_utilization_percent": 8.751285228170318,
+        "pdi_busy_percent_max": 32.302103339969875,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "transfer 3 (PDO channel 256 B/cycle ↓): 256 → 512 B per cycle",
+      "lever": "protocol",
+      "slave": 2,
+      "transfer": 3,
+      "edits": [
+        {
+          "path": "/transfers/3/protocol",
+          "value": {
+            "kind": "pdo_channel",
+            "bytes_per_cycle": 512,
+            "window": 2,
+            "retransmit_after_cycles": 8
+          }
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21489327.0, 33002139.0, 31399658.0, 15264812.0],
+        "finish_ns": 90492522.0,
+        "link_utilization_percent": 10.754759111884985,
+        "pdi_busy_percent_max": 42.31947275854321,
+        "dpram_used_percent_max": 63.96484375
+      }
+    },
+    {
+      "label": "transfer 2 (CoE ↓) by FoE instead",
+      "lever": "protocol",
+      "slave": 2,
+      "transfer": 2,
+      "edits": [
+        {
+          "path": "/transfers/2/protocol",
+          "value": {
+            "kind": "foe"
+          }
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21366447.0, 33002139.0, 33294547.0, 32135456.0],
+        "finish_ns": 92366931.0,
+        "link_utilization_percent": 8.777236326586015,
+        "pdi_busy_percent_max": 32.331726000403265,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "transfer 0 (EoE ↓) by CoE instead",
+      "lever": "protocol",
+      "slave": 2,
+      "transfer": 0,
+      "edits": [
+        {
+          "path": "/transfers/0/protocol",
+          "value": {
+            "kind": "coe_segmented"
+          }
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [30367144.0, 33287292.0, 31294815.0, 32135456.0],
+        "finish_ns": 100370576.0,
+        "link_utilization_percent": 9.264855711592189,
+        "pdi_busy_percent_max": 32.373346610000304,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "transfer 0 (EoE ↓) by FoE instead",
+      "lever": "protocol",
+      "slave": 2,
+      "transfer": 0,
+      "edits": [
+        {
+          "path": "/transfers/0/protocol",
+          "value": {
+            "kind": "foe"
+          }
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [32365256.0, 33293626.0, 31291725.0, 32135456.0],
+        "finish_ns": 104365531.0,
+        "link_utilization_percent": 9.268801245535734,
+        "pdi_busy_percent_max": 32.39687996823331,
+        "dpram_used_percent_max": 45.21484375
+      }
+    },
+    {
+      "label": "transfer 3 (PDO channel 256 B/cycle ↓) by EoE instead",
+      "lever": "protocol",
+      "slave": 2,
+      "transfer": 3,
+      "edits": [
+        {
+          "path": "/transfers/3/protocol",
+          "value": {
+            "kind": "eoe",
+            "mtu_bytes": 1500
+          }
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21281287.0, 33002139.0, 31232898.0, 22233600.0],
+        "finish_ns": 113284523.0,
+        "link_utilization_percent": 6.423958149814438,
+        "pdi_busy_percent_max": 22.223498655049553,
+        "dpram_used_percent_max": 26.171875
+      }
+    },
+    {
+      "label": "transfer 3 (PDO channel 256 B/cycle ↓) by CoE instead",
+      "lever": "protocol",
+      "slave": 2,
+      "transfer": 3,
+      "edits": [
+        {
+          "path": "/transfers/3/protocol",
+          "value": {
+            "kind": "coe_segmented"
+          }
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21281287.0, 33002139.0, 31232898.0, 31228467.0],
+        "finish_ns": 122279390.0,
+        "link_utilization_percent": 6.866089544132854,
+        "pdi_busy_percent_max": 22.255242414270736,
+        "dpram_used_percent_max": 26.171875
+      }
+    },
+    {
+      "label": "transfer 3 (PDO channel 256 B/cycle ↓) by FoE instead",
+      "lever": "protocol",
+      "slave": 2,
+      "transfer": 3,
+      "edits": [
+        {
+          "path": "/transfers/3/protocol",
+          "value": {
+            "kind": "foe"
+          }
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": true,
+        "reason": null,
+        "transfer_ns": [21281287.0, 33002139.0, 31232898.0, 33230195.0],
+        "finish_ns": 124281118.0,
+        "link_utilization_percent": 6.879458508265873,
+        "pdi_busy_percent_max": 22.266428205604885,
+        "dpram_used_percent_max": 26.171875
+      }
+    },
+    {
+      "label": "transfer 0 (EoE ↓) by PDO channel 256 B/cycle instead",
+      "lever": "protocol",
+      "slave": 2,
+      "transfer": 0,
+      "edits": [
+        {
+          "path": "/transfers/0/protocol",
+          "value": {
+            "kind": "pdo_channel",
+            "bytes_per_cycle": 256,
+            "window": 2,
+            "retransmit_after_cycles": 8
+          }
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": false,
+        "reason": "invalid spec: transfer 0: one PDO channel per slave",
+        "transfer_ns": [],
+        "finish_ns": null,
+        "link_utilization_percent": null,
+        "pdi_busy_percent_max": null,
+        "dpram_used_percent_max": null
+      }
+    },
+    {
+      "label": "transfer 1 (FoE ↓) by PDO channel 256 B/cycle instead",
+      "lever": "protocol",
+      "slave": 2,
+      "transfer": 1,
+      "edits": [
+        {
+          "path": "/transfers/1/protocol",
+          "value": {
+            "kind": "pdo_channel",
+            "bytes_per_cycle": 256,
+            "window": 2,
+            "retransmit_after_cycles": 8
+          }
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": false,
+        "reason": "invalid spec: transfer 1: one PDO channel per slave",
+        "transfer_ns": [],
+        "finish_ns": null,
+        "link_utilization_percent": null,
+        "pdi_busy_percent_max": null,
+        "dpram_used_percent_max": null
+      }
+    },
+    {
+      "label": "transfer 2 (CoE ↓) by PDO channel 256 B/cycle instead",
+      "lever": "protocol",
+      "slave": 2,
+      "transfer": 2,
+      "edits": [
+        {
+          "path": "/transfers/2/protocol",
+          "value": {
+            "kind": "pdo_channel",
+            "bytes_per_cycle": 256,
+            "window": 2,
+            "retransmit_after_cycles": 8
+          }
+        }
+      ],
+      "parts": [],
+      "run": {
+        "feasible": false,
+        "reason": "invalid spec: transfer 2: one PDO channel per slave",
+        "transfer_ns": [],
+        "finish_ns": null,
+        "link_utilization_percent": null,
+        "pdi_busy_percent_max": null,
+        "dpram_used_percent_max": null
+      }
+    }
+  ]
+}

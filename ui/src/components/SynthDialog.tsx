@@ -19,22 +19,3 @@ export function SynthDialog(props: {
     />
   );
 }
-
-/** Configure and run the discrete-event simulator; its frames load as a capture. */
-export function SimulateDialog(props: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onCreated: (info: CaptureInfo) => void;
-}) {
-  return (
-    <SpecDialog
-      {...props}
-      title="Simulate transfers"
-      description="A model of master, link, ESC memory and PDI. Every number in the result follows from these parameters; the frames it writes are analysed like a capture and labelled Simulated."
-      action="Simulate"
-      loadSchema={api.simSchema}
-      loadExample={api.simExample}
-      run={api.simulate}
-    />
-  );
-}

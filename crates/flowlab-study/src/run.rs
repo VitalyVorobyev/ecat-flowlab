@@ -309,6 +309,25 @@ fn evaluate(spec: &StudySpec, base: &Value, values: &[Value], measured: &[f64]) 
     Outcome { objectives, targets, feasible: reason.is_none(), reason, spec: Some(json) }
 }
 
+/// `f` over `items` on all cores, results in input order. Runs are independent and
+/// deterministic, so the order of evaluation does not matter.
+pub(crate) fn par_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    let threads = std::thread::available_parallelism().map_or(1, |n| n.get()).min(items.len().max(1));
+    let size = items.len().div_ceil(threads).max(1);
+    let mut out: Vec<Option<R>> = (0..items.len()).map(|_| None).collect();
+    std::thread::scope(|s| {
+        for (k, chunk) in out.chunks_mut(size).enumerate() {
+            let f = &f;
+            s.spawn(move || {
+                for (i, slot) in chunk.iter_mut().enumerate() {
+                    *slot = Some(f(&items[k * size + i]));
+                }
+            });
+        }
+    });
+    out.into_iter().map(|o| o.expect("every item evaluated")).collect()
+}
+
 fn dominates(a: &[Option<f64>], b: &[Option<f64>], goals: &[Goal]) -> bool {
     let mut better = false;
     for ((x, y), g) in a.iter().zip(b).zip(goals) {
@@ -362,21 +381,7 @@ pub fn run_study(spec: &StudySpec, capture: Option<&CaptureReport>) -> Result<St
     }
     let pts = points(spec)?;
 
-    // Runs are independent and deterministic; spread them over threads, keep their order.
-    let threads = std::thread::available_parallelism().map_or(1, |n| n.get()).min(pts.len().max(1));
-    let mut outcomes: Vec<Option<Outcome>> = (0..pts.len()).map(|_| None).collect();
-    std::thread::scope(|s| {
-        for (k, chunk) in outcomes.chunks_mut(pts.len().div_ceil(threads).max(1)).enumerate() {
-            let start = k * pts.len().div_ceil(threads).max(1);
-            let (pts, base, measured) = (&pts, &base, &measured);
-            s.spawn(move || {
-                for (i, slot) in chunk.iter_mut().enumerate() {
-                    *slot = Some(evaluate(spec, base, &pts[start + i], measured));
-                }
-            });
-        }
-    });
-    let outcomes: Vec<Outcome> = outcomes.into_iter().map(|o| o.expect("every run evaluated")).collect();
+    let outcomes = par_map(&pts, |values| evaluate(spec, &base, values, &measured));
 
     let mut goals: Vec<Goal> = Vec::new();
     let mut labels: Vec<String> = Vec::new();

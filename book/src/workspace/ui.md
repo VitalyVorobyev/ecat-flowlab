@@ -37,10 +37,13 @@ calls `initTheme()` and wraps the app in `TooltipProvider` with a `Toaster`.
 `src/app/App.tsx` composes an `AppShell`:
 
 - **Header**: a capture `Select` (each option noted with its provenance), a `ProvenanceBadge`,
-  *Simulate* and *Generate* buttons (the simulator and synth dialogs), a `FileDrop` overlay
-  ("Open capture…", `.pcap`, `.pcapng`, `.cap`) and the `ThemeToggle`.
-- **NavRail**: Captures, Overview, Timing, Frames, Stations, Mailbox (need a selected capture),
-  Planner, Study, Compare (needs two captures), Sim run (needs a simulated capture with a result).
+  a *Generate* button (the synth dialog), a `FileDrop` overlay ("Open capture…", `.pcap`,
+  `.pcapng`, `.cap`) and the `ThemeToggle`.
+- **NavRail**: Simulate, Study, Planner, Captures, Overview, Timing, Frames, Stations, Mailbox
+  (need a selected capture), Compare (needs two captures), Sim run (needs a simulated capture
+  with a result). The view is mirrored in the URL hash (`#simulate`, `#frames`, …).
+- **Scenario state** (`src/scenario/useScenario.ts`) lives in the shell, so the Simulate view
+  keeps its setup, result and baseline while other views are open.
 - **StatusBar**: provenance, capture name, frame count, span, direction mode, server version (or
   "server offline").
 
@@ -50,13 +53,14 @@ calls `initTheme()` and wraps the app in `TooltipProvider` with a `Toaster`.
 
 | Screen | Shows |
 |---|---|
+| `Scenario` (*Simulate*) | `SetupEditor` (master, slaves, transfers, run options in display units), presets, open/save/undo; after each edit (350 ms debounce, older requests aborted) `POST /api/sim/run` and `POST /api/sim/what-if`; `ScenarioResult` (readout line, transfers with a timeline column, slaves), `WhatIfPanel` (single changes and pairs ranked for the run or the selected transfer, *Apply*), a pinned baseline with the changed parameters, *Open frames* |
 | `Captures` | Drop or open a capture by path, generate one, the loaded captures with provenance |
 | `Overview` | Headline numbers (cycle period, send jitter, round trip, lost frames, WKC mismatches, missed cycles, link load, slaves responding), findings, link utilization over time, cycle-interval histogram, datagrams by command, attach/remove an ENI, how the numbers were computed |
 | `Timing` | One cyclic stream: interval and phase-jitter histograms, interval over time, round trip histogram and over time, statistics table, working counters per datagram with their expectation basis |
 | `Frames` | Server-side filtered frame list (pages of 1000) in a `SplitPane` beside `FrameDetailView`: header facts, decoded datagrams and the `HexView` |
 | `Stations` | Stations addressed in the capture and the AL state over time (`StateTimeline`), with an event table |
 | `Mailbox` | Channels with their address source, traffic by protocol, SDO transfers and durations, FoE transfers, EoE frames (with the reassembled-pcapng download), emergencies and mailbox errors |
-| `Simulation` (*Sim run*) | A `SimResult`: transfers against the physical bound and the TCP reference, integrity, protocol work, PDI busy and ESC RAM per slave, the model's assumptions, result JSON download |
+| `Simulation` (*Sim run*) | A `SimResult`: the setup that was simulated (`SystemSummary`), the same result layout as Simulate, protocol work and the TCP reference, the model's assumptions; *Edit in Simulate*, result JSON download |
 | `Planner` | A `PlanSpec` form (recomputed 250 ms after the last edit), ESI import adding devices to the plan, cyclic frames, idle time, mailbox headroom, checks, assumptions |
 | `Study` | A `StudySpec` form, optional capture to calibrate against, runs table, `ScatterPlot` of the frontier, residuals; a frontier run can be simulated again with frames, which loads it as a capture |
 | `Compare` | Two captures side by side, each column with its provenance badge, a fixed list of quantities and their ratio |
@@ -70,11 +74,15 @@ calls `initTheme()` and wraps the app in `TooltipProvider` with a `Toaster`.
 | `HexView` (+ `hexLayout.ts`) | Hex dump with labelled byte ranges; hovering names the range, one datagram can be emphasized |
 | `StateTimeline` | One lane per station with the AL state it reported, ticks where the master requested a state |
 | `ScatterPlot` | Two-dimensional points from the charts primitives, highlighted ones in the first series colour |
-| `SpecDialog` | Load a JSON Schema and example from the server, render them with `SchemaValueForm`, run the spec; `SynthDialog` and `SimulateDialog` are built on it |
+| `SpecDialog` | Load a JSON Schema and example from the server, render them with `SchemaValueForm`, run the spec; `SynthDialog` is built on it |
 | `Metric`, `MetricGrid` | Headline numbers with an optional `verdict` |
 | `ProvenanceBadge` | `Measured` / `Simulated` / `Synthetic` badge with a hint on what that means |
 | `TimeHistogram`, `TimeSeries` (`charts.tsx`) | ns distributions and series in a readable unit |
 | `DistributionTable`, `Findings`, `FilePickButton` | Statistics rows, findings by severity, a one-file picker |
+
+`src/scenario/` holds the Simulate view's parts: `spec.ts` (display units, labels, JSON-pointer
+edits, spec diffs), `useScenario.ts`, `SetupEditor`, `ScenarioResult`, `WhatIfPanel` (and its
+`rank`), `SystemSummary`.
 
 `HexView`, `StateTimeline` and `ScatterPlot` are candidates to upstream into lab-ui.
 `src/lib/` holds `format.ts` (units always shown, decimal and binary units never mixed),
@@ -102,10 +110,11 @@ it; oxlint ignores it and CI fails if `cargo test` changes it.
 |---|---|
 | `report.fixture.json` | `flowlab analyze` of a small synthetic capture (demo spec, 400 cycles, 1 % loss and WKC errors) |
 | `sim.fixture.json` | `flowlab simulate` of the example spec with 8 kB per transfer |
+| `whatif.fixture.json` | `flowlab what-if` of the same spec |
 | `plan.fixture.json` | `flowlab plan --json` (built-in example) |
 | `study.fixture.json` | `flowlab study` of `foe-sweep.json` without its PDI-rate parameter (8 runs) |
 
-The screen tests (`Overview`, `Compare`, `Mailbox`, `Planner`, `Simulation`, `Study`) render
+The screen tests (`Overview`, `Compare`, `Mailbox`, `Planner`, `Scenario`, `Simulation`, `Study`) render
 against these files, so a report schema change that breaks a screen fails a test.
 
 ## Design rules

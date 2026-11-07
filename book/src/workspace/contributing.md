@@ -7,7 +7,7 @@ cargo build                                   # Rust ≥ 1.88; Bun ≥ 1.4 for t
 cargo ui-dev                                  # API on :7878 + Vite on :5173 with hot reload
 ```
 
-`cargo ui-dev` runs `flowlab serve` with the demo capture and Vite's dev server, which proxies
+`cargo ui-dev` runs `flowlab serve` (with `--demo`, also the demo capture) and Vite's dev server, which proxies
 `/api` to it; stopping one stops both. `cargo ui` serves the production build instead. The
 aliases live in `.cargo/config.toml` and run the `xtask` crate (`publish = false`).
 

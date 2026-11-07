@@ -1,6 +1,6 @@
 import { TooltipProvider } from "@vitavision/ui";
-import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 import type { SimResult } from "../api";
 import fixture from "../test/sim.fixture.json";
@@ -9,29 +9,28 @@ import { Simulation } from "./Simulation";
 // Output of `flowlab simulate` (see ui/src/test/README.md).
 const result = fixture as unknown as SimResult;
 
-function renderSimulation(r: SimResult = result) {
+function renderSimulation(r: SimResult = result, onEdit?: (spec: SimResult["spec"]) => void) {
   render(
     <TooltipProvider>
-      <Simulation result={r} />
+      <Simulation result={r} {...(onEdit ? { onEdit } : {})} />
     </TooltipProvider>,
   );
 }
 
 describe("Simulation", () => {
-  it("is labelled as a model, not a measurement", () => {
+  it("is labelled as a model and says what was simulated", () => {
     renderSimulation();
     expect(screen.getAllByText("Simulated").length).toBeGreaterThan(0);
-    expect(screen.getByText("Model output")).toBeInTheDocument();
+    expect(screen.getAllByText(/a model prediction, not a measurement/).length).toBeGreaterThan(0);
+    expect(screen.getByText("What was simulated")).toBeInTheDocument();
+    expect(screen.getByText(/fixed quota, 2 mailbox datagrams per cycle/)).toBeInTheDocument();
+    expect(screen.getAllByText(/EoE ↓ 8 kB to bulk-endpoint/).length).toBeGreaterThan(0);
   });
 
   it("lists every transfer with its integrity check", () => {
     renderSimulation();
     expect(result.transfers.length).toBeGreaterThan(1);
-    expect(screen.getAllByText("SHA-256 ok")).toHaveLength(result.transfers.length);
-    const tile = screen.getByText("Transfers verified").closest("div.rounded-md") as HTMLElement;
-    expect(
-      within(tile).getByText(`${result.transfers.length} / ${result.transfers.length}`),
-    ).toHaveClass("text-normal");
+    expect(screen.getAllByText("verified")).toHaveLength(result.transfers.length);
   });
 
   it("flags a transfer that did not verify", () => {
@@ -45,5 +44,12 @@ describe("Simulation", () => {
       ],
     });
     expect(screen.getByText("incomplete")).toBeInTheDocument();
+  });
+
+  it("opens the run's spec for editing", () => {
+    const edit = vi.fn();
+    renderSimulation(result, edit);
+    fireEvent.click(screen.getByRole("button", { name: "Edit in Simulate" }));
+    expect(edit).toHaveBeenCalledWith(result.spec);
   });
 });

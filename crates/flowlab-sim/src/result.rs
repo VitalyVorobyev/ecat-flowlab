@@ -4,6 +4,8 @@ use flowlab_core::ReportMeta;
 use serde::Serialize;
 use ts_rs::TS;
 
+use crate::SimSpec;
+
 /// Outcome of one transfer.
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
@@ -113,4 +115,6 @@ pub struct SimResult {
     pub capture_frames: u64,
     /// The capture stopped at `capture.max_frames`.
     pub capture_truncated: bool,
+    /// The spec that was simulated, so the result says what it is a result of.
+    pub spec: SimSpec,
 }

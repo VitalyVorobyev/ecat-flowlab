@@ -6,6 +6,7 @@ flowlab <COMMAND>
   analyze   Analyze a pcap/pcapng capture
   synth     Generate a synthetic pcapng with known ground truth from a JSON spec
   simulate  Run the discrete-event simulator
+  what-if   Rank one-change variants of a scenario by how much they shorten its transfers
   study     Run a parameter study (sweep, Pareto frontier, calibration) over the simulator
   plan      Lay out the cyclic frames of a network and check its budget
   esi       Summarize the devices of an ESI file
@@ -22,6 +23,7 @@ flowlab <COMMAND>
 | `analyze CAPTURE` | `-o/--out FILE` JSON report · `--json` to stdout · `--eni XML` · `--mailbox STATION=OUT,IN` (repeatable) · `--eoe-out PCAPNG` · `--link-mbps N` (100) · `--min-stream-frames N` (20) |
 | `synth [SPEC]` | `-o/--out FILE` (required) · `--truth FILE` · `--eni FILE` |
 | `simulate [SPECS…]` | `-o/--out FILE` frames (one spec) · `--result FILE` JSON (an array for several specs) |
+| `what-if [SPEC]` | `--result FILE` JSON: the scenario, every single change and pair, best first |
 | `study [SPEC]` | `--capture FILE` to calibrate against · `--eni XML` and `--mailbox …` for that capture · `--result FILE` |
 | `plan [SPEC]` | `--json` |
 | `esi FILE` | `--json` |
@@ -43,6 +45,9 @@ flowlab analyze run.pcapng --eni network.xml --eoe-out eoe.pcapng --out run.json
 # Simulate, then analyse the simulated frames like a capture
 flowlab simulate spec.json -o sim.pcapng --result sim.json
 flowlab analyze sim.pcapng --out sim-report.json
+
+# What limits a scenario, and which change would help most
+flowlab what-if spec.json
 
 # Fit the simulator to a lab capture and inspect the residuals
 flowlab study fit.json --capture lab.pcapng --result fit-result.json

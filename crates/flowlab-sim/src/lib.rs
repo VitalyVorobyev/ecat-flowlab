@@ -29,8 +29,8 @@ pub use engine::{FIRST_STATION, MASTER_MAC, MBX_BASE, simulate};
 pub use protocol::{payload_bytes, payload_sha256};
 pub use result::{SimResult, SlaveResult, TransferResult};
 pub use spec::{
-    CaptureSpec, MailboxAccess, MailboxPolicy, PDO_ACK_BYTES, PDO_CHUNK_HEADER, PdiSpec, SimFaults, SimSlave, SimSpec,
-    TransferDirection, TransferProtocol, TransferSpec,
+    CaptureSpec, MAX_MAILBOX_BYTES, MailboxAccess, MailboxPolicy, PDO_ACK_BYTES, PDO_CHUNK_HEADER, PdiSpec, SimFaults,
+    SimSlave, SimSpec, TransferDirection, TransferProtocol, TransferSpec,
 };
 
 /// Why a simulation could not run.

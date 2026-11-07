@@ -15,8 +15,8 @@ needs no EtherCAT hardware, no network adapter, no root and no libpcap.
 |---|---|---|
 | Analyse a pcap/pcapng capture | `flowlab analyze` | Overview, Timing, Frames, Stations, Mailbox |
 | Judge working counters against the master's configuration | `flowlab analyze --eni` | Attach ENI… on the Overview |
-| Generate a capture with known faults, to test the analysis | `flowlab synth` | Synthesize… |
-| Simulate a segment and bulk transfers through it | `flowlab simulate` | Simulate…, Sim run |
+| Generate a capture with known faults, to test the analysis | `flowlab synth` | Generate |
+| Simulate a segment and bulk transfers through it, and find what limits them | `flowlab simulate`, `flowlab what-if` | Simulate, Sim run |
 | Lay out the cyclic frames of a network and check its budget | `flowlab plan`, `flowlab esi` | Planner |
 | Sweep simulator parameters, find the Pareto frontier, calibrate | `flowlab study` | Study |
 | Compare two captures, e.g. a measurement and its simulation | — | Compare |

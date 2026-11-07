@@ -10,8 +10,60 @@ flowlab simulate configs/studies/bulk-transfer/{smoke,large-payload,mixed-load}.
 flowlab schema sim                       # JSON Schema of the spec
 ```
 
-In the UI, **Simulate…** in the header opens the spec form. The run appears as a capture, with
-the **Sim run** view next to the usual analysis.
+## The Simulate view
+
+**Simulate**, the first view of the UI, is where a scenario is set up and tuned. The left column
+is the setup, in the units people use:
+
+- **Master and link**: cycle time (µs), link rate (Mbit/s), cycle jitter, and the mailbox policy
+  with its parameter.
+- **Slaves**, in ring order: cyclic outputs and inputs, mailbox sizes, ESC RAM, forwarding
+  delay, and the PDI (read and write rate in Mbit/s, overhead per access in µs, whole-buffer or
+  message-only mailbox access) and the application's time per message.
+- **Transfers**: protocol (EoE, FoE, CoE SDO, PDO channel), direction, slave, payload (B, kB,
+  MB, KiB or MiB), start time, and the protocol's own parameters (EoE MTU; PDO channel bytes
+  per cycle, window, resend timeout). TCP over EoE and VoE are listed but not modelled.
+- **Run**: time limit, seed, frame loss.
+
+Start from a preset (the bulk-transfer study's scenarios), or open and save the setup as a
+`SimSpec` JSON file. The setup is kept in the browser between visits; *Undo* steps back through
+the edits.
+
+About a third of a second after each edit, the scenario is simulated again, without a capture.
+The result shows when all transfers are done, the cycles, link load and the busiest PDI on one
+line; a table of the transfers (time, goodput, multiple of the link bound, when each ran,
+integrity); and the PDI load and ESC RAM of each slave that carries a transfer.
+
+**What would help** reruns the scenario with one change at a time and ranks the changes by how
+much they shorten the run, or the transfer selected in the table:
+
+| Lever | Change tried |
+|---|---|
+| master | cycle time halved |
+| policy | twice the mailbox datagrams or slaves per cycle; the opportunistic policy (60 % of the cycle, 10 µs turnaround); a larger share or shorter turnaround if already opportunistic |
+| PDI | read and write rate doubled; overhead per access halved; message-only mailbox access |
+| mailbox | mailboxes doubled, up to one frame (1484 B) |
+| application | time per message halved |
+| protocol | each other protocol for the transfer; EoE MTU 1500 B; PDO channel bytes per cycle or window doubled |
+
+Only slaves and transfers that carry a transfer are changed. What tops the list limits the
+scenario; a change with no effect (within 1 %) does not. When two limits coincide, for example
+a PDI read that takes most of a cycle when the cycle also allows one message, no single change
+helps: pairs of the first eight non-protocol changes are simulated too, and those that beat
+both of their parts are shown as *two changes together*. Changes that make the spec invalid
+(ESC RAM, frame size, one PDO channel per slave) or leave a transfer unfinished are listed with
+the reason. *Apply* puts a change into the setup.
+
+*Pin as baseline* keeps the current result: later results show their difference per transfer,
+and a line lists the parameters changed since, with *Back to baseline*. *Open frames* runs the
+scenario again with a capture and opens it in the analysis views; its **Sim run** view shows the
+setup that was simulated, with *Edit in Simulate*.
+
+From the command line:
+
+```bash
+flowlab what-if configs/studies/bulk-transfer/large-payload.json --result what-if.json
+```
 
 ## What is modelled
 

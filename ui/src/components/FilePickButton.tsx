@@ -9,6 +9,7 @@ export function FilePickButton({
   onFile,
   disabled,
   variant = "secondary",
+  size,
 }: {
   accept: string;
   icon?: ReactNode;
@@ -16,12 +17,14 @@ export function FilePickButton({
   onFile: (file: File) => void;
   disabled?: boolean;
   variant?: "primary" | "secondary" | "ghost";
+  size?: "sm" | "md";
 }) {
   const input = useRef<HTMLInputElement>(null);
   return (
     <>
       <Button
         variant={variant}
+        {...(size ? { size } : {})}
         icon={icon}
         disabled={disabled}
         onClick={() => input.current?.click()}
