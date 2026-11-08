@@ -46,7 +46,8 @@ generated files and fixtures compare equal on Windows too.
 
    Each matrix entry names its cargo `features`, space-separated; a feature that only some
    targets support is added to those entries alone. The job fails if a Linux binary is not
-   statically linked.
+   statically linked. `flowlab-pdi` links spidev on Linux only, so `flowlab pdi-bench` reaches
+   hardware in the Linux binaries and runs `--sim` only in the Windows and macOS ones.
 3. Every run uploads the archives as workflow artifacts. On a tag, a last job attaches them,
    with `SHA256SUMS.txt`, to a GitHub release of that name.
 
