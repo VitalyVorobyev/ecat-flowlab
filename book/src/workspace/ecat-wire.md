@@ -13,7 +13,7 @@ source: [`crates/ecat-wire`](https://github.com/VitalyVorobyev/ecat-flowlab/blob
 | | |
 |---|---|
 | Depends on | `thiserror`; `serde` behind the default `serde` feature |
-| Used by | `flowlab-capture` (decode into the trace index), `flowlab-analysis` (decode mailbox content and frame details), `flowlab-synth` and `flowlab-sim` (encode frames), `flowlab-devices`, `flowlab-master` (mailbox headers, SyncManager and AL status registers) |
+| Used by | `flowlab-capture` (decode into the trace index), `flowlab-analysis` (decode mailbox content and frame details), `flowlab-synth` and `flowlab-sim` (encode frames), `flowlab-devices`, `flowlab-mailbox` (messages above the headers), `flowlab-master` (mailbox headers, SyncManager and AL status registers) |
 
 The crate does no I/O and knows nothing about captures, time or analysis.
 

@@ -2,6 +2,7 @@
 
 use ecat_wire::{MAILBOX_HEADER_LEN, MailboxErrorReply, MailboxHeader, MailboxType};
 use flowlab_core::{InputRef, Provenance, ReportMeta, units};
+use flowlab_mailbox::msg::{self, EoeAddresses};
 use flowlab_mailbox::{MailboxPolicy, MailboxProtocol, TransferDirection, TransferPlan};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -11,9 +12,7 @@ use crate::bus::{
     BusError, MailboxBus, MailboxLayout, SM_MAILBOX_IN, SM_REPEAT_ACK, SM_REPEAT_REQUEST, read_mailbox, read_sm,
     read_sm_status, sm_register, write_mailbox,
 };
-use crate::protocol::{
-    Endpoint, EoeAddresses, EoeReceive, EoeSend, FoeRead, FoeWrite, Outgoing, SdoDownload, SdoUpload,
-};
+use crate::protocol::{Endpoint, EoeReceive, EoeSend, FoeRead, FoeWrite, Outgoing, SdoDownload, SdoUpload};
 use crate::result::{CycleRecord, CycleTiming, MeasuredTransfer, Summary};
 
 /// The protocol a transfer uses, with its parameters.
@@ -47,12 +46,12 @@ pub enum TransferProtocol {
 impl TransferProtocol {
     /// FoE with the simulator's file name (`flowlab.bin`) and password 0.
     pub fn foe() -> Self {
-        Self::Foe { file_name: "flowlab.bin".into(), password: 0 }
+        Self::Foe { file_name: msg::FOE_FILE_NAME.into(), password: 0 }
     }
 
     /// CoE at the simulator's object, `0x2000:00`.
     pub fn coe() -> Self {
-        Self::Coe { index: 0x2000, subindex: 0 }
+        Self::Coe { index: msg::SDO_INDEX, subindex: msg::SDO_SUBINDEX }
     }
 
     /// EoE with a 1500-byte MTU and the simulator's addresses.
@@ -165,10 +164,6 @@ impl Default for TransferOptions {
     }
 }
 
-const fn next_counter(c: u8) -> u8 {
-    if c >= 7 { 1 } else { c + 1 }
-}
-
 /// A message encoded for "mailbox out", with its counter.
 struct Pending {
     msg: Outgoing,
@@ -253,18 +248,8 @@ impl<'a, B: MailboxBus> Engine<'a, B> {
                 msg.body.len()
             )));
         }
-        let h = MailboxHeader {
-            length: msg.body.len() as u16,
-            address: 0,
-            channel: 0,
-            priority: 0,
-            mailbox_type: msg.kind,
-            counter: self.counter,
-        };
-        self.counter = next_counter(self.counter);
-        let mut buffer = h.encode().to_vec();
-        buffer.extend_from_slice(&msg.body);
-        buffer.resize(len, 0);
+        let buffer = msg::mailbox_buffer(msg.kind, self.counter, 0, &msg.body, len);
+        self.counter = msg::next_counter(self.counter);
         Ok(Pending { msg, buffer })
     }
 
@@ -555,16 +540,16 @@ fn endpoint(job: &TransferJob) -> Result<Box<dyn Endpoint>, MasterError> {
     }
     Ok(match (&job.protocol, &job.payload) {
         (TransferProtocol::Foe { file_name, password }, Payload::Send(d)) => {
-            if MAILBOX_HEADER_LEN + 6 + file_name.len() > out_len {
+            if file_name.len() > msg::foe_capacity(out_len) {
                 return Err(MasterError::Invalid("the FoE file name does not fit the mailbox".into()));
             }
             Box::new(FoeWrite::new(d.clone(), file_name, *password, out_len))
         }
         (TransferProtocol::Foe { file_name, password }, Payload::Receive { .. }) => {
-            if MAILBOX_HEADER_LEN + 6 + file_name.len() > out_len {
+            if file_name.len() > msg::foe_capacity(out_len) {
                 return Err(MasterError::Invalid("the FoE file name does not fit the mailbox".into()));
             }
-            Box::new(FoeRead::new(file_name, *password, in_len - MAILBOX_HEADER_LEN - 6))
+            Box::new(FoeRead::new(file_name, *password, msg::foe_capacity(in_len)))
         }
         (TransferProtocol::Coe { index, subindex }, Payload::Send(d)) => {
             if d.len() > u32::MAX as usize {

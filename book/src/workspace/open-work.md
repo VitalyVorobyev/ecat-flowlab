@@ -44,12 +44,6 @@ questions that real captures should answer.
 
 None of these changes a result; each makes drift likely.
 
-- **One mailbox message layer.** FoE and SDO message builders, the 7-byte SDO padding, counters
-  1–7, EoE fragmentation (frame number `% 15 + 1`, 32-byte offsets) and reassembly, and the
-  UDP/IPv4 frame exist four times: `flowlab-sim/src/protocol.rs`, `flowlab-master/src/protocol.rs`,
-  `flowlab-master/src/virtual_slave.rs` and `flowlab-synth/src/mailbox.rs`. The master's copy
-  handles FoE BUSY and repeated DATA packets, the simulator's does not. Their home is
-  `flowlab-mailbox`; the analysis trackers stay separate as an independent reader.
 - **Mirrored result types.** `TransferResult` (sim) and `MeasuredTransfer` (master) share about
   20 fields, with two `TransferProtocol` enums, `String` directions and two computations of
   `physical_bound_ns`; `flowlab_study::lab::PdiValues` mirrors `flowlab_sim::PdiSpec`; the PDI

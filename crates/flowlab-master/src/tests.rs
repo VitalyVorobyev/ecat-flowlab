@@ -3,6 +3,7 @@
 use futures_lite::future::block_on;
 
 use flowlab_mailbox::MailboxPolicy;
+use flowlab_mailbox::msg::udp_payload;
 
 use super::*;
 

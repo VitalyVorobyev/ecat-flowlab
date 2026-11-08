@@ -33,8 +33,8 @@ Only their provenance differs.
 | [`flowlab-capture`](flowlab-capture.md) | pcap/pcapng reader and writer, trace index, direction inference | ecat-wire, core |
 | [`flowlab-devices`](flowlab-devices.md) | ESI/ENI readers, ENI writer, bus-budget planner | ecat-wire |
 | [`flowlab-analysis`](flowlab-analysis.md) | Capture analysis and frame queries | ecat-wire, core, capture, devices |
-| [`flowlab-synth`](flowlab-synth.md) | Deterministic synthetic captures with ground truth | ecat-wire, core, capture, devices |
-| [`flowlab-mailbox`](flowlab-mailbox.md) | Mailbox policies, transfer directions and protocols, the generated payload: shared by the simulator and the lab master | — |
+| [`flowlab-synth`](flowlab-synth.md) | Deterministic synthetic captures with ground truth | ecat-wire, core, capture, devices, mailbox |
+| [`flowlab-mailbox`](flowlab-mailbox.md) | Mailbox policies, transfer directions and protocols, the generated payload, the FoE, CoE and EoE messages: shared by the simulator, the lab master and the generator | ecat-wire |
 | [`flowlab-sim`](flowlab-sim.md) | Discrete-event simulator emitting frames | ecat-wire, core, capture, mailbox |
 | [`flowlab-study`](flowlab-study.md) | Parameter studies, Pareto frontier, calibration, what-if, lab inputs | core, sim, analysis |
 | [`flowlab-live`](flowlab-live.md) | Live capture through dumpcap or tcpdump, analysed in a rolling window | core, capture, analysis |

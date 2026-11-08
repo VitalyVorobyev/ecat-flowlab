@@ -9,10 +9,8 @@
 
 use std::collections::VecDeque;
 
-use ecat_wire::{
-    CoeEmergency, CoeHeader, CoeService, EoeHeader, EoeType, FoeHeader, FoeOpcode, MAILBOX_HEADER_LEN, MailboxHeader,
-    MailboxType, SdoCommand, SdoHeader,
-};
+use ecat_wire::{CoeEmergency, CoeHeader, CoeService, EoeHeader, FoeHeader, FoeOpcode, MailboxType, SdoCommand};
+use flowlab_mailbox::msg;
 use serde::Serialize;
 
 /// Bytes of each mailbox SyncManager in the generated slaves.
@@ -83,42 +81,10 @@ pub(crate) struct Conversation {
     pub(crate) ready_at: u64,
 }
 
-fn next(c: &mut u8) -> u8 {
-    *c = *c % 7 + 1;
-    *c
-}
-
-fn mbx(counter: u8, t: MailboxType, payload: &[u8]) -> Vec<u8> {
-    debug_assert!(payload.len() + MAILBOX_HEADER_LEN <= MBX_LEN);
-    let h =
-        MailboxHeader { length: payload.len() as u16, address: 0, channel: 0, priority: 0, mailbox_type: t, counter };
-    let mut v = Vec::with_capacity(MBX_LEN);
-    v.extend_from_slice(&h.encode());
-    v.extend_from_slice(payload);
-    v.resize(MBX_LEN, 0);
-    v
-}
-
 fn coe(service: CoeService, rest: &[u8]) -> Vec<u8> {
     let mut v = CoeHeader { number: 0, service }.encode().to_vec();
     v.extend_from_slice(rest);
     v
-}
-
-fn sdo(service: CoeService, cmd: SdoCommand, index: u16, subindex: u8, data: u32, tail: &[u8]) -> Vec<u8> {
-    let mut v = SdoHeader { command: cmd.encode(), index, subindex, data }.encode().to_vec();
-    v.extend_from_slice(tail);
-    coe(service, &v)
-}
-
-/// A segment frame: command byte then data, padded to 7 data bytes.
-fn segment(service: CoeService, cmd: SdoCommand, data: &[u8]) -> Vec<u8> {
-    let mut v = vec![cmd.encode()];
-    v.extend_from_slice(data);
-    if data.len() < 7 {
-        v.resize(1 + 7, 0);
-    }
-    coe(service, &v)
 }
 
 /// Deterministic object content.
@@ -126,11 +92,11 @@ fn content(len: usize, seed: u8) -> Vec<u8> {
     (0..len).map(|i| (i as u8).wrapping_mul(31).wrapping_add(seed)).collect()
 }
 
-const FIRST_CHUNK: usize = MBX_LEN - MAILBOX_HEADER_LEN - CoeHeader::LEN - SdoHeader::LEN;
-const SEGMENT_CHUNK: usize = MBX_LEN - MAILBOX_HEADER_LEN - CoeHeader::LEN - 1;
-const FOE_CHUNK: usize = MBX_LEN - MAILBOX_HEADER_LEN - FoeHeader::LEN;
-/// Non-final EoE fragments must be a multiple of 32 bytes.
-const EOE_CHUNK: usize = (MBX_LEN - MAILBOX_HEADER_LEN - EoeHeader::LEN) / EoeHeader::BLOCK * EoeHeader::BLOCK;
+const FIRST_CHUNK: usize = msg::sdo_initiate_capacity(MBX_LEN);
+const SEGMENT_CHUNK: usize = msg::sdo_segment_capacity(MBX_LEN);
+const FOE_CHUNK: usize = msg::foe_capacity(MBX_LEN);
+/// Every EoE fragment carries this much, the last one at most (a multiple of 32 bytes).
+const EOE_CHUNK: usize = msg::eoe_capacity(MBX_LEN) / EoeHeader::BLOCK * EoeHeader::BLOCK;
 
 impl Conversation {
     pub(crate) fn new(station: u16) -> Self {
@@ -138,26 +104,26 @@ impl Conversation {
     }
 
     fn send(&mut self, t: MailboxType, payload: Vec<u8>) {
-        let c = next(&mut self.out_counter);
-        self.steps.push_back(Step::Send(mbx(c, t, &payload)));
+        self.out_counter = msg::next_counter(self.out_counter);
+        self.steps.push_back(Step::Send(msg::mailbox_buffer(t, self.out_counter, 0, &payload, MBX_LEN)));
     }
 
     fn receive(&mut self, t: MailboxType, payload: Vec<u8>) {
-        let c = next(&mut self.in_counter);
-        self.steps.push_back(Step::Receive(mbx(c, t, &payload)));
+        self.in_counter = msg::next_counter(self.in_counter);
+        self.steps.push_back(Step::Receive(msg::mailbox_buffer(t, self.in_counter, 0, &payload, MBX_LEN)));
     }
 
     /// Expedited upload of `index:subindex` returning `value`.
     pub(crate) fn expedited_upload(&mut self, index: u16, subindex: u8, value: u32, truth: &mut MailboxTruth) {
         let req = SdoCommand::InitiateUploadRequest { complete_access: false };
-        self.send(MailboxType::Coe, sdo(CoeService::SdoRequest, req, index, subindex, 0, &[]));
+        self.send(MailboxType::Coe, msg::sdo(CoeService::SdoRequest, req, index, subindex, 0, &[]));
         let resp = SdoCommand::InitiateUploadResponse {
             complete_access: false,
             expedited: true,
             size_indicated: true,
             unused: 0,
         };
-        self.receive(MailboxType::Coe, sdo(CoeService::SdoResponse, resp, index, subindex, value, &[]));
+        self.receive(MailboxType::Coe, msg::sdo(CoeService::SdoResponse, resp, index, subindex, value, &[]));
         truth.sdo_ok += 1;
     }
 
@@ -165,7 +131,7 @@ impl Conversation {
     pub(crate) fn segmented_upload(&mut self, index: u16, len: usize, truth: &mut MailboxTruth) {
         let data = content(len, index as u8);
         let req = SdoCommand::InitiateUploadRequest { complete_access: false };
-        self.send(MailboxType::Coe, sdo(CoeService::SdoRequest, req, index, 0, 0, &[]));
+        self.send(MailboxType::Coe, msg::sdo(CoeService::SdoRequest, req, index, 0, 0, &[]));
         let first = len.min(FIRST_CHUNK);
         let resp = SdoCommand::InitiateUploadResponse {
             complete_access: false,
@@ -173,7 +139,7 @@ impl Conversation {
             size_indicated: true,
             unused: 0,
         };
-        self.receive(MailboxType::Coe, sdo(CoeService::SdoResponse, resp, index, 0, len as u32, &data[..first]));
+        self.receive(MailboxType::Coe, msg::sdo(CoeService::SdoResponse, resp, index, 0, len as u32, &data[..first]));
         let mut at = first;
         let mut toggle = false;
         if at < len {
@@ -183,10 +149,10 @@ impl Conversation {
             let n = (len - at).min(SEGMENT_CHUNK);
             let last = at + n == len;
             let req = SdoCommand::UploadSegmentRequest { toggle };
-            self.send(MailboxType::Coe, segment(CoeService::SdoRequest, req, &[]));
+            self.send(MailboxType::Coe, msg::sdo_segment(CoeService::SdoRequest, req, &[]));
             let unused = if n < 7 { 7 - n as u8 } else { 0 };
             let resp = SdoCommand::UploadSegmentResponse { toggle, unused, last };
-            self.receive(MailboxType::Coe, segment(CoeService::SdoResponse, resp, &data[at..at + n]));
+            self.receive(MailboxType::Coe, msg::sdo_segment(CoeService::SdoResponse, resp, &data[at..at + n]));
             truth.sdo_segments += 1;
             at += n;
             toggle = !toggle;
@@ -207,8 +173,8 @@ impl Conversation {
                 size_indicated: true,
                 unused: 4 - len as u8,
             };
-            self.send(MailboxType::Coe, sdo(CoeService::SdoRequest, req, index, 0, u32::from_le_bytes(v), &[]));
-            self.receive(MailboxType::Coe, sdo(CoeService::SdoResponse, ok, index, 0, 0, &[]));
+            self.send(MailboxType::Coe, msg::sdo(CoeService::SdoRequest, req, index, 0, u32::from_le_bytes(v), &[]));
+            self.receive(MailboxType::Coe, msg::sdo(CoeService::SdoResponse, ok, index, 0, 0, &[]));
             truth.sdo_ok += 1;
             return;
         }
@@ -219,8 +185,8 @@ impl Conversation {
             size_indicated: true,
             unused: 0,
         };
-        self.send(MailboxType::Coe, sdo(CoeService::SdoRequest, req, index, 0, len as u32, &data[..first]));
-        self.receive(MailboxType::Coe, sdo(CoeService::SdoResponse, ok, index, 0, 0, &[]));
+        self.send(MailboxType::Coe, msg::sdo(CoeService::SdoRequest, req, index, 0, len as u32, &data[..first]));
+        self.receive(MailboxType::Coe, msg::sdo(CoeService::SdoResponse, ok, index, 0, 0, &[]));
         let mut at = first;
         let mut toggle = false;
         if at < len {
@@ -231,9 +197,9 @@ impl Conversation {
             let last = at + n == len;
             let unused = if n < 7 { 7 - n as u8 } else { 0 };
             let req = SdoCommand::DownloadSegmentRequest { toggle, unused, last };
-            self.send(MailboxType::Coe, segment(CoeService::SdoRequest, req, &data[at..at + n]));
+            self.send(MailboxType::Coe, msg::sdo_segment(CoeService::SdoRequest, req, &data[at..at + n]));
             let resp = SdoCommand::DownloadSegmentResponse { toggle };
-            self.receive(MailboxType::Coe, segment(CoeService::SdoResponse, resp, &[]));
+            self.receive(MailboxType::Coe, msg::sdo_segment(CoeService::SdoResponse, resp, &[]));
             truth.sdo_segments += 1;
             at += n;
             toggle = !toggle;
@@ -244,11 +210,11 @@ impl Conversation {
     /// Upload of an object the slave does not have; the slave aborts.
     pub(crate) fn aborted_upload(&mut self, truth: &mut MailboxTruth) {
         let req = SdoCommand::InitiateUploadRequest { complete_access: false };
-        self.send(MailboxType::Coe, sdo(CoeService::SdoRequest, req, MISSING_OBJECT, 0, 0, &[]));
+        self.send(MailboxType::Coe, msg::sdo(CoeService::SdoRequest, req, MISSING_OBJECT, 0, 0, &[]));
         // The abort transfer request uses the SDO request service in either direction.
         self.receive(
             MailboxType::Coe,
-            sdo(CoeService::SdoRequest, SdoCommand::Abort, MISSING_OBJECT, 0, ABORT_NO_OBJECT, &[]),
+            msg::sdo(CoeService::SdoRequest, SdoCommand::Abort, MISSING_OBJECT, 0, ABORT_NO_OBJECT, &[]),
         );
         truth.sdo_aborted += 1;
     }
@@ -289,34 +255,13 @@ impl Conversation {
         frame.extend_from_slice(&src);
         frame.extend_from_slice(&EOE_ETHERTYPE.to_be_bytes());
         frame.extend(content(len.saturating_sub(14), self.eoe_frame_no));
-        self.eoe_frame_no = self.eoe_frame_no % 15 + 1;
-        let frame_no = self.eoe_frame_no;
-        let mut at = 0;
-        let mut fragment = 0u8;
-        while at < frame.len() {
-            let n = (frame.len() - at).min(EOE_CHUNK);
-            let last = at + n == frame.len();
-            let offset_blocks =
-                if fragment == 0 { frame.len().div_ceil(EoeHeader::BLOCK) } else { at / EoeHeader::BLOCK };
-            let h = EoeHeader {
-                frame_type: EoeType::Fragment,
-                port: 0,
-                last_fragment: last,
-                time_appended: false,
-                time_request: false,
-                fragment,
-                offset_blocks: offset_blocks as u8,
-                frame_no,
-            };
-            let mut v = h.encode().to_vec();
-            v.extend_from_slice(&frame[at..at + n]);
+        self.eoe_frame_no = msg::next_eoe_frame_no(self.eoe_frame_no);
+        for v in msg::eoe_fragments(&frame, EOE_CHUNK, self.eoe_frame_no) {
             if to_slave {
                 self.send(MailboxType::Eoe, v);
             } else {
                 self.receive(MailboxType::Eoe, v);
             }
-            at += n;
-            fragment += 1;
         }
         if to_slave {
             truth.eoe_frames_to_slave += 1;

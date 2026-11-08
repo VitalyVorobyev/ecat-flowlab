@@ -7,10 +7,8 @@
 
 use std::collections::VecDeque;
 
-use ecat_wire::{
-    CoeHeader, CoeService, EoeHeader, EoeType, FoeHeader, FoeOpcode, MAILBOX_HEADER_LEN, MailboxType, SdoCommand,
-    SdoHeader, segment_data_len,
-};
+use ecat_wire::{CoeHeader, CoeService, FoeHeader, FoeOpcode, MailboxType, SdoCommand, SdoHeader, segment_data_len};
+use flowlab_mailbox::msg::{self, EOE_HEADERS, EoeAddresses, EoeReassembler};
 use flowlab_mailbox::payload_bytes;
 use sha2::{Digest, Sha256};
 
@@ -113,40 +111,6 @@ pub(crate) trait Endpoint {
 // EoE: UDP/IPv4 datagrams tunnelled in EoE fragments
 // ---------------------------------------------------------------------------------------------
 
-/// Ethernet + IPv4 + UDP header bytes of a tunnelled frame.
-pub(crate) const EOE_HEADERS: usize = 14 + 20 + 8;
-const EOE_DST: [u8; 6] = [0x00, 0x00, 0x5E, 0x00, 0x53, 0x20];
-const EOE_SRC: [u8; 6] = [0x00, 0x00, 0x5E, 0x00, 0x53, 0x21];
-
-fn udp_frame(payload: &[u8], to_slave: bool) -> Vec<u8> {
-    let (dst, src) = if to_slave { (EOE_DST, EOE_SRC) } else { (EOE_SRC, EOE_DST) };
-    // 192.0.2.0/24 (RFC 5737 TEST-NET-1).
-    let (sip, dip) = if to_slave { ([192, 0, 2, 1], [192, 0, 2, 2]) } else { ([192, 0, 2, 2], [192, 0, 2, 1]) };
-    let total = (20 + 8 + payload.len()) as u16;
-    let mut ip = vec![0x45, 0, (total >> 8) as u8, total as u8, 0, 0, 0x40, 0, 64, 17, 0, 0];
-    ip.extend_from_slice(&sip);
-    ip.extend_from_slice(&dip);
-    let mut sum = 0u32;
-    for w in ip.chunks(2) {
-        sum += u16::from_be_bytes([w[0], w[1]]) as u32;
-    }
-    while sum > 0xFFFF {
-        sum = (sum & 0xFFFF) + (sum >> 16);
-    }
-    let c = !(sum as u16);
-    ip[10] = (c >> 8) as u8;
-    ip[11] = c as u8;
-    let ulen = (8 + payload.len()) as u16;
-    let mut f = Vec::with_capacity(EOE_HEADERS + payload.len());
-    f.extend_from_slice(&dst);
-    f.extend_from_slice(&src);
-    f.extend_from_slice(&0x0800u16.to_be_bytes());
-    f.extend_from_slice(&ip);
-    f.extend_from_slice(&[0xC3, 0x50, 0xC3, 0x51, (ulen >> 8) as u8, ulen as u8, 0, 0]); // ports 50000 → 50001
-    f.extend_from_slice(payload);
-    f
-}
-
 pub(crate) struct EoeSender {
     src: Source,
     mtu: usize,
@@ -158,41 +122,14 @@ pub(crate) struct EoeSender {
 
 impl EoeSender {
     pub(crate) fn new(src: Source, mtu: usize, mailbox_len: usize, to_slave: bool) -> Self {
-        let capacity = mailbox_len - MAILBOX_HEADER_LEN - EoeHeader::LEN;
+        let capacity = msg::eoe_capacity(mailbox_len);
         Self { src, mtu, capacity, to_slave, queue: VecDeque::new(), frame_no: 0 }
     }
 
     fn fragment_next_frame(&mut self) {
-        let frame = udp_frame(&self.src.take(self.mtu - 28), self.to_slave);
-        self.frame_no = self.frame_no % 15 + 1;
-        // Fragments other than the last carry a multiple of 32 bytes.
-        let chunk = self.capacity / EoeHeader::BLOCK * EoeHeader::BLOCK;
-        let mut at = 0;
-        let mut fragment = 0u8;
-        while at < frame.len() {
-            let left = frame.len() - at;
-            let n = if left <= self.capacity { left } else { chunk };
-            let last = at + n == frame.len();
-            let h = EoeHeader {
-                frame_type: EoeType::Fragment,
-                port: 0,
-                last_fragment: last,
-                time_appended: false,
-                time_request: false,
-                fragment,
-                offset_blocks: if fragment == 0 {
-                    frame.len().div_ceil(EoeHeader::BLOCK) as u8
-                } else {
-                    (at / EoeHeader::BLOCK) as u8
-                },
-                frame_no: self.frame_no,
-            };
-            let mut v = h.encode().to_vec();
-            v.extend_from_slice(&frame[at..at + n]);
-            self.queue.push_back(v);
-            at += n;
-            fragment += 1;
-        }
+        let frame = msg::udp_frame(&self.src.take(self.mtu - 28), &EoeAddresses::default(), self.to_slave);
+        self.frame_no = msg::next_eoe_frame_no(self.frame_no);
+        self.queue.extend(msg::eoe_fragments(&frame, self.capacity, self.frame_no));
     }
 }
 
@@ -214,14 +151,12 @@ impl Endpoint for EoeSender {
 
 pub(crate) struct EoeReceiver {
     sink: Sink,
-    frame: Vec<u8>,
-    frame_no: Option<u8>,
-    next_fragment: u8,
+    reassembler: EoeReassembler,
 }
 
 impl EoeReceiver {
     pub(crate) fn new(sink: Sink) -> Self {
-        Self { sink, frame: Vec::new(), frame_no: None, next_fragment: 0 }
+        Self { sink, reassembler: EoeReassembler::default() }
     }
 }
 
@@ -230,25 +165,16 @@ impl Endpoint for EoeReceiver {
         None
     }
     fn on(&mut self, t: MailboxType, body: &[u8], now: u64) {
-        let Ok(h) = EoeHeader::parse(body) else { return };
-        if t != MailboxType::Eoe || h.frame_type != EoeType::Fragment {
+        if t != MailboxType::Eoe {
             return;
         }
-        if h.fragment == 0 {
-            self.frame.clear();
-            self.frame_no = Some(h.frame_no);
-            self.next_fragment = 0;
-        }
-        if self.frame_no != Some(h.frame_no) || self.next_fragment != h.fragment {
+        let broken = self.reassembler.broken;
+        let frame = self.reassembler.push(body);
+        if self.reassembler.broken != broken {
             self.sink.corrupt = true;
-            return;
         }
-        self.frame.extend_from_slice(&body[EoeHeader::LEN..]);
-        self.next_fragment += 1;
-        if h.last_fragment && self.frame.len() >= EOE_HEADERS {
-            let data = std::mem::take(&mut self.frame);
+        if let Some(data) = frame.filter(|f| f.len() >= EOE_HEADERS) {
             self.sink.deliver(&data[EOE_HEADERS..], now);
-            self.frame_no = None;
         }
     }
     fn wants_input(&self) -> bool {
@@ -267,12 +193,8 @@ impl Endpoint for EoeReceiver {
 // ---------------------------------------------------------------------------------------------
 
 fn foe(op: FoeOpcode, value: u32, tail: &[u8]) -> (MailboxType, Vec<u8>) {
-    let mut v = FoeHeader { opcode: op, value }.encode().to_vec();
-    v.extend_from_slice(tail);
-    (MailboxType::Foe, v)
+    (MailboxType::Foe, msg::foe(op, value, tail))
 }
-
-const FOE_FILE: &str = "flowlab.bin";
 
 /// Sends a file in DATA packets, each acknowledged before the next. Used by the master for a
 /// write (after WRQ) and by the slave for a read (after RRQ).
@@ -296,7 +218,7 @@ enum FoeTx {
 impl FoeSender {
     /// `initiator`: the sender opens with WRQ (master write); otherwise it waits for RRQ.
     pub(crate) fn new(src: Source, mailbox_len: usize, initiator: bool) -> Self {
-        let capacity = mailbox_len - MAILBOX_HEADER_LEN - FoeHeader::LEN;
+        let capacity = msg::foe_capacity(mailbox_len);
         let state = if initiator { FoeTx::Request } else { FoeTx::Idle };
         Self { src, capacity, initiator, state, last_short: false }
     }
@@ -307,7 +229,7 @@ impl Endpoint for FoeSender {
         match self.state {
             FoeTx::Request => {
                 self.state = FoeTx::WaitAck(0);
-                Some(foe(FoeOpcode::Write, 0, FOE_FILE.as_bytes()))
+                Some(foe(FoeOpcode::Write, 0, msg::FOE_FILE_NAME.as_bytes()))
             }
             FoeTx::Send(n) => {
                 let data = self.src.take(self.capacity);
@@ -351,10 +273,10 @@ pub(crate) struct FoeReceiver {
 impl FoeReceiver {
     /// `initiator`: this side sends RRQ first (master read).
     pub(crate) fn new(sink: Sink, mailbox_len: usize, initiator: bool) -> Self {
-        let capacity = mailbox_len - MAILBOX_HEADER_LEN - FoeHeader::LEN;
+        let capacity = msg::foe_capacity(mailbox_len);
         let mut pending = VecDeque::new();
         if initiator {
-            pending.push_back(foe(FoeOpcode::Read, 0, FOE_FILE.as_bytes()));
+            pending.push_back(foe(FoeOpcode::Read, 0, msg::FOE_FILE_NAME.as_bytes()));
         }
         Self { sink, capacity, pending, expected: 1, finished: false }
     }
@@ -398,35 +320,12 @@ impl Endpoint for FoeReceiver {
 // CoE SDO, normal transfer with segments
 // ---------------------------------------------------------------------------------------------
 
-const SDO_INDEX: u16 = 0x2000;
-
 fn sdo(service: CoeService, cmd: SdoCommand, data: u32, tail: &[u8]) -> (MailboxType, Vec<u8>) {
-    let mut v = CoeHeader { number: 0, service }.encode().to_vec();
-    v.extend_from_slice(&SdoHeader { command: cmd.encode(), index: SDO_INDEX, subindex: 0, data }.encode());
-    v.extend_from_slice(tail);
-    (MailboxType::Coe, v)
+    (MailboxType::Coe, msg::sdo(service, cmd, msg::SDO_INDEX, msg::SDO_SUBINDEX, data, tail))
 }
 
 fn segment(service: CoeService, cmd: SdoCommand, data: &[u8]) -> (MailboxType, Vec<u8>) {
-    let mut v = CoeHeader { number: 0, service }.encode().to_vec();
-    v.push(cmd.encode());
-    v.extend_from_slice(data);
-    if data.len() < 7 {
-        v.resize(CoeHeader::LEN + 1 + 7, 0);
-    }
-    (MailboxType::Coe, v)
-}
-
-fn unused(n: usize) -> u8 {
-    if n < 7 { (7 - n) as u8 } else { 0 }
-}
-
-fn init_capacity(mailbox_len: usize) -> usize {
-    mailbox_len - MAILBOX_HEADER_LEN - CoeHeader::LEN - SdoHeader::LEN
-}
-
-fn segment_capacity(mailbox_len: usize) -> usize {
-    mailbox_len - MAILBOX_HEADER_LEN - CoeHeader::LEN - 1
+    (MailboxType::Coe, msg::sdo_segment(service, cmd, data))
 }
 
 fn parse_sdo(body: &[u8], request: bool) -> Option<(SdoCommand, Option<SdoHeader>)> {
@@ -468,8 +367,8 @@ impl SdoSender {
         Self {
             src,
             total,
-            init_cap: init_capacity(mailbox_len),
-            seg_cap: segment_capacity(mailbox_len),
+            init_cap: msg::sdo_initiate_capacity(mailbox_len),
+            seg_cap: msg::sdo_segment_capacity(mailbox_len),
             client,
             state,
             toggle: false,
@@ -518,13 +417,19 @@ impl Endpoint for SdoSender {
                 let n = data.len();
                 if self.client {
                     self.state = SdoTx::WaitSegment;
-                    let cmd =
-                        SdoCommand::DownloadSegmentRequest { toggle: self.toggle, unused: unused(n), last: self.last };
+                    let cmd = SdoCommand::DownloadSegmentRequest {
+                        toggle: self.toggle,
+                        unused: msg::sdo_unused(n),
+                        last: self.last,
+                    };
                     Some(segment(CoeService::SdoRequest, cmd, &data))
                 } else {
                     self.state = if self.last { SdoTx::Done } else { SdoTx::WaitSegment };
-                    let cmd =
-                        SdoCommand::UploadSegmentResponse { toggle: self.toggle, unused: unused(n), last: self.last };
+                    let cmd = SdoCommand::UploadSegmentResponse {
+                        toggle: self.toggle,
+                        unused: msg::sdo_unused(n),
+                        last: self.last,
+                    };
                     self.toggle = !self.toggle;
                     Some(segment(CoeService::SdoResponse, cmd, &data))
                 }

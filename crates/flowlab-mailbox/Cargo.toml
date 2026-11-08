@@ -1,6 +1,6 @@
 [package]
 name = "flowlab-mailbox"
-description = "Mailbox vocabulary shared by the ECAT FlowLab simulator and lab master: service policies, transfer directions and protocols, the generated payload."
+description = "Mailbox vocabulary shared by the ECAT FlowLab simulator, lab master and capture generator: service policies, transfer directions and protocols, the generated payload, and the FoE, CoE and EoE messages."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,6 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+ecat-wire.workspace = true
 serde.workspace = true
 schemars.workspace = true
 sha2.workspace = true
