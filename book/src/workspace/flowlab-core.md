@@ -1,8 +1,9 @@
 # flowlab-core
 
 `flowlab-core` is the shared vocabulary of the workspace: where a result came from
-(`Provenance`), the metadata every report carries (`ReportMeta`, `InputRef`), and unit
-constants. It is deliberately small so that every other crate can depend on it.
+(`Provenance`), the metadata every report carries (`ReportMeta`, `InputRef`), unit constants,
+the one percentile definition (`stats::quantile`) and the PDI timing samples file
+(`pdi_samples`). It is deliberately small so that every other crate can depend on it.
 
 API reference: [`flowlab_core`](../../api/flowlab_core/index.html) ·
 source: [`crates/flowlab-core`](https://github.com/VitalyVorobyev/ecat-flowlab/blob/main/crates/flowlab-core)
@@ -62,6 +63,16 @@ reports stay self-describing for tools outside Rust. The `units` module holds th
 `units::serialization_ns(bytes, bps)` is the time to serialize `bytes` at `bps`, in ns,
 rounded up. Its unit test checks that 1538 wire bytes (a maximum-size frame plus overhead)
 take 123 040 ns at 100 Mbit/s, and that 10 MB (decimal) take 800 000 000 ns.
+
+## Percentiles and PDI samples
+
+`stats::quantile(sorted, q)` interpolates linearly between the two closest ranks, at position
+*q* · (*n* − 1); every percentile in a FlowLab result comes from it.
+
+`pdi_samples` is the samples file `flowlab pdi-bench` writes and `flowlab pdi-fit` reads
+([PDI timing samples](../reference/specs.md#pdi-timing-samples)): `Direction`, `Sample`
+(`duration_ns` may have a fraction), `to_csv`, `parse` (errors name the line) and `provenance`
+(the `flowlab:provenance=` marker, else measured).
 
 ## Tests
 

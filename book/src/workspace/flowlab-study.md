@@ -32,7 +32,7 @@ source: [crates/flowlab-study](https://github.com/VitalyVorobyev/ecat-flowlab/bl
 | `Metric` | A number read from a `SimResult` |
 | `Objective` | `metric` + `goal` (`minimize` default, or `maximize`) |
 | `Constraint` | `metric` + optional `max` / `min` |
-| `lab::parse_samples`, `lab::fit_pdi` → `PdiFit` | PDI timing samples (CSV) → the PDI model's cost per access and effective rates, with residuals per access size; provenance `measured` |
+| `lab::fit_pdi` → `PdiFit` | PDI timing samples (CSV) → the PDI model's cost per access and effective rates, with residuals per access size; provenance `measured` |
 | `lab::mailbox_policy(&ServicePattern) -> MailboxPolicy` | the analysis's service pattern as a simulator policy |
 | `lab::LabInputs` (+ `apply(&mut SimSpec, slave)`, `lab::schema()`) | measured values replacing the placeholders of one slave and the master |
 | `Target`, `CaptureMetric` | A measured value to fit: `measured` directly, or `from_capture` |
@@ -123,7 +123,7 @@ the simulator's single cost per access is the access-weighted mean of the read a
 intercepts. Each direction needs two or more sizes; a slope ≤ 0 is an error. A direction without
 samples takes the other's values, and the assumptions say so. The fit's provenance is
 `measured` unless the samples file carries a `flowlab:provenance=` marker in a comment
-(`samples_provenance`); `flowlab pdi-bench --sim` ([flowlab-pdi](flowlab-pdi.md)) writes
+(`flowlab_core::pdi_samples::provenance`); `flowlab pdi-bench --sim` ([flowlab-pdi](flowlab-pdi.md)) writes
 `simulated`.
 
 `mailbox_policy` maps the analysis's `ServicePattern` (see
@@ -184,7 +184,7 @@ finish time. The edits are what the UI applies, so applying them reproduces the 
 | `what_if_reports_why_a_change_does_not_fit` | Doubled mailboxes that overflow the ESC RAM are an infeasible variant with the reason |
 | `analysis_reads_the_master_policy_back_from_a_simulated_capture` | A simulated FoE transfer with `fixed_quota` 2, then with `opportunistic` 60 % / 10 µs, captured and analysed: the service pattern gives back fixed quota 2, and back-to-back polling with a budget of 50–60 % and a 10 µs turnaround |
 | `lab::tests::fit_recovers_rate_and_overhead_despite_outliers` | Samples on known lines with spread and one preempted and one early call per size: rates and costs recovered exactly; combined cost is the access-weighted mean |
-| `lab::tests::bad_samples_are_rejected_with_their_line`, `lab_inputs_replace_placeholders` | Header, column and direction errors name the line; one size cannot be fitted; `apply` sets the slave's PDI, application time and the policy |
+| `lab::tests::one_size_cannot_be_fitted`, `lab_inputs_replace_placeholders` | One size cannot be fitted; `apply` sets the slave's PDI, application time and the policy |
 | `lab::tests::a_provenance_marker_labels_the_fit` | A `# flowlab:provenance=simulated` comment makes the fit simulated, with an assumption saying so; no marker means measured |
 
 ## Example

@@ -71,8 +71,8 @@ physical modes.
 ## Mailbox
 
 `MailboxHeader` (`MAILBOX_HEADER_LEN` = 6) holds length, address, channel (6 bits), priority
-(2 bits), `MailboxType` (4 bits) and counter (3 bits, 0 reserved). The protocol headers that
-follow it:
+(2 bits), `MailboxType` (4 bits; `name()` gives `CoE`, `FoE`, … as reports show them) and
+counter (3 bits, 0 reserved). The protocol headers that follow it:
 
 | `MailboxType` | Types in this crate |
 |---|---|

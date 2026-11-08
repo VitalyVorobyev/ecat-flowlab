@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::str::FromStr;
 
-use flowlab_core::Provenance;
+use flowlab_core::pdi_samples::{Direction, Sample};
 use flowlab_core::stats::quantile;
 
 use crate::PdiError;
@@ -57,36 +57,6 @@ impl FromStr for Area {
         }
         Ok(area)
     }
-}
-
-/// Direction of a timed access.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Direction {
-    /// ESC → host.
-    Read,
-    /// Host → ESC.
-    Write,
-}
-
-impl Direction {
-    /// `read` or `write`, as in the samples file.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Read => "read",
-            Self::Write => "write",
-        }
-    }
-}
-
-/// One timed ESC access.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Sample {
-    /// Read or write.
-    pub direction: Direction,
-    /// Bytes moved.
-    pub bytes: u32,
-    /// Wall time of the complete access, ns.
-    pub duration_ns: u64,
 }
 
 /// What to time.
@@ -160,7 +130,7 @@ pub fn plan(o: &BenchOptions) -> Result<Plan, PdiError> {
 }
 
 /// Result of [`run`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BenchRun {
     /// The link check.
     pub link: LinkInfo,
@@ -240,7 +210,7 @@ pub fn run<S: SpiBus, C: Clock + ?Sized>(
         let t0 = clock.now_ns();
         access(esc, direction, bytes as usize)?;
         let t1 = clock.now_ns();
-        samples.push(Sample { direction, bytes, duration_ns: t1.saturating_sub(t0).max(1) });
+        samples.push(Sample { direction, bytes, duration_ns: t1.saturating_sub(t0).max(1) as f64 });
     }
     let after = esc.check_link(chip_id)?;
     if after.al_status != link.al_status {
@@ -250,23 +220,6 @@ pub fn run<S: SpiBus, C: Clock + ?Sized>(
         )));
     }
     Ok(BenchRun { link, plan, samples })
-}
-
-/// The samples file of `flowlab pdi-fit`: `comments` as `#` lines, the provenance marker
-/// (`# flowlab:provenance=measured|simulated`), the header `direction,bytes,duration_ns`, one
-/// line per sample.
-pub fn to_csv(samples: &[Sample], comments: &[String], provenance: Provenance) -> String {
-    let mut s = String::new();
-    for c in comments {
-        for line in c.lines() {
-            s += &format!("# {line}\n");
-        }
-    }
-    s += &format!("# {}{}\ndirection,bytes,duration_ns\n", Provenance::COMMENT_PREFIX, provenance.as_str());
-    for x in samples {
-        s += &format!("{},{},{}\n", x.direction.as_str(), x.bytes, x.duration_ns);
-    }
-    s
 }
 
 /// Timing of one direction at one size.
@@ -290,7 +243,7 @@ pub struct SizeSummary {
 pub fn summarise(samples: &[Sample]) -> Vec<SizeSummary> {
     let mut by: BTreeMap<(Direction, u32), Vec<f64>> = BTreeMap::new();
     for s in samples {
-        by.entry((s.direction, s.bytes)).or_default().push(s.duration_ns as f64);
+        by.entry((s.direction, s.bytes)).or_default().push(s.duration_ns);
     }
     by.into_iter()
         .map(|((direction, bytes), mut v)| {

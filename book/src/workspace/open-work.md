@@ -44,12 +44,8 @@ questions that real captures should answer.
 
 None of these changes a result; each makes drift likely.
 
-- **Mirrored result types.** `TransferResult` (sim) and `MeasuredTransfer` (master) share about
-  20 fields, with two `TransferProtocol` enums, `String` directions and two computations of
-  `physical_bound_ns`; `flowlab_study::lab::PdiValues` mirrors `flowlab_sim::PdiSpec`; the PDI
-  samples CSV is written by `flowlab-pdi` and parsed by `flowlab-study` with separate types.
 - **Small repeats.** Four SplitMix PRNGs (sim, study, pdi, synth's seeding); nine hex encoders
-  and six hand-built `InputRef`s; four protocol-name tables; SyncManager register constants and
+  and six hand-built `InputRef`s; SyncManager register constants and
   the "mailbox full" bit in master and analysis (`ecat-wire`'s `sm` module is their home);
   capture → `Trace::build` → analyse three times in the CLI and once in the server.
 - **`flowlab-analysis/src/mailbox.rs`** (about 1,500 lines) holds channel discovery, the CoE, FoE

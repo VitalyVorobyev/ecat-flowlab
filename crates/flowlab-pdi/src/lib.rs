@@ -5,7 +5,8 @@
 //! at an effective rate. This crate measures exactly that on the target: it performs complete
 //! ESC reads and writes the way a LAN9252 slave stack's hardware layer does ([`Lan9252`]: the
 //! CSR interface for registers, the process RAM FIFOs for memory), times each one with a
-//! monotonic clock ([`run`]) and writes them as a samples file ([`to_csv`]).
+//! monotonic clock ([`run`]) and writes them as a samples file ([`to_csv`], the format of
+//! `flowlab_core::pdi_samples`).
 //!
 //! * [`SpiBus`] is one SPI transaction with chip select held; [`open_spidev`] gives the Linux
 //!   spidev backend (other systems get an error).
@@ -39,9 +40,8 @@ mod tests;
 
 use std::io;
 
-pub use bench::{
-    Area, BenchOptions, BenchRun, DEFAULT_SIZES, Direction, Plan, Sample, SizeSummary, plan, run, summarise, to_csv,
-};
+pub use bench::{Area, BenchOptions, BenchRun, DEFAULT_SIZES, Plan, SizeSummary, plan, run, summarise};
+pub use flowlab_core::pdi_samples::{Direction, Sample, to_csv};
 pub use hardware::open_spidev;
 pub use lan9252::{Lan9252, LinkInfo, PROTECTED, ReadInstruction, check_range, csr_chunk, reg};
 pub use sim::{EscAccess, SimLan9252, SimTiming};
