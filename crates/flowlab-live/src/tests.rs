@@ -48,9 +48,13 @@ fn a_replay_is_counted_completely_and_saved_byte_for_byte() {
 #[test]
 fn the_window_keeps_recent_traffic_and_mailbox_addresses_outlive_it() {
     let options = LiveOptions { window: Duration::from_millis(500), ..fast() };
-    // About 0.08 s of capture per tick, 2.5 s in all: several ticks even on a slow machine.
-    let source = Source::Replay { bytes: demo(), name: "demo.pcapng".into(), speed: 2.0 };
-    let done = LiveSession::start(source, options).unwrap().wait();
+    // The demo's mailbox traffic is in its first 0.32 s. At half speed that is 0.64 s of wall
+    // time, so it spreads over several ticks even where sleeps overshoot (macOS CI runners).
+    // Stopped after 0.8 s of capture, which holds all of it.
+    let source = Source::Replay { bytes: demo(), name: "demo.pcapng".into(), speed: 0.5 };
+    let session = LiveSession::start(source, options).unwrap();
+    std::thread::sleep(Duration::from_millis(1600));
+    let done = session.stop();
     let report = done.window.unwrap();
     let span = report.summary.duration_ns as f64;
     assert!(span <= 0.5e9 + 2e6, "window spans {span} ns");
@@ -60,7 +64,8 @@ fn the_window_keeps_recent_traffic_and_mailbox_addresses_outlive_it() {
     let whole = analyze(&Trace::build(CaptureFile::parse(demo()).unwrap(), "demo"), &AnalysisOptions::default());
     let messages: u64 = whole.report.mailbox.channels.iter().map(|c| c.messages_in + c.messages_out).sum();
     let later: u64 = done.series[1..].iter().map(|p| p.mailbox_messages).sum();
-    assert!(later > 0);
+    let points: Vec<_> = done.series.iter().map(|p| (p.t_s, p.frames, p.mailbox_messages)).collect();
+    assert!(later > 0, "points (t, frames, mailbox): {points:?}");
     assert!(done.totals.mailbox_messages.abs_diff(messages) <= 2, "{} vs {messages}", done.totals.mailbox_messages);
     assert!(report.mailbox.channels.iter().all(|c| c.source == ChannelSource::Hint));
 }

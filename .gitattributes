@@ -1,0 +1,10 @@
+# LF everywhere, also in Windows checkouts: generated files (ui/src/api/gen), fixtures and
+# formatter checks compare bytes.
+* text=auto eol=lf
+
+*.pcap binary
+*.pcapng binary
+*.png binary
+*.ico binary
+*.woff binary
+*.woff2 binary

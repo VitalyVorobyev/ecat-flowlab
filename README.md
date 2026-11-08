@@ -13,8 +13,13 @@ the [API reference](https://vitalyvorobyev.github.io/ecat-flowlab/api/) and the 
 
 ## Quick start
 
-Requires Rust ≥ 1.88 and [Bun](https://bun.sh) ≥ 1.4. It needs no EtherCAT hardware, root rights
-or libpcap.
+**Release binaries** for Linux (x86-64 and aarch64, static: lab PCs and the Toradex Verdin),
+Windows and macOS are on the [releases page](https://github.com/VitalyVorobyev/ecat-flowlab/releases).
+Unpack one and run `flowlab serve --open`: the UI is built in
+([installing](book/src/getting-started.md#install-a-release-binary)).
+
+**From source** it requires Rust ≥ 1.88 and [Bun](https://bun.sh) ≥ 1.4. It needs no EtherCAT
+hardware, root rights or libpcap.
 
 ```bash
 cargo ui                      # builds the UI if needed, opens http://127.0.0.1:7878 on Simulate

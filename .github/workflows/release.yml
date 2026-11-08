@@ -1,0 +1,145 @@
+name: Release
+
+# `flowlab` with the UI built in, for the platforms FlowLab runs on, archived with the README, the
+# licences and the example specs (configs/). Every run uploads the archives as workflow
+# artifacts; a `v*` tag also publishes them as a GitHub release. Pull requests that change this
+# file run it without publishing.
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths: [.github/workflows/release.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  ui:
+    name: Build the UI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ui-dist
+          path: ui/dist
+          if-no-files-found: error
+
+  build:
+    name: flowlab for ${{ matrix.target }}
+    needs: ui
+    strategy:
+      fail-fast: false
+      matrix:
+        # `features`: cargo features of flowlab-cli, space-separated. `zig`: cross-link with
+        # cargo-zigbuild (static musl binaries for Linux PCs and the Verdin). `rustflags`: the
+        # Windows binary links the C runtime statically, so it needs no Visual C++ runtime.
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            zig: true
+            features: embed-ui
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            zig: true
+            features: embed-ui
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            features: embed-ui
+            rustflags: -C target-feature=+crt-static
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            features: embed-ui
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+      - if: matrix.zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.14.1
+      - if: matrix.zig
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+      - uses: actions/download-artifact@v4
+        with:
+          name: ui-dist
+          path: ui/dist
+      - name: Archive name
+        id: name
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then version="$GITHUB_REF_NAME"; else version="dev-${GITHUB_SHA::7}"; fi
+          echo "dir=flowlab-$version-${{ matrix.target }}" >> "$GITHUB_OUTPUT"
+      - name: Build
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
+        run: >-
+          cargo ${{ matrix.zig && 'zigbuild' || 'build' }} --locked --release -p flowlab-cli
+          --target ${{ matrix.target }} --features "${{ matrix.features }}"
+      - name: The Linux binary is static
+        if: contains(matrix.target, 'linux-musl')
+        run: file target/${{ matrix.target }}/release/flowlab | tee /dev/stderr | grep -q 'statically linked'
+      - name: Package
+        id: package
+        run: |
+          dir=${{ steps.name.outputs.dir }}
+          mkdir -p "dist/$dir"
+          if [[ "${{ matrix.target }}" == *windows* ]]; then exe=flowlab.exe; else exe=flowlab; fi
+          cp "target/${{ matrix.target }}/release/$exe" README.md LICENSE-MIT LICENSE-APACHE "dist/$dir/"
+          cp -R configs "dist/$dir/"
+          cd dist
+          if [[ "${{ matrix.target }}" == *windows* ]]; then
+            archive="$dir.zip"
+            7z a -tzip "$archive" "$dir"
+          else
+            archive="$dir.tar.gz"
+            tar czf "$archive" "$dir"
+          fi
+          echo "archive=dist/$archive" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.name.outputs.dir }}
+          path: ${{ steps.package.outputs.archive }}
+          if-no-files-found: error
+
+  publish:
+    name: GitHub release
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: flowlab-*
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS.txt
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --verify-tag
+          --title "$GITHUB_REF_NAME" --generate-notes

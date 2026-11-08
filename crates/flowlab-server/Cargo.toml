@@ -23,6 +23,7 @@ serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 ts-rs = "12"
+rust-embed = { version = "8.13", features = ["mime-guess", "debug-embed"], optional = true }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
@@ -30,3 +31,8 @@ http-body-util = "0.1"
 
 [lints]
 workspace = true
+
+[features]
+# Builds the UI from `ui/dist` into the binary (run `bun run build` in `ui/` first); it is
+# served when `--ui-dir` has no built UI.
+embed-ui = ["dep:rust-embed"]

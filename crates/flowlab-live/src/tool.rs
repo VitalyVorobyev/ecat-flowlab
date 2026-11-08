@@ -33,22 +33,38 @@ impl Tool {
         }
     }
 
-    /// Places to look besides `PATH`.
-    fn known_paths(self) -> &'static [&'static str] {
-        match self {
+    /// Places to look besides `PATH`: the Wireshark installation on Windows (under
+    /// `%ProgramFiles%`), the app bundle on macOS, the system directories on Linux.
+    fn known_paths(self) -> Vec<PathBuf> {
+        if cfg!(windows) {
+            return match self {
+                Tool::Dumpcap => ["ProgramW6432", "ProgramFiles", "ProgramFiles(x86)"]
+                    .iter()
+                    .filter_map(std::env::var_os)
+                    .map(|dir| PathBuf::from(dir).join("Wireshark").join("dumpcap.exe"))
+                    .chain([PathBuf::from(r"C:\Program Files\Wireshark\dumpcap.exe")])
+                    .collect(),
+                // tcpdump does not run on Windows.
+                Tool::Tcpdump => Vec::new(),
+            };
+        }
+        let paths: &[&str] = match self {
             Tool::Dumpcap => &["/Applications/Wireshark.app/Contents/MacOS/dumpcap", "/usr/bin/dumpcap"],
             Tool::Tcpdump => &["/usr/sbin/tcpdump", "/usr/bin/tcpdump"],
-        }
+        };
+        paths.iter().map(PathBuf::from).collect()
     }
 
-    /// Where the program is, if installed.
+    /// Where the program is, if installed: on `PATH` (with `.exe` on Windows), else in the
+    /// Wireshark installation (`%ProgramFiles%\Wireshark` on Windows, the app bundle on macOS)
+    /// or a system directory.
     pub fn locate(self) -> Option<PathBuf> {
         let exe = if cfg!(windows) { format!("{}.exe", self.name()) } else { self.name().to_owned() };
         std::env::var_os("PATH")
             .into_iter()
             .flat_map(|p| std::env::split_paths(&p).collect::<Vec<_>>())
             .map(|dir| dir.join(&exe))
-            .chain(self.known_paths().iter().map(PathBuf::from))
+            .chain(self.known_paths())
             .find(|p| p.is_file())
     }
 
@@ -81,18 +97,32 @@ impl Tool {
     }
 }
 
-/// The capture tool to use: the preferred one, else `dumpcap`, else `tcpdump`.
+/// The capture tool to use: the preferred one, else `dumpcap`, else `tcpdump` (not on
+/// Windows, where only `dumpcap` from Wireshark is looked for).
 pub fn find_tool(preferred: Option<Tool>) -> Result<(Tool, PathBuf), LiveError> {
     let order = match preferred {
         Some(t) => vec![t],
+        None if cfg!(windows) => vec![Tool::Dumpcap],
         None => vec![Tool::Dumpcap, Tool::Tcpdump],
     };
-    order.iter().find_map(|&t| t.locate().map(|p| (t, p))).ok_or_else(|| {
-        LiveError::NoTool(
-            order.iter().map(|t| t.name()).collect::<Vec<_>>().join(" or ")
-                + " not found; install Wireshark (dumpcap) or tcpdump",
+    order
+        .iter()
+        .find_map(|&t| t.locate().map(|p| (t, p)))
+        .ok_or_else(|| LiveError::NoTool(not_found_message(&order, cfg!(windows))))
+}
+
+/// What to say when none of `tools` is installed.
+fn not_found_message(tools: &[Tool], windows: bool) -> String {
+    let names = tools.iter().map(|t| t.name()).collect::<Vec<_>>().join(" or ");
+    if windows {
+        let tcpdump = if tools.contains(&Tool::Tcpdump) { "tcpdump does not run on Windows; " } else { "" };
+        format!(
+            "{names} not found; {tcpdump}install Wireshark with Npcap (https://www.wireshark.org), \
+             which puts dumpcap.exe in C:\\Program Files\\Wireshark"
         )
-    })
+    } else {
+        format!("{names} not found; install Wireshark (dumpcap) or tcpdump")
+    }
 }
 
 /// A network interface a capture tool can open.
@@ -149,6 +179,28 @@ mod tests {
         let t = parse_interface_list("1.en0 [Up, Running, Wireless]\n2.lo0 [Up, Running, Loopback]\n");
         assert_eq!(t[0].name, "en0");
         assert_eq!(t[1].description.as_deref(), Some("Up, Running, Loopback"));
+    }
+
+    #[test]
+    fn missing_tools_point_to_wireshark_and_npcap_on_windows() {
+        let w = not_found_message(&[Tool::Dumpcap], true);
+        assert!(w.contains("Npcap") && w.contains(r"C:\Program Files\Wireshark"), "{w}");
+        assert!(!w.contains("tcpdump"), "{w}");
+        let t = not_found_message(&[Tool::Tcpdump], true);
+        assert!(t.contains("tcpdump does not run on Windows"), "{t}");
+        let u = not_found_message(&[Tool::Dumpcap, Tool::Tcpdump], false);
+        assert_eq!(u, "dumpcap or tcpdump not found; install Wireshark (dumpcap) or tcpdump");
+    }
+
+    #[test]
+    fn dumpcap_is_looked_for_in_the_wireshark_installation() {
+        let known = Tool::Dumpcap.known_paths();
+        if cfg!(windows) {
+            assert!(known.iter().all(|p| p.ends_with(r"Wireshark\dumpcap.exe")), "{known:?}");
+            assert!(Tool::Tcpdump.known_paths().is_empty());
+        } else {
+            assert!(known.iter().all(|p| p.ends_with("dumpcap")), "{known:?}");
+        }
     }
 
     #[test]

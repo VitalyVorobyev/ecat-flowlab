@@ -1,14 +1,80 @@
 # Getting started
 
-## Requirements
+FlowLab is one program, `flowlab`, with the web UI built in. It needs no EtherCAT hardware,
+network adapter, root rights or libpcap. Install a release binary, or build it from source.
+
+## Install a release binary
+
+Each [release](https://github.com/VitalyVorobyev/ecat-flowlab/releases) has one archive per
+platform. It holds `flowlab` (with the UI inside), the README, the licences and the example
+specs in `configs/`.
+
+| Platform | Archive | |
+|---|---|---|
+| Linux x86-64 (lab PCs) | `flowlab-VERSION-x86_64-unknown-linux-musl.tar.gz` | static: runs on any distribution |
+| Linux aarch64 (Toradex Verdin and other 64-bit Arm boards) | `flowlab-VERSION-aarch64-unknown-linux-musl.tar.gz` | static: independent of the image's glibc (Yocto, Torizon) |
+| Windows x86-64 | `flowlab-VERSION-x86_64-pc-windows-msvc.zip` | needs no Visual C++ runtime |
+| macOS, Apple silicon | `flowlab-VERSION-aarch64-apple-darwin.tar.gz` | |
+
+The Linux binaries are linked statically against musl, so they need no shared library from the
+system.
+
+**Linux and macOS**
+
+```bash
+tar xzf flowlab-VERSION-x86_64-unknown-linux-musl.tar.gz
+cd flowlab-VERSION-x86_64-unknown-linux-musl
+./flowlab serve --open                  # UI on http://127.0.0.1:7878, from any directory
+./flowlab analyze run.pcapng --out run.json
+```
+
+Put `flowlab` on `PATH` (for example in `~/.local/bin`) to call it from anywhere. macOS marks
+files downloaded with a browser as quarantined, and the binary is not signed: remove the mark with
+`xattr -d com.apple.quarantine flowlab`.
+
+**Toradex Verdin (aarch64)**
+
+```bash
+scp flowlab-VERSION-aarch64-unknown-linux-musl.tar.gz root@verdin:   # from the PC
+ssh root@verdin
+tar xzf flowlab-VERSION-aarch64-unknown-linux-musl.tar.gz
+./flowlab-VERSION-aarch64-unknown-linux-musl/flowlab serve
+```
+
+`flowlab serve` listens on the module's loopback address only. To open the UI on the PC, forward
+the port over SSH: `ssh -L 7878:127.0.0.1:7878 root@verdin`, then browse to
+<http://127.0.0.1:7878> on the PC.
+
+**Windows**
+
+Unpack the zip and run, in PowerShell or `cmd`:
+
+```text
+.\flowlab.exe serve --open
+.\flowlab.exe analyze run.pcapng --out run.json
+```
+
+Live capture on Windows uses Wireshark's `dumpcap.exe`: install
+[Wireshark](https://www.wireshark.org) together with Npcap, which its installer offers. FlowLab
+finds `dumpcap.exe` on `PATH` or in `C:\Program Files\Wireshark`. Interfaces have names like
+`\Device\NPF_{GUID}`; `flowlab.exe capture --list` shows them with their descriptions
+([Live capture](guide/live.md)). tcpdump does not exist on Windows.
+
+**Builds of a branch.** Every run of the *Release* workflow (on a `v*` tag, on demand, or for a
+pull request that changes it) keeps the same archives as workflow artifacts, named
+`flowlab-dev-COMMIT-TARGET`.
+
+## Build from source
+
+### Requirements
 
 - Rust ≥ 1.88 (edition 2024) — <https://rustup.rs>
 - [Bun](https://bun.sh) ≥ 1.4, to build the UI
 - Optional: Wireshark's `tshark`, to cross-check FlowLab's decoding
 
-No EtherCAT hardware, network adapter, root rights or libpcap are needed.
+The workspace builds and its tests pass on Linux, macOS and Windows; CI runs all three.
 
-## Build and start
+### Build and start
 
 ```bash
 git clone https://github.com/VitalyVorobyev/ecat-flowlab
@@ -29,12 +95,25 @@ download over SPI*, change the setup, and read what limits the transfers
 | `cargo ci` | the checks CI runs: rustfmt, clippy, tests, generated types, rustdoc, UI lint/types/tests/build, the book |
 | `cargo site` | the Pages site (start page, findings, book, API docs) in `_site/` |
 
-These are cargo aliases (`.cargo/config.toml`) for the workspace's `xtask` crate. For a shorter command, install the binary:
-`cargo install --path crates/flowlab-cli`, then use `flowlab …`.
+These are cargo aliases (`.cargo/config.toml`) for the workspace's `xtask` crate. For a shorter
+command, install the binary: `cargo install --path crates/flowlab-cli`, then use `flowlab …`.
+Built this way, `flowlab serve` reads the UI from `ui/dist` (`--ui-dir`), so it shows the UI only
+when started in the repository. To build the UI into the binary, as the releases do, build the UI
+first:
+
+```bash
+(cd ui && bun install && bun run build)
+cargo install --path crates/flowlab-cli --features embed-ui
+```
+
+A binary with `embed-ui` serves its built-in UI whenever `--ui-dir` holds no `index.html`.
+Cross-compiling, for example for the Verdin, is described under
+[Contributing](workspace/contributing.md#releases-and-cross-compiling).
 
 ## A first analysis
 
-The demo capture is synthetic: a master with six slaves at 1 ms, with lost frames, working-counter
+The commands below use the example specs in `configs/`, which are in the repository and in the
+release archives. The demo capture is synthetic: a master with six slaves at 1 ms, with lost frames, working-counter
 errors, skipped cycles and mailbox traffic put in on purpose.
 
 ```bash

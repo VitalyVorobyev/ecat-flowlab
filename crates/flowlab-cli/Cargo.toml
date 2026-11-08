@@ -29,5 +29,10 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 open.workspace = true
 
+[features]
+# The built UI (`ui/dist`) inside the binary, served when `--ui-dir` has none: for release
+# binaries that run from any directory. Build the UI first (`bun run build` in `ui/`).
+embed-ui = ["flowlab-server/embed-ui"]
+
 [lints]
 workspace = true

@@ -135,7 +135,8 @@ enum Cmd {
         /// keep the default loopback address.
         #[arg(long, default_value = "127.0.0.1")]
         host: IpAddr,
-        /// Directory of the built UI.
+        /// Directory of the built UI. A binary built with the `embed-ui` feature (the release
+        /// binaries) serves its own UI when this directory has none.
         #[arg(long, default_value = "ui/dist")]
         ui_dir: PathBuf,
         /// Open the UI in the default browser.
@@ -338,12 +339,15 @@ fn run(cli: Cli) -> Result<()> {
                 let info = state.load_path(c).map_err(|e| format!("{}: {e}", c.display()))?;
                 tracing::info!("loaded {} ({} frames)", info.name, info.frames);
             }
-            let ui = ui_dir.join("index.html").is_file().then_some(ui_dir.clone());
-            if ui.is_none() {
-                tracing::warn!(
-                    "no built UI at {} (run `bun run build` in ui/); serving the API only",
+            let ui = flowlab_server::Ui::find(&ui_dir);
+            match &ui {
+                Some(flowlab_server::Ui::Dir(d)) => tracing::info!("serving the UI from {}", d.display()),
+                Some(flowlab_server::Ui::Embedded) => tracing::info!("serving the UI built into this binary"),
+                None => tracing::warn!(
+                    "no built UI at {} (run `bun run build` in ui/, or build with `--features embed-ui`); \
+                     serving the API only",
                     ui_dir.display()
-                );
+                ),
             }
             let addr = SocketAddr::new(host, port);
             if open {
