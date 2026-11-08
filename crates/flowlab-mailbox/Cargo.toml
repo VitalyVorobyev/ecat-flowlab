@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 ecat-wire.workspace = true
+flowlab-core.workspace = true
 serde.workspace = true
 schemars.workspace = true
 sha2.workspace = true

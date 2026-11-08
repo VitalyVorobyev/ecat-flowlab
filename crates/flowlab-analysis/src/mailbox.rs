@@ -9,9 +9,9 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use ecat_wire::{
     CoeEmergency, CoeHeader, CoeService, DatagramAddress, EoeHeader, EoeType, FoeHeader, FoeOpcode, MAILBOX_HEADER_LEN,
-    MailboxErrorReply, MailboxHeader, MailboxType, SM_REGISTER_BASE, SM_REGISTER_LEN, SdoCommand, SdoHeader,
+    MailboxErrorReply, MailboxHeader, MailboxType, SM_COUNT, SM_REGISTER_BASE, SM_REGISTER_LEN, SdoCommand, SdoHeader,
     SdoInfoHeader, SmDirection, SmMode, SoeHeader, VoeHeader, foe_error_text, sdo_abort_text, segment_data_len,
-    sync_managers_in,
+    sm_status_register, sync_managers_in,
 };
 use flowlab_capture::{DatagramRecord, Direction, FrameKind, Trace};
 
@@ -117,7 +117,7 @@ impl Channels {
         let mut map: BTreeMap<u16, ChannelInfo> = BTreeMap::new();
         let mut positions: HashMap<u16, u16> = HashMap::new();
         let mut by_position: Vec<(u16, u8, ecat_wire::SyncManagerConfig)> = Vec::new();
-        let sm_end = SM_REGISTER_BASE as u32 + 16 * SM_REGISTER_LEN as u32;
+        let sm_end = SM_REGISTER_BASE as u32 + SM_COUNT as u32 * SM_REGISTER_LEN as u32;
         for &i in order {
             let f = &trace.frames[i as usize];
             if f.kind != FrameKind::Ethercat || (directions_known && f.direction != Direction::Tx) {
@@ -166,7 +166,7 @@ impl Channels {
                 c.out.insert(m.out_start, m.out_len);
                 c.inn.insert(m.in_start, m.in_len);
                 // ENI does not say which SyncManager is "mailbox in"; SM1 by convention.
-                c.status.insert(SM_REGISTER_BASE + SM_REGISTER_LEN + 5);
+                c.status.insert(sm_status_register(1));
                 c
             });
         }
@@ -194,7 +194,7 @@ fn add_sm(map: &mut BTreeMap<u16, ChannelInfo>, station: u16, n: u8, sm: ecat_wi
         }
         SmDirection::EcatRead => {
             c.inn.insert(sm.start, sm.length);
-            c.status.insert(SM_REGISTER_BASE + n as u16 * SM_REGISTER_LEN + 5);
+            c.status.insert(sm_status_register(n));
         }
         SmDirection::Reserved => {}
     }
@@ -575,7 +575,7 @@ impl CoeTracker {
                         station: ctx.station,
                         error_code: e.error_code,
                         error_register: e.error_register,
-                        data: e.data.iter().map(|b| format!("{b:02x}")).collect(),
+                        data: flowlab_core::hex(&e.data),
                     });
                 }
             }

@@ -15,10 +15,11 @@ use std::collections::VecDeque;
 
 use ecat_wire::{
     CoeHeader, CoeService, FoeHeader, FoeOpcode, MAILBOX_HEADER_LEN, MailboxErrorReply, MailboxHeader, MailboxType,
-    SdoCommand, SdoHeader, SyncManagerConfig, segment_data_len,
+    SM_REPEAT_ACK, SM_REPEAT_REQUEST, SM_STATUS_MAILBOX_FULL, SdoCommand, SdoHeader, SyncManagerConfig,
+    segment_data_len, sm_activate_register, sm_register,
 };
 
-use crate::bus::{BusError, MailboxBus, Reply, SM_REPEAT_ACK, SM_REPEAT_REQUEST, sm_register};
+use crate::bus::{BusError, MailboxBus, Reply};
 use crate::{MailboxLayout, bus::SM_MAILBOX_IN};
 use flowlab_mailbox::msg::{self, EoeAddresses, EoeReassembler, eoe_fragments, foe, udp_frame};
 
@@ -423,7 +424,7 @@ impl VirtualSlave {
             start,
             length: len,
             control,
-            status: if full { 0x08 } else { 0 },
+            status: if full { SM_STATUS_MAILBOX_FULL } else { 0 },
             activate,
             pdi_control: pdi,
         }
@@ -513,7 +514,7 @@ impl MailboxBus for VirtualSlave {
                 }
                 1
             }
-        } else if register == sm_register(SM_MAILBOX_IN) + 6 && data.len() == 1 {
+        } else if register == sm_activate_register(SM_MAILBOX_IN) && data.len() == 1 {
             if (data[0] ^ st.sm1_activate) & SM_REPEAT_REQUEST != 0
                 && let Some(buf) = st.last_sent.clone()
             {

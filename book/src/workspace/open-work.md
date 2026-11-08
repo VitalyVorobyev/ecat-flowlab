@@ -44,10 +44,6 @@ questions that real captures should answer.
 
 None of these changes a result; each makes drift likely.
 
-- **Small repeats.** Four SplitMix PRNGs (sim, study, pdi, synth's seeding); nine hex encoders
-  and six hand-built `InputRef`s; SyncManager register constants and
-  the "mailbox full" bit in master and analysis (`ecat-wire`'s `sm` module is their home);
-  capture → `Trace::build` → analyse three times in the CLI and once in the server.
 - **`flowlab-analysis/src/mailbox.rs`** (about 1,500 lines) holds channel discovery, the CoE, FoE
   and EoE trackers, the description text, findings, assumptions and the EoE pcapng export: split
   along those lines.

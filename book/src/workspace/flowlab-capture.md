@@ -34,6 +34,7 @@ The crate interprets nothing beyond one frame: streams, pairing and timing belon
 | `CaptureError` | `UnknownFormat`, `Malformed { format, offset, reason }`, `Io` |
 | `PcapNgWriter` | writes pcapng (see below) |
 | `Trace::build(file, name)` | decode every packet into the index |
+| `Trace::read(path)` | read a file and decode it, named after the file (the CLI and the server's *Open path*) |
 | `FrameRecord`, `DatagramRecord` | the per-frame and per-datagram index entries |
 | `FrameKind` | `Ethercat`, `Other`, `Malformed` |
 | `Direction`, `DirectionMode` | per-frame direction, and how directions were inferred |

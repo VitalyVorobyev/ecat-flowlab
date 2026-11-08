@@ -79,8 +79,8 @@ The same number is reported as `SlaveResult::dpram_used_bytes`.
 ## The engine
 
 Virtual time is in ns. Events sit in a binary heap ordered by `(time, insertion index)`, so ties
-resolve in scheduling order and a run is a pure function of the spec. The RNG (SplitMix64, seeded
-by `seed`) drives only frame loss and master jitter; each transfer's payload has its own seed
+resolve in scheduling order and a run is a pure function of the spec. The RNG (`flowlab_core::rng::SplitMix64`,
+seeded by `seed`) drives only frame loss and master jitter; each transfer's payload has its own seed
 derived from `seed` and the transfer index.
 
 **Preamble.** Configuration frames are sent first, 50 µs apart, so that the capture describes

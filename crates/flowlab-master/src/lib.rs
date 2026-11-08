@@ -49,8 +49,8 @@ pub mod hardware;
 pub mod safety;
 
 pub use bus::{
-    BusError, MailboxBus, MailboxLayout, Reply, SM_MAILBOX_IN, SM_MAILBOX_OUT, SM_REPEAT_ACK, SM_REPEAT_REQUEST,
-    read_mailbox, read_sm, read_sm_status, sm_register, write_mailbox,
+    BusError, MailboxBus, MailboxLayout, Reply, SM_MAILBOX_IN, SM_MAILBOX_OUT, read_mailbox, read_sm, read_sm_status,
+    write_mailbox,
 };
 pub use engine::{
     Payload, PollMode, SimulatedSetup, TransferJob, TransferOptions, TransferProtocol, run_transfer, setup_like,

@@ -17,10 +17,10 @@ use ecat_wire::{
     SyncManagerConfig, wire_bytes,
 };
 use flowlab_capture::PcapNgWriter;
+use flowlab_core::rng::SplitMix64;
 use flowlab_core::units::serialization_ns;
 use flowlab_core::{InputRef, Provenance, ReportMeta};
 use flowlab_mailbox::{msg, payload_sha256, transfer_seed};
-use sha2::{Digest, Sha256};
 
 use crate::SimError;
 use crate::protocol::{
@@ -40,33 +40,6 @@ const LOGICAL_BASE: u32 = 0x0001_0000;
 const PREAMBLE_STEP_NS: u64 = 50_000;
 /// Largest EtherCAT payload of one frame (Ethernet MTU − 2-byte EtherCAT header).
 const MAX_PDU: usize = 1498;
-
-// ---------------------------------------------------------------------------------------------
-// Deterministic RNG
-// ---------------------------------------------------------------------------------------------
-
-struct Rng(u64);
-
-impl Rng {
-    fn next_u64(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = self.0;
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
-    }
-    fn unit(&mut self) -> f64 {
-        (self.next_u64() >> 11) as f64 / (1u64 << 53) as f64
-    }
-    fn chance(&mut self, p: f64) -> bool {
-        p > 0.0 && self.unit() < p
-    }
-    fn normal(&mut self) -> f64 {
-        let u1 = self.unit().max(f64::MIN_POSITIVE);
-        let u2 = self.unit();
-        (-2.0 * u1.ln()).sqrt() * (std::f64::consts::TAU * u2).cos()
-    }
-}
 
 // ---------------------------------------------------------------------------------------------
 // Events
@@ -249,7 +222,7 @@ struct Sim<'a, W: Write> {
     queue: BinaryHeap<Reverse<Entry>>,
     seq: u64,
     now: u64,
-    rng: Rng,
+    rng: SplitMix64,
     link_free: u64,
     flights: HashMap<u32, Flight>,
     next_frame: u32,
@@ -999,7 +972,7 @@ fn assumptions() -> Vec<String> {
 pub fn simulate<W: Write>(spec: &SimSpec, capture: Option<W>) -> Result<SimResult, SimError> {
     spec.validate().map_err(SimError::Spec)?;
     let spec_json = serde_json::to_vec(spec).map_err(|e| SimError::Spec(e.to_string()))?;
-    let spec_sha: String = Sha256::digest(&spec_json).iter().map(|b| format!("{b:02x}")).collect();
+    let spec_sha = flowlab_core::sha256_hex(&spec_json);
     let writer = match capture.filter(|_| spec.capture.enabled) {
         Some(w) => {
             let comment = format!(
@@ -1052,7 +1025,7 @@ pub fn simulate<W: Write>(spec: &SimSpec, capture: Option<W>) -> Result<SimResul
         queue: BinaryHeap::new(),
         seq: 0,
         now: 0,
-        rng: Rng(spec.seed),
+        rng: SplitMix64::new(spec.seed),
         link_free: 0,
         flights: HashMap::new(),
         next_frame: 0,

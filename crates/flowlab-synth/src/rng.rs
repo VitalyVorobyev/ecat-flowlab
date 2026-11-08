@@ -1,7 +1,7 @@
 //! The generator's own PRNG, so captures stay byte-identical across dependency upgrades.
 
-/// xoshiro256** seeded by splitmix64. Implemented here so generated captures stay
-/// byte-identical across dependency upgrades.
+/// xoshiro256** seeded by `flowlab_core::rng::SplitMix64`. The generator keeps it rather than
+/// SplitMix64 alone because its committed captures and fixtures are made with it.
 #[derive(Debug, Clone)]
 pub(crate) struct Rng {
     s: [u64; 4],
@@ -9,15 +9,8 @@ pub(crate) struct Rng {
 
 impl Rng {
     pub(crate) fn new(seed: u64) -> Self {
-        let mut x = seed;
-        let mut next = || {
-            x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
-            let mut z = x;
-            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-            z ^ (z >> 31)
-        };
-        Self { s: [next(), next(), next(), next()] }
+        let mut x = flowlab_core::rng::SplitMix64::new(seed);
+        Self { s: [x.next_u64(), x.next_u64(), x.next_u64(), x.next_u64()] }
     }
 
     pub(crate) fn next_u64(&mut self) -> u64 {

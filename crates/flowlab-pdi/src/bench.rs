@@ -6,6 +6,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use flowlab_core::pdi_samples::{Direction, Sample};
+use flowlab_core::rng::SplitMix64;
 use flowlab_core::stats::quantile;
 
 use crate::PdiError;
@@ -141,18 +142,6 @@ pub struct BenchRun {
 }
 
 /// SplitMix64, for a reproducible order.
-struct Rng(u64);
-
-impl Rng {
-    fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = self.0;
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
-    }
-}
-
 const STATE_INIT: u16 = 1;
 
 /// Check the link, refuse unless the ESC is in INIT, then time every access of the plan in a
@@ -173,8 +162,8 @@ pub fn run<S: SpiBus, C: Clock + ?Sized>(
         )));
     }
     let max = *plan.sizes.last().unwrap_or(&1) as usize;
-    let mut rng = Rng(o.seed);
-    let pattern: Vec<u8> = (0..max).map(|_| rng.next() as u8).collect();
+    let mut rng = SplitMix64::new(o.seed);
+    let pattern: Vec<u8> = (0..max).map(|_| rng.next_u64() as u8).collect();
     let mut buf = vec![0u8; max];
     if let Some(a) = plan.write_area {
         esc.write(a.start, &pattern)?;
@@ -191,7 +180,7 @@ pub fn run<S: SpiBus, C: Clock + ?Sized>(
         }
     }
     for i in (1..jobs.len()).rev() {
-        jobs.swap(i, (rng.next() % (i as u64 + 1)) as usize);
+        jobs.swap(i, rng.below(i as u64 + 1) as usize);
     }
     let mut access = |esc: &mut Lan9252<S>, d: Direction, n: usize| match d {
         Direction::Read => esc.read(plan.read_area.start, &mut buf[..n]),

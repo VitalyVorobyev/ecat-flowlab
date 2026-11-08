@@ -2,7 +2,7 @@
 
 use std::future::Future;
 
-use ecat_wire::{SM_REGISTER_BASE, SM_REGISTER_LEN, SyncManagerConfig};
+use ecat_wire::{SM_REGISTER_LEN, SyncManagerConfig, sm_register, sm_status_register};
 use serde::{Deserialize, Serialize};
 
 /// What came back from a read: the datagram's data and its working counter.
@@ -73,16 +73,6 @@ pub struct MailboxLayout {
 pub const SM_MAILBOX_OUT: u8 = 0;
 /// Index of the "mailbox in" SyncManager.
 pub const SM_MAILBOX_IN: u8 = 1;
-/// Activate register bit 1: repeat request (master toggles it).
-pub const SM_REPEAT_REQUEST: u8 = 0x02;
-/// PDI control register bit 1: repeat acknowledge (the slave toggles it).
-pub const SM_REPEAT_ACK: u8 = 0x02;
-
-/// Register address of SyncManager `sm`'s 8-byte block.
-pub const fn sm_register(sm: u8) -> u16 {
-    SM_REGISTER_BASE + SM_REGISTER_LEN * sm as u16
-}
-
 /// Write a whole "mailbox out" buffer (a write that ends before the buffer's last byte does
 /// not hand the buffer to the slave). Returns the working counter.
 pub async fn write_mailbox<B: MailboxBus>(bus: &B, m: &MailboxLayout, buffer: &[u8]) -> Result<u16, BusError> {
@@ -106,5 +96,5 @@ pub async fn read_sm<B: MailboxBus>(bus: &B, station: u16, sm: u8) -> Result<Opt
 
 /// Read the status register of SyncManager `sm` (one byte at `0x0805 + 8·sm`).
 pub async fn read_sm_status<B: MailboxBus>(bus: &B, station: u16, sm: u8) -> Result<Reply, BusError> {
-    bus.fprd(station, sm_register(sm) + 5, 1).await
+    bus.fprd(station, sm_status_register(sm), 1).await
 }
