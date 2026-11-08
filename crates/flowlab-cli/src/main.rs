@@ -255,6 +255,25 @@ enum Cmd {
         #[arg(long, value_name = "JSON")]
         lab: Option<PathBuf>,
     },
+    /// Put measured lab inputs (from `pdi-fit --lab`, `policy --lab`) into a simulator spec.
+    ///
+    /// The PDI timing and application time go to one slave, the mailbox policy to the master;
+    /// the spec's description names the sources. The result is a spec for `simulate`,
+    /// `what-if` and `study`, or the Simulate view.
+    ApplyLab {
+        /// Simulator spec (see `flowlab schema sim`).
+        spec: PathBuf,
+        /// Lab-inputs file (see `flowlab schema lab`).
+        #[arg(long, value_name = "JSON")]
+        lab: PathBuf,
+        /// The slave the PDI and application values belong to: its index in the spec's
+        /// `slaves` (ring order, from 0).
+        #[arg(long)]
+        slave: usize,
+        /// Write the spec here instead of printing it.
+        #[arg(short, long)]
+        out: Option<PathBuf>,
+    },
 }
 
 fn parse_station(s: &str) -> std::result::Result<u16, String> {
@@ -496,6 +515,25 @@ fn run(cli: Cli) -> Result<()> {
                 l.set_mailbox_policy(policy, chosen.station, &report.meta)
                     .map_err(|e| format!("{e}; {} is unchanged", p.display()))?;
                 write_lab(&p, &l)?;
+            }
+        }
+        Cmd::ApplyLab { spec: path, lab, slave, out } => {
+            let mut spec: SimSpec =
+                serde_json::from_reader(File::open(&path).map_err(|e| format!("{}: {e}", path.display()))?)
+                    .map_err(|e| format!("{}: {e}", path.display()))?;
+            if !lab.exists() {
+                return Err(format!("{}: no such lab-inputs file", lab.display()).into());
+            }
+            read_lab(&lab)?.apply(&mut spec, slave).map_err(|e| format!("{}: {e}", lab.display()))?;
+            spec.validate().map_err(|e| format!("the spec with the lab inputs is not valid: {e}"))?;
+            let text = serde_json::to_string_pretty(&spec)? + "\n";
+            match out {
+                Some(p) => {
+                    ensure_parent(&p)?;
+                    std::fs::write(&p, text)?;
+                    eprintln!("wrote {} (`flowlab simulate {}`)", p.display(), p.display());
+                }
+                None => print!("{text}"),
             }
         }
         Cmd::Plan { spec, json } => {

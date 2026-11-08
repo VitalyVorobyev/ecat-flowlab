@@ -32,7 +32,9 @@ TABLES = ROOT / "book/src/studies/bulk-transfer/generated"
 
 PAYLOAD = 10_000_000  # 10 MB, decimal
 SLAVE = 2  # index of the bulk endpoint in the line
-LAB = None  # measured inputs (LabInputs JSON), applied by base()
+LAB = None  # measured inputs (LabInputs JSON), applied by base() through `flowlab apply-lab`
+LAB_PATH = None
+FLOWLAB = None
 
 # -- the modelled system ------------------------------------------------------------------------
 
@@ -108,13 +110,27 @@ def base(protocol=FOE, mailbox=512, cycle_us=1000, policy=None, description=""):
         "start_unix_s": 1_767_225_600,
     }
     if LAB:
-        end = spec["slaves"][SLAVE]
-        end["pdi"].update(LAB.get("pdi") or {})
-        if "app_processing_ns" in LAB:
-            end["app_processing_ns"] = LAB["app_processing_ns"]
-        if policy is None and "mailbox_policy" in LAB:
-            spec["mailbox_policy"] = LAB["mailbox_policy"]
+        spec = with_lab(spec, keep_policy=policy is not None)
     return spec
+
+
+def with_lab(spec, keep_policy):
+    """The spec with the lab inputs applied by `flowlab apply-lab` to the bulk endpoint. A policy
+    the step or study chose explicitly stays; the description stays the report's."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "base.json"
+        path.write_text(dump(spec))
+        out = subprocess.run(
+            [FLOWLAB, "apply-lab", str(path), "--lab", str(LAB_PATH), "--slave", str(SLAVE)],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    applied = json.loads(out)
+    applied["description"] = spec["description"]
+    if keep_policy:
+        applied["mailbox_policy"] = spec["mailbox_policy"]
+    return applied
 
 
 def param(path, values, also=()):
@@ -164,46 +180,48 @@ def pdo_base(cycle_us=1000):
     return b
 
 
-STUDIES = {
-    "01-protocol-policy": study(
-        "Protocol × master mailbox policy, 512 B mailboxes, 1 ms cycle",
-        base(),
-        [param("/transfers/0/protocol", [FOE, EOE, COE]), param("/mailbox_policy", POLICIES)],
-    ),
-    "02-mailbox-foe": study(
-        "FoE write: mailbox size × master policy, 1 ms cycle",
-        base(),
-        [param(MAILBOX[0], MAILBOXES, MAILBOX[1]), param("/mailbox_policy", TWO_POLICIES)],
-    ),
-    "03-mailbox-eoe": study(
-        "EoE (UDP-like, 1500 B MTU): mailbox size × master policy, 1 ms cycle",
-        base(protocol=EOE),
-        [param(MAILBOX[0], MAILBOXES, MAILBOX[1]), param("/mailbox_policy", TWO_POLICIES)],
-    ),
-    "04-cycle": study(
-        "FoE write, 1024 B mailboxes: cycle time × master policy",
-        base(mailbox=1024),
-        [param("/cycle_time_us", [250, 500, 1000, 2000, 4000]), param("/mailbox_policy", TWO_POLICIES)],
-    ),
-    "05-pdi-whole-buffer": pdi_study("whole_buffer"),
-    "06-pdi-message-only": pdi_study("message_only"),
-    "07-pdo-size": study(
-        "PDO channel (window 2), 128 B mailboxes: bytes per cycle × cycle time",
-        pdo_base(),
-        [
-            param("/transfers/0/protocol", [pdo(n) for n in (256, 512, 1024, 1260, 1270)]),
-            param("/cycle_time_us", [250, 500, 1000]),
-        ],
-    ),
-    "08-pdo-pdi": study(
-        "PDO channel 1024 B/cycle at 250 µs, 128 B mailboxes: window × PDI rate",
-        pdo_base(250),
-        [
-            param("/transfers/0/protocol", [pdo(1024, w) for w in (1, 2, 4)]),
-            param(RATE[0], [10_000_000, 20_000_000, 40_000_000, 80_000_000], RATE[1]),
-        ],
-    ),
-}
+def studies():
+    """The report's sweeps; built after the lab inputs are read, so that base() applies them."""
+    return {
+        "01-protocol-policy": study(
+            "Protocol × master mailbox policy, 512 B mailboxes, 1 ms cycle",
+            base(),
+            [param("/transfers/0/protocol", [FOE, EOE, COE]), param("/mailbox_policy", POLICIES)],
+        ),
+        "02-mailbox-foe": study(
+            "FoE write: mailbox size × master policy, 1 ms cycle",
+            base(),
+            [param(MAILBOX[0], MAILBOXES, MAILBOX[1]), param("/mailbox_policy", TWO_POLICIES)],
+        ),
+        "03-mailbox-eoe": study(
+            "EoE (UDP-like, 1500 B MTU): mailbox size × master policy, 1 ms cycle",
+            base(protocol=EOE),
+            [param(MAILBOX[0], MAILBOXES, MAILBOX[1]), param("/mailbox_policy", TWO_POLICIES)],
+        ),
+        "04-cycle": study(
+            "FoE write, 1024 B mailboxes: cycle time × master policy",
+            base(mailbox=1024),
+            [param("/cycle_time_us", [250, 500, 1000, 2000, 4000]), param("/mailbox_policy", TWO_POLICIES)],
+        ),
+        "05-pdi-whole-buffer": pdi_study("whole_buffer"),
+        "06-pdi-message-only": pdi_study("message_only"),
+        "07-pdo-size": study(
+            "PDO channel (window 2), 128 B mailboxes: bytes per cycle × cycle time",
+            pdo_base(),
+            [
+                param("/transfers/0/protocol", [pdo(n) for n in (256, 512, 1024, 1260, 1270)]),
+                param("/cycle_time_us", [250, 500, 1000]),
+            ],
+        ),
+        "08-pdo-pdi": study(
+            "PDO channel 1024 B/cycle at 250 µs, 128 B mailboxes: window × PDI rate",
+            pdo_base(250),
+            [
+                param("/transfers/0/protocol", [pdo(1024, w) for w in (1, 2, 4)]),
+                param(RATE[0], [10_000_000, 20_000_000, 40_000_000, 80_000_000], RATE[1]),
+            ],
+        ),
+    }
 
 
 def steps():
@@ -416,7 +434,7 @@ def dump(obj):
 
 
 def main():
-    global LAB, SPECS, TABLES
+    global LAB, LAB_PATH, FLOWLAB, SPECS, TABLES
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--flowlab", default=str(ROOT / "target/release/flowlab"))
     ap.add_argument("--lab", type=Path, help="lab inputs (LabInputs JSON) replacing the placeholders")
@@ -426,6 +444,8 @@ def main():
         if not args.out:
             ap.error("--lab writes to a separate directory: give --out")
         LAB = json.loads(args.lab.read_text())
+        LAB_PATH = args.lab.resolve()
+    FLOWLAB = args.flowlab
     if args.out:
         SPECS, TABLES = args.out / "specs", args.out / "tables"
     SPECS.mkdir(parents=True, exist_ok=True)
@@ -439,7 +459,7 @@ def main():
         "studies": {},
     }
     with tempfile.TemporaryDirectory() as tmp:
-        for name, spec in STUDIES.items():
+        for name, spec in studies().items():
             path = SPECS / f"{name}.json"
             path.write_text(dump(spec))
             out = Path(tmp) / f"{name}.result.json"

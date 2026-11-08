@@ -1,0 +1,153 @@
+{
+  "description": "Calibration: PDI rate, per-access overhead and application time of slave 2 against an FoE write and an SDO download in a capture",
+  "base": {
+    "seed": 1,
+    "description": "Calibration base: an FoE write and an SDO download to slave 2. Set the line, mailbox sizes, cycle, policy and payloads to the real network's",
+    "link_bps": 100000000,
+    "cycle_time_us": 1000,
+    "master_jitter_ns": 2000,
+    "slaves": [
+      {
+        "name": "coupler",
+        "outputs_bytes": 0,
+        "inputs_bytes": 0,
+        "forwarding_delay_ns": 700,
+        "mailbox_out_bytes": 0,
+        "mailbox_in_bytes": 0,
+        "dpram_bytes": 4096,
+        "pdi": {
+          "read_bps": 20000000,
+          "write_bps": 20000000,
+          "access_overhead_ns": 5000,
+          "mailbox_access": "whole_buffer"
+        },
+        "app_processing_ns": 20000
+      },
+      {
+        "name": "io-16",
+        "outputs_bytes": 2,
+        "inputs_bytes": 2,
+        "forwarding_delay_ns": 700,
+        "mailbox_out_bytes": 0,
+        "mailbox_in_bytes": 0,
+        "dpram_bytes": 4096,
+        "pdi": {
+          "read_bps": 20000000,
+          "write_bps": 20000000,
+          "access_overhead_ns": 5000,
+          "mailbox_access": "whole_buffer"
+        },
+        "app_processing_ns": 20000
+      },
+      {
+        "name": "bulk-endpoint",
+        "outputs_bytes": 8,
+        "inputs_bytes": 8,
+        "forwarding_delay_ns": 700,
+        "mailbox_out_bytes": 512,
+        "mailbox_in_bytes": 512,
+        "dpram_bytes": 4096,
+        "pdi": {
+          "read_bps": 20000000,
+          "write_bps": 20000000,
+          "access_overhead_ns": 5000,
+          "mailbox_access": "whole_buffer"
+        },
+        "app_processing_ns": 20000
+      }
+    ],
+    "mailbox_policy": {
+      "kind": "opportunistic",
+      "bus_budget_percent": 90.0,
+      "turnaround_ns": 10000
+    },
+    "transfers": [
+      {
+        "slave": 2,
+        "direction": "master_to_slave",
+        "payload_bytes": 65536,
+        "protocol": {
+          "kind": "foe"
+        },
+        "start_ms": 0.0
+      },
+      {
+        "slave": 2,
+        "direction": "master_to_slave",
+        "payload_bytes": 2048,
+        "protocol": {
+          "kind": "coe_segmented"
+        },
+        "start_ms": 0.0
+      }
+    ],
+    "max_duration_ms": 60000,
+    "faults": {
+      "frame_loss_probability": 0.0
+    },
+    "capture": {
+      "enabled": false,
+      "max_frames": 200000
+    },
+    "start_unix_s": 1767225600
+  },
+  "parameters": [
+    {
+      "path": "/slaves/2/pdi/read_bps",
+      "also": [
+        "/slaves/2/pdi/write_bps"
+      ],
+      "values": [
+        5000000,
+        10000000,
+        20000000,
+        40000000
+      ]
+    },
+    {
+      "path": "/slaves/2/pdi/access_overhead_ns",
+      "values": [
+        5000,
+        20000,
+        50000
+      ]
+    },
+    {
+      "path": "/slaves/2/app_processing_ns",
+      "values": [
+        10000,
+        40000
+      ]
+    }
+  ],
+  "sampling": {
+    "kind": "grid"
+  },
+  "objectives": [],
+  "constraints": [],
+  "targets": [
+    {
+      "metric": {
+        "kind": "exchange_time_s",
+        "transfer": 0
+      },
+      "from_capture": {
+        "kind": "foe_duration_s",
+        "index": 0
+      },
+      "weight": 1.0
+    },
+    {
+      "metric": {
+        "kind": "exchange_time_s",
+        "transfer": 1
+      },
+      "from_capture": {
+        "kind": "sdo_duration_s",
+        "index": 0
+      },
+      "weight": 1.0
+    }
+  ],
+  "max_runs": 400
+}

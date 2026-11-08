@@ -26,6 +26,7 @@ ESC, and a lab master that sends frames on an isolated segment
 | Sweep simulator parameters, find the Pareto frontier, calibrate | `flowlab study` | Study |
 | Compare two captures, e.g. a measurement and its simulation | — | Compare |
 | Read the master's mailbox service pattern from a capture, as a simulator policy | `flowlab policy` | Mailbox |
+| Put measured values (PDI timing, policy) into a simulator spec | `flowlab apply-lab` | — |
 | Time a slave's SPI accesses to its ESC (LAN9252) and fit the simulator's PDI model | `flowlab pdi-bench`, `flowlab pdi-fit` | — |
 | Scan a lab network and measure transfers on it with FlowLab's own master (opt-in build) | `flowlab master scan\|run\|transfer` | — |
 | Print the JSON Schema of an input file | `flowlab schema` | the spec forms |
@@ -46,7 +47,9 @@ assumptions; see [Provenance and assumptions](reference/provenance.md).
 
 ## How this book is organised
 
-- **User guide**: installing, the UI, and each task in the table above.
+- **User guide**: installing; [investigating your own network](guide/own-network.md), from the
+  first capture to a model fitted to it and a change checked on the wire; the UI; and each task in
+  the table above.
 - **Reference**: input and output file formats, the HTTP API, limitations, terms and sources.
 - **Workspace**: the crates, how they fit together, how they are tested, and the design
   decisions behind them, for anyone who wants to extend FlowLab.

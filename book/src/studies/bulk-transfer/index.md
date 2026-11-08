@@ -31,7 +31,9 @@ PC master ──[100BASE-TX EtherCAT]── LAN9252 ESC board ──SPI / IRQ / 
 - The same capture views apply to simulated transfers and to lab captures, so model and
   measurement are compared view for view.
 
-Specs: `configs/studies/bulk-transfer/`. The report's sweeps are in its `report/` folder.
+Specs: `configs/studies/bulk-transfer/`. The report's sweeps are in its `report/` folder. For a
+network other than this study's, the same tools are described step by step in
+[Investigating your own network](../../guide/own-network.md).
 
 ## Physical sanity bound
 

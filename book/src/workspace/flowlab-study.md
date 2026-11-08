@@ -124,13 +124,17 @@ intercepts. Each direction needs two or more sizes; a slope ≤ 0 is an error. A
 samples takes the other's values, and the assumptions say so. The fit's provenance is
 `measured` unless the samples file carries a `flowlab:provenance=` marker in a comment
 (`samples_provenance`); `flowlab pdi-bench --sim` ([flowlab-pdi](flowlab-pdi.md)) writes
-`simulated`, and the CLI stores only measured fits as lab inputs.
+`simulated`.
 
 `mailbox_policy` maps the analysis's `ServicePattern` (see
 [flowlab-analysis § Mailbox](flowlab-analysis.md#mailbox)) one to one onto `MailboxPolicy`.
-`LabInputs::apply` writes `pdi`, `app_processing_ns` and `mailbox_policy` into a spec; fields
-left out keep the spec's values. CLI: `flowlab pdi-fit`, `flowlab policy`, `flowlab schema lab`;
-`scripts/bulk-transfer-report.py --lab` uses the file.
+`LabInputs::set_pdi_fit` and `set_mailbox_policy` store a fit or a policy and append to `sources`;
+both return `LabError::NotMeasured` for input that is not measured, so a simulated fit or a
+synthetic capture never becomes a lab input. `LabInputs::apply` writes `pdi`,
+`app_processing_ns` and `mailbox_policy` into a spec and names the sources in its
+`description`; fields left out keep the spec's values, and a file without any value is an error.
+CLI: `flowlab pdi-fit`, `flowlab policy`, `flowlab apply-lab`, `flowlab schema lab`;
+`scripts/bulk-transfer-report.py --lab` applies the file through `flowlab apply-lab`.
 
 ## Running
 

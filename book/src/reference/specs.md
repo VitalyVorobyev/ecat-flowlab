@@ -12,8 +12,8 @@ This page lists their fields, defaults and variants. What each tool does with th
 | `SynthSpec` | `flowlab synth`, `POST /api/synth` | `flowlab schema synth` | `configs/synth/*.json` |
 | `SimSpec` | `flowlab simulate`, `what-if`, `study` (the base spec), `master transfer --like`, `POST /api/simulate`, `/api/sim/run`, `/api/sim/what-if` | `flowlab schema sim` | `configs/sim/example.json`, `configs/studies/bulk-transfer/{smoke,large-payload,mixed-load}.json` |
 | `PlanSpec` | `flowlab plan`, `POST /api/plan` | `flowlab schema plan` | built in (`flowlab plan` without a file, `GET /api/plan/example`) |
-| `StudySpec` | `flowlab study`, `POST /api/study` | `flowlab schema study` | `configs/studies/bulk-transfer/foe-sweep.json` |
-| `LabInputs` | `scripts/bulk-transfer-report.py --lab`; written by `flowlab pdi-fit --lab`, `flowlab policy --lab` | `flowlab schema lab` | — |
+| `StudySpec` | `flowlab study`, `POST /api/study` | `flowlab schema study` | `configs/studies/bulk-transfer/foe-sweep.json`; a calibration: `configs/calibration/foe-span.json` |
+| `LabInputs` | `flowlab apply-lab`, `scripts/bulk-transfer-report.py --lab`; written by `flowlab pdi-fit --lab`, `flowlab policy --lab` | `flowlab schema lab` | — |
 | PDI timing samples (CSV) | `flowlab pdi-fit` (written by `flowlab pdi-bench`) | — | below |
 | Mailbox hint | `analyze --mailbox`, `serve --mailbox` | — | `0x1001=0x1000,0x1080` |
 | ENI XML | `analyze --eni`, `serve --eni`, `study --eni`, `POST /api/captures/{id}/eni` | — | written by `flowlab synth --eni` |
@@ -379,7 +379,9 @@ mailbox durations with `exchange_time_s`, which both sides observe:
 
 `LabInputs` carries measured values that replace the simulator's placeholders for one slave and
 the master. Every field is optional; `flowlab pdi-fit --lab` and `flowlab policy --lab` create
-the file or update their part of it and append to `sources`. Both take only measured data: samples
+the file or update their part of it and append to `sources`. `flowlab apply-lab SPEC --lab FILE
+--slave N` writes a `SimSpec` with them applied: `pdi` and `app_processing_ns` to slave *N*, the
+policy to the master, and the sources added to the spec's `description`. Both take only measured data: samples
 marked `simulated` and synthetic or simulated captures are refused, and the file stays as it was.
 
 | Field | Meaning |

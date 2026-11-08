@@ -123,6 +123,7 @@ created. Spec arguments that are omitted fall back to the built-in example.
 | `what-if [SPEC]` | `--result <RESULT>` result JSON with the rankings; `--no-effect-percent <P>` (default 1) |
 | `pdi-fit <SAMPLES>` | `--result <JSON>` the fit with residuals; `--lab <JSON>` store the values in a lab-inputs file (measured samples only) |
 | `policy <CAPTURE>` | `--station`, `--mailbox`, `--eni`; `--lab <JSON>` store the policy in a lab-inputs file (measured captures only) |
+| `apply-lab <SPEC>` | `--lab <JSON>`, `--slave <N>`, `-o, --out`: `LabInputs::apply` on a `SimSpec`, validated, written or printed (`tests/apply_lab.rs`) |
 | `serve [CAPTURES]...` | `-p, --port <PORT>` (default 7878); `--host <HOST>` (default 127.0.0.1); `--ui-dir <UI_DIR>` built UI (default `ui/dist`); `--open` open the browser; `--mailbox <STATION=OUT,IN>` repeatable; `--eni <XML>` applied to every capture; `--live` allow live capture from interfaces; `--live-dir <DIR>` where live captures are saved (default `results/live`) |
 | `capture [INTERFACE]` | live capture through dumpcap or tcpdump ([flowlab-live](flowlab-live.md)): `--list`; `--tool`; `-o, --out`; `--duration`; `--window`; `--all-traffic`; `--replay <FILE>` with `--speed`; `--report <JSON>` the last window's analysis; `--eni`, `--mailbox`, `--link-mbps` |
 | `schema <WHICH>` | One of `synth`, `sim`, `plan`, `study`, `lab`; prints the JSON Schema |
