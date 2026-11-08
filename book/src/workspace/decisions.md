@@ -138,6 +138,19 @@ experiment can answer them.
   read for protocol facts only; no code was copied.
   Consequence: the samples time user-space spidev, one driver variant; a kernel driver or
   another stack's access pattern needs its own measurement.
+- **ADR-036 Lab master on EtherCrab, behind a feature.** `flowlab master` (crate
+  `flowlab-master`) measures transfers on the lab rig so they compare with simulated ones.
+  EtherCrab (MIT OR Apache-2.0, pure Rust, raw socket on Linux, Npcap on Windows) initialises the
+  network; SOEM and IgH were not taken (GPLv3 or commercial, C). Mailbox transfers do not use
+  EtherCrab's mailbox code: FlowLab's own engine issues every mailbox access as an FPWR or FPRD,
+  so counters, retries and the service policy are FlowLab's, the policies are the simulator's
+  `MailboxPolicy`, and the engine is tested without hardware against a virtual ESC. The hardware
+  layer is thin glue behind the cargo feature `hardware` (CLI: `master`), off by default: a
+  default build cannot send frames, and only the master needs the Npcap SDK on Windows. Every
+  command needs an interface name, `--isolated-lab-network`, and a quiet segment (it listens
+  first through `flowlab-live`). Consequences: timings are the host's, not the wire's; EtherCrab
+  sends each access as its own frame where the simulator packs a write and a read into one; and
+  the glue is untested until it runs on the rig.
 
 ## Open questions
 
@@ -167,6 +180,13 @@ experiment can answer them.
 - Does the access pattern of `pdi-bench` (one access at a fixed address per size, polling the
   PRAM command register before each FIFO burst) time the same as the real stack's accesses?
   *Test:* compare its fit with timing logged inside SOES on the same board.
+- Does the SOES slave on the LAN9252 drop a mailbox message whose counter repeats the previous
+  one, and does it serve the mailbox repeat request? `flowlab master transfer` relies on both
+  after a lost frame, and starts its counters at 1 after EtherCrab's own CoE traffic.
+  *Test:* `transfer` right after `scan`, and with frames dropped on the link (unplug briefly);
+  check `resent_messages`, `repeat_requests` and the file on the slave.
+- How far is the host's timing (`flowlab master run`) from the wire's? *Test:* `run` with a
+  capture on a tap or with NIC hardware timestamps; compare the round-trip distributions.
 - Which mailbox policy does each candidate master implement (EtherCrab, SOEM, IgH, TwinCAT), and
   does it poll mailboxes every cycle? *Test:* captures of an FoE write per master; compare with
   the policies' signatures (accesses per cycle, frames per cycle).

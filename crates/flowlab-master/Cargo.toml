@@ -1,0 +1,29 @@
+[package]
+name = "flowlab-master"
+description = "Lab EtherCAT master: mailbox transfer engine (FoE, CoE, EoE) with the simulator's service policies, a simulated slave, and an EtherCrab hardware layer behind the `hardware` feature."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ecat-wire.workspace = true
+flowlab-core.workspace = true
+flowlab-devices.workspace = true
+flowlab-sim.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+futures-lite = "2"
+ethercrab = { version = "0.7.1", default-features = false, features = ["std"], optional = true }
+async-io = { version = "2", optional = true }
+
+[features]
+default = []
+# EtherCrab on a real network interface: raw socket on Linux and macOS, Npcap on Windows.
+hardware = ["dep:ethercrab", "dep:async-io"]
+
+[lints]
+workspace = true

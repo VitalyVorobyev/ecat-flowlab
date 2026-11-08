@@ -22,11 +22,19 @@ ports connect to the master. Before any transfer work:
 
 ## Master
 
-1. **Linux PC** first: EtherCrab (Rust) or SOEM/IgH (check licences). Interface ownership,
-   permissions and timestamping are controllable.
-2. **Windows PC** second, with a master that supports Npcap. Do not assume Windows networking is
-   deterministic.
+1. **Linux PC** first: FlowLab's own master, `flowlab master` ([Lab master](../../guide/master.md)),
+   built on EtherCrab; or SOEM/IgH (check licences). Interface ownership, permissions and
+   timestamping are controllable.
+2. **Windows PC** second, with a master that supports Npcap (`flowlab master` builds there with
+   the Npcap SDK). Do not assume Windows networking is deterministic.
 3. **TwinCAT** as an optional interoperability baseline.
+
+FlowLab's master runs a transfer set up like a simulated one: the same payload bytes, cycle
+time and mailbox policy (`flowlab master transfer --like SPEC --transfer K`), so its result
+compares field by field with the simulated one. It is a measuring instrument, not a product
+master: it serves one slave and one transfer at a time, and its timing is the host's. Run
+`flowlab capture` on the same port meanwhile; `flowlab policy` on that capture reads the policy
+back from the wire.
 
 The development Mac only runs FlowLab; it is not a lab master.
 
@@ -35,8 +43,8 @@ The development Mac only runs FlowLab; it is not a lab master.
 | Step | Goal | FlowLab's part |
 |---|---|---|
 | L0 | Plain Ethernet: PC ↔ Verdin TCP, 10 MB with checksum, throughput and CPU | the baseline every result is compared with |
-| L1 | ESC bring-up: PDI register access, EEPROM, identity, state machine, small PDOs | capture → Stations (AL states), Timing (cycle, WKC) |
-| L2 | Basic transfer: 1 KB, 1 MB, 10 MB with integrity, timeouts and diagnostics | Mailbox view: messages, rejected writes, empty reads |
+| L1 | ESC bring-up: PDI register access, EEPROM, identity, state machine, small PDOs | `flowlab master scan` (identity, SyncManagers, ENI), `flowlab master run`; capture → Stations (AL states), Timing (cycle, WKC) |
+| L2 | Basic transfer: 1 KB, 1 MB, 10 MB with integrity, timeouts and diagnostics | `flowlab master transfer`; Mailbox view: messages, rejected writes, empty reads |
 | L3 | One protocol at a time: FoE, EoE, CoE, VoE, PDO channel, each verified on both ends | per-protocol transfer tables, Compare |
 | L4 | Calibration: measured PDI timing and master policy as lab inputs; check against the captures and report residuals | `flowlab pdi-bench`, `flowlab pdi-fit`, `flowlab policy`, `flowlab study --capture` |
 | L5 | Optimisation: constrained sweeps; check the best candidates over several trials with control traffic present | `scripts/bulk-transfer-report.py --lab lab.json --out DIR` |

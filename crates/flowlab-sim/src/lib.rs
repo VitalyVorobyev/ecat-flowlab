@@ -25,7 +25,7 @@ mod protocol;
 mod result;
 mod spec;
 
-pub use engine::{FIRST_STATION, MASTER_MAC, MBX_BASE, simulate};
+pub use engine::{FIRST_STATION, MASTER_MAC, MBX_BASE, simulate, transfer_seed};
 pub use protocol::{payload_bytes, payload_sha256};
 pub use result::{SimResult, SlaveResult, TransferResult};
 pub use spec::{

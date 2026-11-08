@@ -35,6 +35,7 @@ cargo test -p flowlab-analysis recovers_mailbox_ground_truth
 | `flowlab-study` | `src/tests.rs` | Pareto consistency, constraints with reasons, sampling rules, calibration recovering hidden parameters |
 | `flowlab-live` | `src/tests.rs`, `src/tool.rs` | Replays counted completely and saved byte for byte, the window's span, mailbox addresses kept beyond the window, `cat` as a stand-in capture tool, failing tools and non-capture output, interface lists |
 | `flowlab-pdi` | `src/tests.rs` | Against a simulated LAN9252: SPI framing of READ and FAST READ; CSR reads at every alignment; process RAM round trips through the FIFOs (unaligned, not DWORD multiples, beyond the FIFO depth); refusals of a broken link, a wrong chip, an ESC outside INIT, writes without permission or outside process RAM, and the AL Control and SyncManager registers; a benchmark's CSV fitted back by `flowlab-study` to the simulated bus, labelled simulated |
+| `flowlab-master` | `src/tests.rs`, `src/protocol.rs`, `src/hardware.rs` | The transfer engine end to end against the virtual slave: FoE, CoE and EoE byte-identical at both ends, policies changing accesses per cycle, status polling, lost frames recovered with counters and repeat requests, resends, time limits, a transfer set up like a simulated one hashing to the simulated SHA-256; EtherCrab glue helpers with `--features hardware` ([flowlab-master](flowlab-master.md#tests)) |
 | `flowlab-server` | `src/lib.rs` | The router driven in-process: synth, simulate, ENI, ESI, plan, study, live replay and the `--live` opt-in, uploads, errors |
 
 Each crate page in this part of the book lists its tests in more detail.
@@ -148,8 +149,8 @@ New mailbox encodings in synth must keep this check passing.
 
 | Job | Runs on | Steps |
 |---|---|---|
-| `rust` | ubuntu-latest, macos-latest, windows-latest (bash) | `cargo fmt --check`; `cargo clippy --all-targets -- -D warnings`; `cargo test`; `git diff --exit-code -- ui/src/api/gen` (generated types committed); synth → analyze round trip; synth with `--eni` → analyze with `--eni`, `esi` on the fixture, `plan`; `simulate` of `configs/sim/example.json` and the three bulk-transfer specs, `study` of `foe-sweep.json` (release) |
-| `musl` | ubuntu-latest, per target `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl` | stand-in `ui/dist`; `cargo zigbuild --release -p flowlab-cli --features embed-ui`; `file` must say statically linked; the x86-64 binary, started outside the repository, must serve the embedded UI |
+| `rust` | ubuntu-latest, macos-latest, windows-latest (bash) | `cargo fmt --check`; `cargo clippy --all-targets -- -D warnings`; `cargo test`; on Linux also `cargo clippy -p flowlab-cli --features master` and `cargo test -p flowlab-master --features hardware`; `git diff --exit-code -- ui/src/api/gen` (generated types committed); synth → analyze round trip; synth with `--eni` → analyze with `--eni`, `esi` on the fixture, `plan`; `simulate` of `configs/sim/example.json` and the three bulk-transfer specs, `study` of `foe-sweep.json` (release) |
+| `musl` | ubuntu-latest, per target `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl` | stand-in `ui/dist`; `cargo zigbuild --release -p flowlab-cli --features embed-ui,master`; `file` must say statically linked; the x86-64 binary, started outside the repository, must serve the embedded UI |
 | `wireshark` | ubuntu-latest | Install tshark; synth → analyze → `crosscheck-tshark.py`; simulate the example with `-o` → analyze → `crosscheck-tshark.py` |
 | `ui` | ubuntu-latest | `bun install --frozen-lockfile`; `fmt:check`, `lint`, `typecheck`, `test:run`, `build` |
 

@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 mod capture;
+mod master;
 mod pdi_bench;
 
 use clap::{Parser, Subcommand};
@@ -204,6 +205,10 @@ enum Cmd {
         #[arg(long, default_value_t = 100)]
         link_mbps: u64,
     },
+    /// FlowLab's own EtherCAT master on an isolated lab segment: scan, a cyclic run, mailbox
+    /// transfers measured like the simulator's. Sends frames; needs a build with
+    /// `--features master`.
+    Master(master::MasterArgs),
     /// Print a JSON Schema.
     Schema {
         /// Which schema.
@@ -387,6 +392,7 @@ fn run(cli: Cli) -> Result<()> {
                 ..Default::default()
             },
         })?,
+        Cmd::Master(m) => master::run(m)?,
         Cmd::Schema { which } => {
             let schema = match which.as_str() {
                 "sim" => flowlab_sim::spec_schema(),

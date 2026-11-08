@@ -220,6 +220,13 @@ fn ci() -> Result {
     run(cargo().args(["clippy", "--all-targets", "--quiet", "--", "-D", "warnings"]))?;
     step("tests");
     run(cargo().args(["test", "--quiet"]))?;
+    if cfg!(windows) {
+        eprintln!("xtask ci: lab master (feature `master`) skipped on Windows: linking needs the Npcap SDK");
+    } else {
+        step("lab master (feature `master`): clippy and tests");
+        run(cargo().args(["clippy", "-p", "flowlab-cli", "--features", "master", "--quiet", "--", "-D", "warnings"]))?;
+        run(cargo().args(["test", "-p", "flowlab-master", "--features", "hardware", "--quiet"]))?;
+    }
     step("generated UI types are committed");
     run(Command::new("git").args(["diff", "--exit-code", "--stat", "--", "ui/src/api/gen"]))?;
     step("rustdoc");

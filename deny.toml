@@ -17,6 +17,9 @@ allow = [
   "Unicode-3.0",
   "Zlib",
 ]
+# ISC (permissive, MIT-like) for one crate only: libloading, a build dependency of `pcap`,
+# which EtherCrab uses on Windows (flowlab-master's `hardware` feature).
+exceptions = [{ allow = ["ISC"], crate = "libloading" }]
 
 [bans]
 multiple-versions = "allow"

@@ -49,18 +49,21 @@ is listed in the report's assumptions.
 
 ## Safety
 
-FlowLab reads files and the output of capture tools, and never sends frames. Live capture
-(`flowlab capture`, or the Live view after `cargo ui -- --live`) runs Wireshark's dumpcap or
-tcpdump, which only listen. `flowlab pdi-bench` talks to a LAN9252 over SPI on the slave's host:
-it refuses unless the ESC is in INIT, never touches AL Control or SyncManager registers, and
-writes only with `--allow-writes` into a named area of process RAM. `flowlab serve` has no authentication and can read any file you can,
-so keep it on loopback.
+A default build reads files and the output of capture tools, and never sends frames. Live
+capture (`flowlab capture`, or the Live view after `cargo ui -- --live`) runs Wireshark's dumpcap
+or tcpdump, which only listen. `flowlab pdi-bench` talks to a LAN9252 over SPI on the slave's
+host: it refuses unless the ESC is in INIT, never touches AL Control or SyncManager registers,
+and writes only with `--allow-writes` into a named area of process RAM. The lab master
+(`flowlab master`, EtherCrab) sends frames: it is only in a build with `--features master`, and
+each command needs an interface name, `--isolated-lab-network` and a segment where no other
+master is heard ([Lab master](book/src/guide/master.md)). `flowlab serve` has no
+authentication and can read any file you can, so keep it on loopback.
 
 ## Repository
 
 | Path | Content |
 |---|---|
-| `crates/` | `ecat-wire` (codec), `flowlab-core`, `-capture`, `-analysis`, `-synth`, `-sim`, `-devices`, `-study`, `-live`, `-pdi` (LAN9252 SPI timing), `-server`, `-cli` |
+| `crates/` | `ecat-wire` (codec), `flowlab-core`, `-capture`, `-analysis`, `-synth`, `-sim`, `-devices`, `-study`, `-live`, `-pdi` (LAN9252 SPI timing), `-master` (lab master, opt-in), `-server`, `-cli` |
 | `ui/` | React UI on the `@vitavision` lab-ui packages |
 | `configs/` | Example generator, simulator and study specs |
 | `book/` | The documentation (mdBook) |

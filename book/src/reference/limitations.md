@@ -4,11 +4,10 @@ What FlowLab does not do, or does only partly. Each item is a property of the cu
 
 ## Captures and analysis
 
-- **No own capture or master.** FlowLab never sends frames. Live capture runs Wireshark's
-  dumpcap or tcpdump and reads what they write; their timestamps are the capturing host's. It has
-  been tested with replays and stand-in tools, not yet on a real segment. On Windows, where
-  FlowLab looks for `dumpcap.exe` and how it reads the interface list are tested; capturing
-  through it has not been tried on a Windows machine.
+- **No own capture.** Live capture runs Wireshark's dumpcap or tcpdump and reads what they write;
+  their timestamps are the capturing host's. It has been tested with replays and stand-in tools,
+  not yet on a real segment. On Windows, where FlowLab looks for `dumpcap.exe` and how it reads
+  the interface list are tested; capturing through it has not been tried on a Windows machine.
 - **Live figures** come from one second of frames each (cycles slower than about 50 ms show no
   per-second period) and from a rolling window ([Live capture](../guide/live.md#how-the-live-figures-are-made)).
 - **Validated on generated traffic.** The analysis is tested against synthetic captures with
@@ -26,6 +25,22 @@ What FlowLab does not do, or does only partly. Each item is a property of the cu
   headers are decoded only.
 - **Expected working counters** without an ENI are the most frequent value per datagram,
   which is wrong if a slave is missing for most of the capture.
+
+## Lab master
+
+- **Opt-in and untested on hardware.** Only a build with `--features master` sends frames
+  ([Lab master](../guide/master.md)). The transfer engine is tested against a virtual ESC; the
+  EtherCrab layer has not yet run against a real slave.
+- **Host timing.** Cycle starts and round trips are the host's clock around EtherCrab calls,
+  including the operating system and the socket, not the wire's.
+- **One slave, one transfer** at a time; with one slave, the round-robin policy serves it every
+  cycle. FoE, CoE (SDO normal transfer) and EoE carrying UDP; no PDO channel, TCP, VoE or SoE.
+- **Separate frames.** EtherCrab sends each mailbox access as its own Ethernet frame; the
+  simulator packs a cycle's write and read into one.
+- **Process data** in `run` and `transfer --op` is whatever EtherCrab maps (zeros are sent);
+  distributed clocks are not configured.
+- **Master check** listens only for `--listen` seconds before starting; a master that is silent
+  then is not seen.
 
 ## ESI and ENI
 

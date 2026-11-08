@@ -17,7 +17,11 @@ specs in `configs/`.
 | macOS, Apple silicon | `flowlab-VERSION-aarch64-apple-darwin.tar.gz` | |
 
 The Linux binaries are linked statically against musl, so they need no shared library from the
-system.
+system. They also hold the [lab master](guide/master.md) (`flowlab master`, which sends EtherCAT
+frames only with `--isolated-lab-network` on a quiet segment, and needs `CAP_NET_RAW` or root).
+The Windows and macOS binaries do not: on Windows the master links against Npcap's `wpcap.dll`,
+which every user of the binary would then need. Build it there from source with the Npcap SDK
+([Lab master](guide/master.md#building)).
 
 **Linux and macOS**
 

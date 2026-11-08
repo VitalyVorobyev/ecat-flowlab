@@ -1,6 +1,6 @@
 # Overview
 
-FlowLab is a Cargo workspace of twelve crates and a React UI. Every source of traffic produces
+FlowLab is a Cargo workspace of thirteen crates and a React UI. Every source of traffic produces
 real Ethernet frames, and one analysis reads them all.
 
 ```text
@@ -16,6 +16,7 @@ real Ethernet frames, and one analysis reads them all.
   flowlab-devices: ESI/ENI → expected WKCs, names, mailboxes (analysis) · bus budget (planner)
   flowlab-study:   many flowlab-sim runs → Pareto frontier, calibration against a CaptureReport
   flowlab-pdi:     timed ESC accesses over a LAN9252's SPI → PDI timing samples (pdi-fit)
+  flowlab-master:  transfers on the lab rig (EtherCrab, opt-in) → MeasuredTransfer, set up like a sim run
 ```
 
 Because the simulator and the generator write frames through the same codec the analysis
@@ -36,6 +37,7 @@ Only their provenance differs.
 | [`flowlab-study`](flowlab-study.md) | Parameter studies, Pareto frontier, calibration | sim, analysis |
 | [`flowlab-live`](flowlab-live.md) | Live capture through dumpcap or tcpdump, analysed in a rolling window | capture, analysis |
 | [`flowlab-pdi`](flowlab-pdi.md) | Timed ESC accesses over a LAN9252's SPI (Linux spidev, or a simulated LAN9252) for `pdi-fit` | core |
+| [`flowlab-master`](flowlab-master.md) | Lab master: mailbox transfer engine with the simulator's policies, a virtual slave; EtherCrab behind the `hardware` feature | ecat-wire, core, devices, sim |
 | [`flowlab-server`](server-cli.md) | Local HTTP API and static UI (axum) | all of the above |
 | [`flowlab-cli`](server-cli.md) | The `flowlab` binary | all of the above |
 | `xtask` (not published) | Developer commands behind the cargo aliases `cargo ui`, `ui-dev`, `ci`, `site` ([Contributing](contributing.md)) | std only |

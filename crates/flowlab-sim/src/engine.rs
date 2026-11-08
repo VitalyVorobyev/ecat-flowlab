@@ -1032,6 +1032,13 @@ fn protocol_name(p: &TransferProtocol) -> &'static str {
     }
 }
 
+/// Seed of the payload of transfer `index` in a spec with seed `spec_seed`: the transfer's
+/// bytes are [`payload_bytes`](crate::payload_bytes)`(transfer_seed(..), offset, ..)`, so
+/// another tool can send the very payload a simulation moved and compare SHA-256s.
+pub fn transfer_seed(spec_seed: u64, index: usize) -> u64 {
+    spec_seed ^ (index as u64 + 1).wrapping_mul(0xA24B_AED4_963E_E407)
+}
+
 /// Run the simulation; frames go to `capture` as pcapng if given and enabled in the spec.
 pub fn simulate<W: Write>(spec: &SimSpec, capture: Option<W>) -> Result<SimResult, SimError> {
     spec.validate().map_err(SimError::Spec)?;
@@ -1073,7 +1080,7 @@ pub fn simulate<W: Write>(spec: &SimSpec, capture: Option<W>) -> Result<SimResul
         .map(|k| Transfer {
             first_msg_ns: None,
             last_msg_ns: None,
-            seed: spec.seed ^ (k as u64 + 1).wrapping_mul(0xA24B_AED4_963E_E407),
+            seed: transfer_seed(spec.seed, k),
             eligible: false,
             started_at: None,
             kind: None,
