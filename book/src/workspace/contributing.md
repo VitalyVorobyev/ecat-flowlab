@@ -49,7 +49,14 @@ report regeneration below. See [Testing and validation](testing.md).
 - **Crate boundaries.** `ecat-wire` does no I/O, does not allocate while parsing, never panics on
   input, and gives every structure an encode path with a proptest round trip. Analysis is pure.
   The server holds no analysis logic and runs heavy work in `spawn_blocking`. The simulator never
-  analyses its own frames.
+  analyses its own frames; every modelling choice that changes results is a spec parameter or an
+  assumption in the result, and its tests for byte conservation, the physical bound and
+  monotonicity keep passing. Studies calibrate only on quantities both a capture and the
+  simulator observe (message spans, not application end-to-end times) and always report
+  residuals. Device fixtures are hand-written; no vendor ESI or ENI files are committed.
+- **Mailbox reading.** Messages come only from returning datagrams with WKC > 0. Channel
+  addresses come from SyncManager configuration, then hints, then heuristics, and the source is
+  always reported.
 - **Generators stay honest.** Synth and sim output must keep matching Wireshark's reading (CI)
   and behave like real ESCs wherever the analysis depends on it.
 - **UI.** lab-ui components first; design tokens only (no raw palette classes or hex); verdict
