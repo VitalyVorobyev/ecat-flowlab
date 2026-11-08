@@ -14,7 +14,7 @@ This page lists their fields, defaults and variants. What each tool does with th
 | `PlanSpec` | `flowlab plan`, `POST /api/plan` | `flowlab schema plan` | built in (`flowlab plan` without a file, `GET /api/plan/example`) |
 | `StudySpec` | `flowlab study`, `POST /api/study` | `flowlab schema study` | `configs/studies/bulk-transfer/foe-sweep.json` |
 | `LabInputs` | `scripts/bulk-transfer-report.py --lab`; written by `flowlab pdi-fit --lab`, `flowlab policy --lab` | `flowlab schema lab` | — |
-| PDI timing samples (CSV) | `flowlab pdi-fit` | — | below |
+| PDI timing samples (CSV) | `flowlab pdi-fit` (written by `flowlab pdi-bench`) | — | below |
 | Mailbox hint | `analyze --mailbox`, `serve --mailbox` | — | `0x1001=0x1000,0x1080` |
 | ENI XML | `analyze --eni`, `serve --eni`, `study --eni`, `POST /api/captures/{id}/eni` | — | written by `flowlab synth --eni` |
 | ESI XML | `flowlab esi`, `POST /api/esi` | — | `crates/flowlab-devices/tests/fixtures/flowlab-demo.esi.xml` |
@@ -403,7 +403,11 @@ the file or update their part of it and append to `sources`.
 One timed ESC access by the slave application per line, after the header
 `direction,bytes,duration_ns`. `direction` is `read` or `write` (`r`, `w`); `bytes` is what the
 access moved; `duration_ns` is the wall time around the driver call. Blank lines and lines
-starting with `#` are ignored.
+starting with `#` are ignored, except a provenance marker: a comment containing
+`flowlab:provenance=simulated` (or `synthetic`) makes the fit carry that provenance, and
+`pdi-fit --lab` then refuses to store it. Files without a marker are taken as measured.
+`flowlab pdi-bench` writes this format, with the setup in comment lines and the marker
+(`measured` on hardware, `simulated` with `--sim`).
 
 ```text
 # Verdin, LAN9252, spidev at 30 MHz

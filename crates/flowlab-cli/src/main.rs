@@ -1,5 +1,5 @@
 //! `flowlab`: analyse captures (or capture live), generate synthetic ones, simulate, run studies, plan networks,
-//! read ESI files, turn lab measurements into simulator inputs and serve the UI. `flowlab help`
+//! read ESI files, time a LAN9252's SPI, turn lab measurements into simulator inputs and serve the UI. `flowlab help`
 //! lists the subcommands.
 
 use std::fs::File;
@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 mod capture;
+mod pdi_bench;
 
 use clap::{Parser, Subcommand};
 use flowlab_analysis::mailbox::{MailboxHint, write_eoe_pcapng};
@@ -219,6 +220,14 @@ enum Cmd {
         #[arg(long, value_name = "JSON")]
         lab: Option<PathBuf>,
     },
+    /// Time complete ESC reads and writes over a LAN9252's SPI (Linux spidev), as samples for
+    /// `pdi-fit`.
+    ///
+    /// Run it on the slave's host with the slave application stopped and the ESC in INIT (no
+    /// master). Checks the link (BYTE_TEST, ID_REV) first; reads process RAM; writes only with
+    /// --allow-writes into an --area of process RAM that nothing uses. --sim times a simulated
+    /// LAN9252 instead and marks the samples simulated.
+    PdiBench(pdi_bench::PdiBenchArgs),
     /// Read the master's mailbox service pattern from a capture, as a simulator policy.
     Policy {
         /// Capture of the real master serving the mailbox (e.g. during an FoE transfer).
@@ -437,23 +446,9 @@ fn run(cli: Cli) -> Result<()> {
         }
         Cmd::PdiFit { samples, result, lab } => {
             let bytes = std::fs::read(&samples).map_err(|e| format!("{}: {e}", samples.display()))?;
-            let text = String::from_utf8_lossy(&bytes);
-            let parsed = flowlab_study::parse_samples(&text).map_err(|e| format!("{}: {e}", samples.display()))?;
-            let name = file_name(&samples);
-            let fit = flowlab_study::fit_pdi(&parsed, &name, &bytes)?;
-            print_pdi_fit(&fit);
-            if let Some(p) = result {
-                ensure_parent(&p)?;
-                serde_json::to_writer_pretty(BufWriter::new(File::create(&p)?), &fit)?;
-            }
-            if let Some(p) = lab {
-                let mut l = read_lab(&p)?;
-                let access = l.pdi.as_ref().and_then(|x| x.mailbox_access);
-                l.pdi = Some(flowlab_study::lab::PdiValues { mailbox_access: access, ..fit.pdi.clone() });
-                l.sources.push(format!("pdi: flowlab pdi-fit {name} (sha256 {})", &fit.meta.input.sha256[..16]));
-                write_lab(&p, &l)?;
-            }
+            pdi_bench::fit_samples(&bytes, &samples.display().to_string(), &file_name(&samples), result, lab)?;
         }
+        Cmd::PdiBench(args) => pdi_bench::run(args)?,
         Cmd::Policy { capture, station, mailbox_hints, eni, lab } => {
             let file = CaptureFile::read(&capture).map_err(|e| format!("{}: {e}", capture.display()))?;
             let name = file_name(&capture);

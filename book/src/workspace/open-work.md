@@ -17,8 +17,11 @@ questions that real captures should answer.
   the simulator's policies. Only with explicit opt-in, an interface name and an isolated network
   (see the hardware rules in [Contributing](contributing.md)); refuse to start when another
   master's frames are seen.
-- PDI profiling on the slave: kernel SPI trace events (`trace-cmd`) → PDI timing samples for
-  `flowlab pdi-fit`, and a LAN9252 access benchmark over spidev.
+- Run `flowlab pdi-bench` on the Verdin/LAN9252 with both read instructions and several clocks,
+  and answer the LAN9252 questions in the [design decisions](decisions.md#open-questions).
+- PDI profiling of the real stack: a converter from kernel SPI trace events (ftrace/`trace-cmd`
+  `spi:spi_transfer_start`/`stop`) of the running slave application to PDI timing samples for
+  `flowlab pdi-fit`, grouping the transfers of one ESC access.
 - Live capture: NIC hardware timestamps (`tcpdump -j`), ring files for long captures.
 
 ## Analysis

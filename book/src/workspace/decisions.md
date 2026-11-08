@@ -122,6 +122,22 @@ experiment can answer them.
   listens, so it needs no cargo feature. The server still asks for `--live` before it starts a
   capture from an HTTP request, and the interface is always named explicitly.
   Consequence: the timestamps are the tool's. NIC hardware timestamps need the tool's own option.
+- **ADR-037 PDI timing measured by a benchmark that speaks the ESC's protocol.** `flowlab
+  pdi-bench` performs complete ESC accesses through the LAN9252's SPI protocol, the same paths a
+  slave stack's hardware layer takes (CSR interface below 0x1000, process RAM FIFOs above, AL
+  Event read after each access as in SOES), and times each one; the samples go through
+  `flowlab pdi-fit` unchanged. Instrumenting the real stack stays possible but needs a patched
+  build per stack; the benchmark needs only the binary on the target. It talks to `/dev/spidevB.C`
+  through the `spidev` crate (MIT/Apache-2.0, Linux only; other systems compile without it). The
+  LAN9252 logic sits behind a small SPI trait, so a simulated LAN9252 tests it and gives `--sim`
+  dry runs, whose samples carry `# flowlab:provenance=simulated`; `pdi-fit` reads the marker and
+  refuses to store such a fit as lab inputs. Hardware safety: the link check (`BYTE_TEST`,
+  `HW_CFG`, `ID_REV`) runs first, the ESC must be in INIT (and still be at the end), AL Control and
+  SyncManager registers are never accessed, and writes go only into process RAM with
+  `--allow-writes` and an explicit `--area`. SOES (GPLv2) and Microchip's application notes were
+  read for protocol facts only; no code was copied.
+  Consequence: the samples time user-space spidev, one driver variant; a kernel driver or
+  another stack's access pattern needs its own measurement.
 
 ## Open questions
 
@@ -143,7 +159,14 @@ experiment can answer them.
   after a state change? *Test:* captures across INIT → PREOP transitions on real slaves.
 - What are a LAN9252-class ESC's effective SPI read/write rates and per-access overhead from a
   Linux userspace driver on the Verdin? The simulator's PDI-bound results hinge on them.
-  *Test:* timestamped SPI transactions or a capture of mailbox turnaround on the lab rig.
+  *Test:* `flowlab pdi-bench` on the rig, then `flowlab pdi-fit`; check the fit against a
+  capture of mailbox turnaround.
+- Does the LAN9252's `ID_REV` read 0x9252 in bits 31:16, and does it accept the `FAST READ`
+  dummy byte value 0x01 that SOES sends? `pdi-bench` assumes both (`--chip-id` overrides the
+  first). *Test:* the first `pdi-bench` run on the Verdin, with both read instructions.
+- Does the access pattern of `pdi-bench` (one access at a fixed address per size, polling the
+  PRAM command register before each FIFO burst) time the same as the real stack's accesses?
+  *Test:* compare its fit with timing logged inside SOES on the same board.
 - Which mailbox policy does each candidate master implement (EtherCrab, SOEM, IgH, TwinCAT), and
   does it poll mailboxes every cycle? *Test:* captures of an FoE write per master; compare with
   the policies' signatures (accesses per cycle, frames per cycle).

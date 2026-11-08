@@ -18,7 +18,7 @@ whenever `cargo test` runs.
 | What-if result | `flowlab what-if SPEC --result FILE`; `POST /api/sim/what-if` | `flowlab_study::WhatIfResult` | `meta.source`: `simulated` | `WhatIfResult.ts` |
 | Study result | `flowlab study SPEC --result FILE`; `POST /api/study` | `flowlab_study::StudyResult` | `meta.source`: `simulated` | `StudyResult.ts` |
 | ESI summary | `flowlab esi FILE --json`; `POST /api/esi` (as `EsiImport`) | `flowlab_devices::EsiFile` | device description, not a result | `EsiFile.ts`, `EsiImport.ts` |
-| PDI fit | `flowlab pdi-fit SAMPLES --result FILE` | `flowlab_study::PdiFit` | `meta.source`: `measured` | not exported |
+| PDI fit | `flowlab pdi-fit SAMPLES --result FILE`, `flowlab pdi-bench … --result FILE` | `flowlab_study::PdiFit` | `meta.source`: `measured`, or the samples file's marker (`simulated` from `pdi-bench --sim`) | not exported |
 
 `flowlab analyze --eoe-out FILE` and `GET /api/captures/{id}/eoe.pcapng` also write the
 Ethernet frames reassembled from EoE as a pcapng; it carries the provenance of the capture it
@@ -400,8 +400,11 @@ with its `spec` left out:
 
 ## PdiFit
 
-Written by `flowlab pdi-fit SAMPLES --result FILE`. `meta.source` is `measured`, and `meta.input`
-names the samples file with its SHA-256.
+Written by `flowlab pdi-fit SAMPLES --result FILE` (or `flowlab pdi-bench … --result FILE`).
+`meta.source` is `measured` unless the samples file carries a provenance marker
+(`flowlab pdi-bench --sim` writes `simulated`; see
+[PDI timing samples](specs.md#pdi-timing-samples)), and `meta.input` names the samples file
+with its SHA-256.
 
 | Field | Meaning |
 |---|---|

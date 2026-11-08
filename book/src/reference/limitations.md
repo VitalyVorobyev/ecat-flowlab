@@ -41,6 +41,17 @@ What FlowLab does not do, or does only partly. Each item is a property of the cu
 - **Process image ≤ 1,400 bytes** in one cyclic frame; one PDO channel per slave.
 - **Parameters are not calibrated** until a study fits them to a capture of the real system.
 
+## PDI benchmark
+
+- **LAN9252 over SPI only**, through Linux spidev (`flowlab pdi-bench`); other ESCs, the
+  LAN9252's host bus interface, dual/quad SPI and kernel drivers are not covered. On macOS and
+  Windows only `--sim` runs.
+- **Untested on hardware.** The protocol follows the data sheet, Microchip's application notes
+  and the SOES hardware layer, and is tested against FlowLab's own simulated LAN9252, not yet
+  against a real one.
+- **Its own access pattern.** It times one access at a fixed address per size; a stack that
+  splits or merges accesses differently can time differently.
+
 ## Server
 
 - Captures are held in memory; there is no persistence between runs.
