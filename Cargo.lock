@@ -637,7 +637,6 @@ dependencies = [
  "ecat-wire",
  "flowlab-core",
  "serde",
- "sha2",
  "thiserror",
  "ts-rs",
 ]
@@ -671,6 +670,7 @@ name = "flowlab-core"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "sha2",
  "ts-rs",
 ]
 
@@ -705,6 +705,7 @@ name = "flowlab-mailbox"
 version = "0.1.0"
 dependencies = [
  "ecat-wire",
+ "flowlab-core",
  "schemars",
  "serde",
  "serde_json",
@@ -794,7 +795,6 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
- "sha2",
  "thiserror",
  "ts-rs",
 ]

@@ -11,7 +11,6 @@ use flowlab_sim::{
 };
 use serde::Serialize;
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use ts_rs::TS;
 
 use crate::StudyError;
@@ -535,11 +534,7 @@ pub fn what_if(spec: &SimSpec, o: &WhatIfOptions) -> Result<WhatIfResult, StudyE
     });
 
     let json = serde_json::to_vec(spec).unwrap_or_default();
-    let input = InputRef {
-        name: "scenario.json".into(),
-        bytes: json.len() as u64,
-        sha256: Sha256::digest(&json).iter().map(|b| format!("{b:02x}")).collect(),
-    };
+    let input = InputRef::of("scenario.json", &json);
     let assumptions = vec![
         "Each change is a separate simulation of the scenario with one parameter doubled or halved, or one choice switched; the simulator's own assumptions apply to each run.".to_owned(),
         format!("Pairs of the first {MAX_PAIRED} changes that are not protocol switches are also simulated together, since two limits can coincide; larger combinations are not tried."),

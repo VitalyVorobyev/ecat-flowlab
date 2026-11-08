@@ -16,7 +16,6 @@ use flowlab_core::{InputRef, Provenance, ReportMeta};
 use flowlab_sim::{MailboxAccess, MailboxPolicy, SimSpec};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 /// Why lab inputs could not be read or applied.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -206,11 +205,7 @@ pub fn fit_pdi(samples: &[Sample], input_name: &str, input_bytes: &[u8]) -> Resu
         access_overhead_ns: overhead.max(0.0).round().min(u32::MAX as f64) as u32,
         mailbox_access: None,
     };
-    let input = InputRef {
-        name: input_name.to_owned(),
-        bytes: input_bytes.len() as u64,
-        sha256: Sha256::digest(input_bytes).iter().map(|b| format!("{b:02x}")).collect(),
-    };
+    let input = InputRef::of(input_name, input_bytes);
     Ok(PdiFit { meta: ReportMeta::new(source, input, assumptions), read, write, pdi })
 }
 

@@ -1,11 +1,11 @@
 //! Drawing, running and judging the runs of a study.
 
 use flowlab_analysis::CaptureReport;
+use flowlab_core::rng::SplitMix64;
 use flowlab_core::{InputRef, Provenance, ReportMeta};
 use flowlab_sim::{SimResult, SimSpec};
 use serde::Serialize;
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use ts_rs::TS;
 
 use crate::StudyError;
@@ -130,24 +130,6 @@ fn capture_label(m: &CaptureMetric) -> String {
 // Sampling
 // ---------------------------------------------------------------------------------------------
 
-struct Rng(u64);
-
-impl Rng {
-    fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
-        let mut z = self.0;
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^ (z >> 31)
-    }
-    fn unit(&mut self) -> f64 {
-        (self.next() >> 11) as f64 / (1u64 << 53) as f64
-    }
-    fn below(&mut self, n: usize) -> usize {
-        (self.next() % n.max(1) as u64) as usize
-    }
-}
-
 fn range_value(p: &Parameter, f: f64) -> Value {
     let (lo, hi) = (p.min.unwrap_or(0.0), p.max.unwrap_or(0.0));
     let v = if p.log && lo > 0.0 && hi > 0.0 { (lo.ln() + f * (hi.ln() - lo.ln())).exp() } else { lo + f * (hi - lo) };
@@ -193,12 +175,12 @@ fn points(spec: &StudySpec) -> Result<Vec<Vec<Value>>, StudyError> {
             if n == 0 || n > spec.max_runs as usize {
                 return Err(StudyError::Spec(format!("samples must be within 1..={}", spec.max_runs)));
             }
-            let mut rng = Rng(*seed);
+            let mut rng = SplitMix64::new(*seed);
             let mut columns = Vec::with_capacity(spec.parameters.len());
             for p in &spec.parameters {
                 let mut strata: Vec<usize> = (0..n).collect();
                 for i in (1..n).rev() {
-                    strata.swap(i, rng.below(i + 1));
+                    strata.swap(i, rng.below(i as u64 + 1) as usize);
                 }
                 let col: Vec<Value> = strata
                     .into_iter()
@@ -447,11 +429,7 @@ pub fn run_study(spec: &StudySpec, capture: Option<&CaptureReport>) -> Result<St
         })
         .collect::<Vec<_>>();
     let json = serde_json::to_vec(spec).map_err(|e| StudyError::Spec(e.to_string()))?;
-    let input = InputRef {
-        name: "study.json".into(),
-        bytes: json.len() as u64,
-        sha256: Sha256::digest(&json).iter().map(|b| format!("{b:02x}")).collect(),
-    };
+    let input = InputRef::of("study.json", &json);
     let mut assumptions = vec![
         "Every run is a simulation of the base spec with the listed parameters changed; the simulator's own assumptions apply to each.".to_owned(),
         "A run is feasible when its spec is valid, every transfer finishes verified, and every constraint holds.".into(),

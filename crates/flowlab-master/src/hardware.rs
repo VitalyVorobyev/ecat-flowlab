@@ -21,7 +21,7 @@
 
 use std::time::{Duration, Instant};
 
-use ecat_wire::{AlStatus, SmDirection, SmMode, SyncManagerConfig};
+use ecat_wire::{AlStatus, SmDirection, SmMode, SyncManagerConfig, sm_register};
 use ethercrab::error::Error as EcError;
 use ethercrab::subdevice_group::Op;
 use ethercrab::{
@@ -30,7 +30,7 @@ use ethercrab::{
 use flowlab_core::{InputRef, Provenance, ReportMeta};
 
 use crate::MasterError;
-use crate::bus::{BusError, MailboxBus, MailboxLayout, Reply, sm_register};
+use crate::bus::{BusError, MailboxBus, MailboxLayout, Reply};
 use crate::engine::{TransferJob, TransferOptions, run_transfer};
 use crate::result::{
     CycleRecord, CycleTiming, MeasuredTransfer, RunResult, ScanResult, ScannedSlave, ScannedSm, Summary,

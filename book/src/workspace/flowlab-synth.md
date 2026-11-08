@@ -109,8 +109,8 @@ cyclic faults.
 
 ## Determinism and provenance
 
-The generator uses its own PRNG (xoshiro256\*\* seeded by splitmix64, Box–Muller for normal
-draws) and no clock, so the same spec gives a byte-identical capture on every run, independent
+The generator uses its own PRNG (xoshiro256\*\* seeded by `flowlab_core::rng::SplitMix64`,
+Box–Muller for normal draws) and no clock, so the same spec gives a byte-identical capture on every run, independent
 of dependency upgrades. The pcapng section comment is
 `flowlab:provenance=synthetic; generator=flowlab-synth <version>; seed=<seed>; <description>`,
 on an interface named `synthetic0`; `Trace::build` reads it back as `Provenance::Synthetic`.

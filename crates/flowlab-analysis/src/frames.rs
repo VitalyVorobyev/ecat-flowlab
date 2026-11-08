@@ -484,7 +484,7 @@ pub fn detail(trace: &Trace, a: &Analysis, no: u32) -> Option<FrameDetail> {
         ecat_type: None,
         datagrams: Vec::new(),
         ranges: Vec::new(),
-        hex: bytes.iter().map(|b| format!("{b:02x}")).collect(),
+        hex: flowlab_core::hex(bytes),
         error: trace.errors.iter().find(|(fi, _)| *fi as usize == i).map(|(_, e)| e.clone()),
     };
     let range = |start: usize, len: usize, label: String, kind: &str, dg: Option<u16>| ByteRange {

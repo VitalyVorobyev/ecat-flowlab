@@ -3,7 +3,8 @@
 `flowlab-core` is the shared vocabulary of the workspace: where a result came from
 (`Provenance`), the metadata every report carries (`ReportMeta`, `InputRef`), unit constants,
 the one percentile definition (`stats::quantile`) and the PDI timing samples file
-(`pdi_samples`). It is deliberately small so that every other crate can depend on it.
+(`pdi_samples`), hex and SHA-256, and the deterministic generator (`rng`). It is deliberately
+small so that every other crate can depend on it.
 
 API reference: [`flowlab_core`](../../api/flowlab_core/index.html) ·
 source: [`crates/flowlab-core`](https://github.com/VitalyVorobyev/ecat-flowlab/blob/main/crates/flowlab-core)
@@ -12,10 +13,10 @@ source: [`crates/flowlab-core`](https://github.com/VitalyVorobyev/ecat-flowlab/b
 
 | | |
 |---|---|
-| Depends on | `serde`, `ts-rs` (TypeScript export) |
+| Depends on | `serde`, `ts-rs` (TypeScript export), `sha2` |
 | Used by | `flowlab-capture`, `flowlab-analysis`, `flowlab-synth`, `flowlab-sim`, `flowlab-study`, `flowlab-live`, `flowlab-pdi`, `flowlab-master`, `flowlab-server`, `flowlab-cli` |
 
-It must not depend on anything heavier than serialization.
+It must not depend on anything heavier than serialization and hashing.
 
 ## Types
 
@@ -24,7 +25,9 @@ It must not depend on anything heavier than serialization.
 | `Provenance` | `Measured`, `Simulated` or `Synthetic`; serialized in snake case |
 | `Provenance::COMMENT_PREFIX` | `"flowlab:provenance="`, the marker FlowLab writers put into the pcapng section comment |
 | `Provenance::as_str()` / `from_comment()` | the lower-case name, and parsing the marker out of free text |
-| `InputRef` | file name (no directories), size in bytes, SHA-256 of the contents (lower-case hex) |
+| `InputRef` | file name (no directories), size in bytes, SHA-256 of the contents (lower-case hex); `InputRef::of(name, bytes)` computes the last two |
+| `hex(bytes)`, `sha256_hex(bytes)` | lower-case hex, and the SHA-256 in it |
+| `rng::SplitMix64`, `rng::mix64` | the deterministic generator of the simulator, the studies and the PDI benchmark (`next_u64`, `unit`, `chance`, `normal`, `below`), and its mix function, which the generated payload uses too; implemented here so a seed gives the same numbers across dependency upgrades |
 | `ReportMeta` | `schema_version`, `tool` (`"ecat-flowlab"`), `tool_version`, `source: Provenance`, `input: InputRef`, `assumptions: Vec<String>` |
 | `ReportMeta::new(source, input, assumptions)` | fills in the schema and tool version |
 | `SCHEMA_VERSION` | version of the JSON report schemas (currently `1`) |

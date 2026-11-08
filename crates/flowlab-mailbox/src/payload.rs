@@ -1,16 +1,14 @@
 //! The generated payload: deterministic bytes from a seed, the same in the simulator and in a
 //! lab transfer set up like it.
 
+use flowlab_core::rng::{GOLDEN, mix64};
 use sha2::{Digest, Sha256};
 
 /// Fill `out` with the payload bytes at `offset`.
 pub fn payload_bytes(seed: u64, offset: u64, out: &mut [u8]) {
     for (i, b) in out.iter_mut().enumerate() {
         let pos = offset + i as u64;
-        let mut z = seed ^ (pos >> 3).wrapping_mul(0x9E37_79B9_7F4A_7C15);
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^= z >> 31;
+        let z = mix64(seed ^ (pos >> 3).wrapping_mul(GOLDEN));
         *b = (z >> ((pos & 7) * 8)) as u8;
     }
 }
@@ -33,7 +31,7 @@ pub fn payload_sha256(seed: u64, len: u64) -> String {
         h.update(&buf[..n]);
         at += n as u64;
     }
-    h.finalize().iter().map(|b| format!("{b:02x}")).collect()
+    flowlab_core::hex(&h.finalize())
 }
 
 /// Seed of the payload of transfer `index` in a spec with seed `spec_seed`: the transfer's
@@ -54,8 +52,7 @@ mod tests {
         let mut piece = [0u8; 100];
         payload_bytes(seed, 450, &mut piece);
         assert_eq!(&whole[450..550], &piece);
-        let h: String = Sha256::digest(&whole).iter().map(|b| format!("{b:02x}")).collect();
-        assert_eq!(payload_sha256(seed, 1000), h);
+        assert_eq!(payload_sha256(seed, 1000), flowlab_core::sha256_hex(&whole));
         assert_ne!(transfer_seed(1, 0), transfer_seed(1, 1));
     }
 }

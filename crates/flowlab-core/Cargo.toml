@@ -1,6 +1,6 @@
 [package]
 name = "flowlab-core"
-description = "Shared units, provenance and report envelope for ECAT FlowLab."
+description = "Shared vocabulary of ECAT FlowLab: provenance, the report envelope, units, percentiles, the PDI samples file and the deterministic generator."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 serde.workspace = true
+sha2.workspace = true
 ts-rs = { version = "12", features = ["serde-compat"] }
 
 [lints]

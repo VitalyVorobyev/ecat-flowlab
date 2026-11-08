@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use ecat_wire::{Command, DatagramAddress, Encapsulation, MacAddr, parse_frame};
 use flowlab_core::{InputRef, Provenance};
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 
 use crate::file::{CaptureFile, LINKTYPE_ETHERNET};
 
@@ -131,13 +130,16 @@ pub struct Trace {
 }
 
 impl Trace {
+    /// Read the capture at `path` and decode it, named after the file.
+    pub fn read(path: &std::path::Path) -> Result<Self, crate::CaptureError> {
+        let file = CaptureFile::read(path)?;
+        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        Ok(Self::build(file, &name))
+    }
+
     /// Decode `file`. `name` is the file name shown to users.
     pub fn build(file: CaptureFile, name: &str) -> Self {
-        let input = InputRef {
-            name: name.to_owned(),
-            bytes: file.bytes.len() as u64,
-            sha256: hex(&Sha256::digest(&file.bytes)),
-        };
+        let input = InputRef::of(name, &file.bytes);
         let provenance = file.comments.iter().find_map(|c| Provenance::from_comment(c)).unwrap_or(Provenance::Measured);
         let start_ts_ns = file.packets.iter().map(|p| p.ts_ns).min().unwrap_or(0);
         let mut frames = Vec::with_capacity(file.packets.len());
@@ -257,14 +259,6 @@ fn infer_by_wkc(frames: &mut [FrameRecord], datagrams: &[DatagramRecord]) -> Dir
         f.direction = if all_zero(f) { Direction::Tx } else { Direction::Rx };
     }
     DirectionMode::WkcHeuristic
-}
-
-fn hex(bytes: &[u8]) -> String {
-    use std::fmt::Write;
-    bytes.iter().fold(String::with_capacity(bytes.len() * 2), |mut s, b| {
-        let _ = write!(s, "{b:02x}");
-        s
-    })
 }
 
 #[cfg(test)]

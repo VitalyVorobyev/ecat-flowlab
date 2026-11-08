@@ -15,7 +15,7 @@ mod pdi_bench;
 use clap::{Parser, Subcommand};
 use flowlab_analysis::mailbox::{MailboxHint, write_eoe_pcapng};
 use flowlab_analysis::{AnalysisOptions, CaptureReport, Severity, analyze};
-use flowlab_capture::{CaptureFile, Trace};
+use flowlab_capture::Trace;
 use flowlab_sim::{SimResult, SimSpec};
 use flowlab_synth::SynthSpec;
 
@@ -329,9 +329,7 @@ fn run(cli: Cli) -> Result<()> {
             );
         }
         Cmd::Analyze { capture, out, json, link_mbps, min_stream_frames, mailbox_hints, eoe_out, eni } => {
-            let file = CaptureFile::read(&capture).map_err(|e| format!("{}: {e}", capture.display()))?;
-            let name = capture.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            let trace = Trace::build(file, &name);
+            let trace = Trace::read(&capture).map_err(|e| format!("{}: {e}", capture.display()))?;
             let opts = AnalysisOptions {
                 link_bps: link_mbps * 1_000_000,
                 min_stream_frames,
@@ -342,7 +340,12 @@ fn run(cli: Cli) -> Result<()> {
             let a = analyze(&trace, &opts);
             if let Some(p) = &eoe_out {
                 ensure_parent(p)?;
-                let n = write_eoe_pcapng(&a.mailbox, trace.provenance, &name, BufWriter::new(File::create(p)?))?;
+                let n = write_eoe_pcapng(
+                    &a.mailbox,
+                    trace.provenance,
+                    &trace.input.name,
+                    BufWriter::new(File::create(p)?),
+                )?;
                 eprintln!("wrote {n} EoE-reassembled frames to {}", p.display());
             }
             if let Some(o) = &out {
@@ -458,14 +461,13 @@ fn run(cli: Cli) -> Result<()> {
             };
             let report = match &capture {
                 Some(c) => {
-                    let file = CaptureFile::read(c).map_err(|e| format!("{}: {e}", c.display()))?;
-                    let name = c.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                    let trace = Trace::read(c).map_err(|e| format!("{}: {e}", c.display()))?;
                     let opts = AnalysisOptions {
                         network: eni.as_deref().map(read_eni).transpose()?,
                         mailbox_hints,
                         ..Default::default()
                     };
-                    Some(analyze(&Trace::build(file, &name), &opts).report)
+                    Some(analyze(&trace, &opts).report)
                 }
                 None => None,
             };
@@ -482,9 +484,8 @@ fn run(cli: Cli) -> Result<()> {
         }
         Cmd::PdiBench(args) => pdi_bench::run(args)?,
         Cmd::Policy { capture, station, mailbox_hints, eni, lab } => {
-            let file = CaptureFile::read(&capture).map_err(|e| format!("{}: {e}", capture.display()))?;
-            let name = file_name(&capture);
-            let trace = Trace::build(file, &name);
+            let trace = Trace::read(&capture).map_err(|e| format!("{}: {e}", capture.display()))?;
+            let name = trace.input.name.clone();
             let opts = AnalysisOptions {
                 mailbox_hints,
                 network: eni.as_deref().map(read_eni).transpose()?,

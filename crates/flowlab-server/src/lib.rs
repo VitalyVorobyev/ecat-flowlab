@@ -209,9 +209,7 @@ impl AppState {
     /// Parse, index and analyze `bytes` and add the capture. Blocking; call off the runtime.
     pub fn load_bytes(&self, bytes: Vec<u8>, name: &str) -> Result<CaptureInfo, ApiError> {
         let file = CaptureFile::parse(bytes).map_err(|e| ApiError::bad_request(e.to_string()))?;
-        let trace = Trace::build(file, name);
-        let analysis = analyze(&trace, &self.options);
-        self.insert(trace, analysis, None)
+        self.load_trace(Trace::build(file, name))
     }
 
     /// Run a simulation, analyse its capture and add both. Blocking.
@@ -233,9 +231,14 @@ impl AppState {
         if !path.is_file() {
             return Err(ApiError::bad_request(format!("{} is not a file", path.display())));
         }
-        let bytes = std::fs::read(&path).map_err(|e| ApiError::bad_request(format!("{}: {e}", path.display())))?;
-        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        self.load_bytes(bytes, &name)
+        let trace = Trace::read(&path).map_err(|e| ApiError::bad_request(format!("{}: {e}", path.display())))?;
+        self.load_trace(trace)
+    }
+
+    /// Analyse `trace` and add it. Blocking.
+    fn load_trace(&self, trace: Trace) -> Result<CaptureInfo, ApiError> {
+        let analysis = analyze(&trace, &self.options);
+        self.insert(trace, analysis, None)
     }
 }
 

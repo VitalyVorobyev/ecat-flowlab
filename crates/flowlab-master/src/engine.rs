@@ -1,16 +1,18 @@
 //! The transfer engine: cycles, the mailbox service policy, counters, retries and timing.
 
-use ecat_wire::{MAILBOX_HEADER_LEN, MailboxErrorReply, MailboxHeader, MailboxType};
+use ecat_wire::{
+    MAILBOX_HEADER_LEN, MailboxErrorReply, MailboxHeader, MailboxType, SM_REPEAT_ACK, SM_REPEAT_REQUEST,
+    SM_STATUS_MAILBOX_FULL, sm_activate_register,
+};
+use flowlab_core::sha256_hex;
 use flowlab_core::{InputRef, Provenance, ReportMeta, units};
 use flowlab_mailbox::msg::{self, EoeAddresses};
 use flowlab_mailbox::{MailboxPolicy, MailboxProtocol, TransferDirection, TransferPlan};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 use crate::MasterError;
 use crate::bus::{
-    BusError, MailboxBus, MailboxLayout, SM_MAILBOX_IN, SM_REPEAT_ACK, SM_REPEAT_REQUEST, read_mailbox, read_sm,
-    read_sm_status, sm_register, write_mailbox,
+    BusError, MailboxBus, MailboxLayout, SM_MAILBOX_IN, read_mailbox, read_sm, read_sm_status, write_mailbox,
 };
 use crate::protocol::{Endpoint, EoeReceive, EoeSend, FoeRead, FoeWrite, Outgoing, SdoDownload, SdoUpload};
 use crate::result::{CycleRecord, CycleTiming, MeasuredTransfer, Summary};
@@ -310,7 +312,7 @@ impl<'a, B: MailboxBus> Engine<'a, B> {
                 Err(BusError::Fatal(e)) => return ReadOutcome { result: ReadResult::Fatal(e), ..o },
             };
             let activate = sm.activate ^ SM_REPEAT_REQUEST;
-            return match step!(bus.fpwr(st, sm_register(SM_MAILBOX_IN) + 6, &[activate])) {
+            return match step!(bus.fpwr(st, sm_activate_register(SM_MAILBOX_IN), &[activate])) {
                 Ok(w) if w > 0 => {
                     ReadOutcome { result: ReadResult::RepeatRequested(activate & SM_REPEAT_REQUEST != 0), ..o }
                 }
@@ -329,7 +331,7 @@ impl<'a, B: MailboxBus> Engine<'a, B> {
         } else if self.poll == PollMode::Status {
             o.status_reads += 1;
             match step!(read_sm_status(bus, st, SM_MAILBOX_IN)) {
-                Ok(r) if r.wkc > 0 && r.data.first().is_some_and(|s| s & 0x08 != 0) => {}
+                Ok(r) if r.wkc > 0 && r.data.first().is_some_and(|s| s & SM_STATUS_MAILBOX_FULL != 0) => {}
                 Ok(_) => return ReadOutcome { result: ReadResult::Empty, ..o },
                 Err(BusError::Lost) => return ReadOutcome { result: ReadResult::Lost, ..o },
                 Err(BusError::Fatal(e)) => return ReadOutcome { result: ReadResult::Fatal(e), ..o },
@@ -578,10 +580,6 @@ fn endpoint(job: &TransferJob) -> Result<Box<dyn Endpoint>, MasterError> {
             Box::new(EoeReceive::new(addresses.destination_port, *n))
         }
     })
-}
-
-fn sha256_hex(data: &[u8]) -> String {
-    Sha256::digest(data).iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// Run one transfer over `bus` and measure it.

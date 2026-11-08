@@ -87,7 +87,7 @@ impl Sink {
     }
 
     pub(crate) fn sha256(&self) -> String {
-        self.hasher.clone().finalize().iter().map(|b| format!("{b:02x}")).collect()
+        flowlab_core::hex(&self.hasher.clone().finalize())
     }
 }
 

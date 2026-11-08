@@ -8,6 +8,31 @@ pub const SM_REGISTER_BASE: u16 = 0x0800;
 pub const SM_REGISTER_LEN: u16 = 8;
 /// Number of SyncManagers an ESC can have.
 pub const SM_COUNT: u16 = 16;
+/// Offset of the status register in a SyncManager's block.
+pub const SM_STATUS_OFFSET: u16 = 5;
+/// Offset of the activate register in a SyncManager's block.
+pub const SM_ACTIVATE_OFFSET: u16 = 6;
+/// Status bit 3: the (mailbox) buffer is full.
+pub const SM_STATUS_MAILBOX_FULL: u8 = 0x08;
+/// Activate register bit 1: repeat request (the master toggles it).
+pub const SM_REPEAT_REQUEST: u8 = 0x02;
+/// PDI control register bit 1: repeat acknowledge (the slave toggles it).
+pub const SM_REPEAT_ACK: u8 = 0x02;
+
+/// Register address of SyncManager `sm`'s 8-byte block.
+pub const fn sm_register(sm: u8) -> u16 {
+    SM_REGISTER_BASE + SM_REGISTER_LEN * sm as u16
+}
+
+/// Register address of SyncManager `sm`'s status byte.
+pub const fn sm_status_register(sm: u8) -> u16 {
+    sm_register(sm) + SM_STATUS_OFFSET
+}
+
+/// Register address of SyncManager `sm`'s activate byte.
+pub const fn sm_activate_register(sm: u8) -> u16 {
+    sm_register(sm) + SM_ACTIVATE_OFFSET
+}
 
 /// Operation mode of a SyncManager (control bits 1:0).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -102,7 +127,7 @@ impl SyncManagerConfig {
 
     /// Status bit 3: the (mailbox) buffer is full.
     pub const fn mailbox_full(&self) -> bool {
-        self.status & 0x08 != 0
+        self.status & SM_STATUS_MAILBOX_FULL != 0
     }
 }
 

@@ -97,7 +97,9 @@ up to 7 bytes are padded to 7 and declare the unused count). `sdo_abort_text()` 
   `mode()` returns `SmMode::{Buffered, Mailbox, Reserved}` and `direction()` returns
   `SmDirection::{EcatRead, EcatWrite, Reserved}`. `sync_managers_in(ado, data)` yields the
   blocks wholly contained in one write; the mailbox analysis uses it to learn mailbox
-  addresses.
+  addresses. `sm_register(n)`, `sm_status_register(n)` and `sm_activate_register(n)` give the
+  addresses; `SM_STATUS_MAILBOX_FULL` is status bit 3, and `SM_REPEAT_REQUEST` (activate) and
+  `SM_REPEAT_ACK` (PDI control) are the mailbox repeat handshake.
 - `AlState` (`Init`, `PreOp`, `Boot`, `SafeOp`, `Op`, `Other`) and `AlStatus` (state plus the
   error bit 4) decode the low byte of AL control (0x0120) and AL status (0x0130).
 - `register_info(ado)` names common ESC registers and returns a `RegisterInfo` with start,

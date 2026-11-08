@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub mod pdi_samples;
+pub mod rng;
 pub mod stats;
 pub mod units;
 
@@ -64,6 +65,28 @@ pub struct InputRef {
     pub bytes: u64,
     /// SHA-256 of the file contents, lower-case hex.
     pub sha256: String,
+}
+
+impl InputRef {
+    /// The input `name` with contents `bytes`: their size and SHA-256.
+    pub fn of(name: impl Into<String>, bytes: &[u8]) -> Self {
+        Self { name: name.into(), bytes: bytes.len() as u64, sha256: sha256_hex(bytes) }
+    }
+}
+
+/// `bytes` as lower-case hex, two digits each.
+pub fn hex(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    bytes.iter().fold(String::with_capacity(bytes.len() * 2), |mut s, b| {
+        let _ = write!(s, "{b:02x}");
+        s
+    })
+}
+
+/// SHA-256 of `bytes`, lower-case hex.
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::Digest;
+    hex(&sha2::Sha256::digest(bytes))
 }
 
 /// Metadata carried by every FlowLab report.

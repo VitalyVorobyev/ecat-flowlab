@@ -62,7 +62,11 @@ pub use foe::{FoeHeader, FoeOpcode, foe_error_text};
 pub use mailbox::{MAILBOX_HEADER_LEN, MailboxErrorReply, MailboxHeader, MailboxType, VoeHeader};
 pub use registers::{RegisterInfo, register_info};
 pub use sdo::{CoeEmergency, SDO_SEGMENT_HEADER_LEN, SdoCommand, SdoInfoHeader, sdo_abort_text, segment_data_len};
-pub use sm::{SM_COUNT, SM_REGISTER_BASE, SM_REGISTER_LEN, SmDirection, SmMode, SyncManagerConfig, sync_managers_in};
+pub use sm::{
+    SM_ACTIVATE_OFFSET, SM_COUNT, SM_REGISTER_BASE, SM_REGISTER_LEN, SM_REPEAT_ACK, SM_REPEAT_REQUEST,
+    SM_STATUS_MAILBOX_FULL, SM_STATUS_OFFSET, SmDirection, SmMode, SyncManagerConfig, sm_activate_register,
+    sm_register, sm_status_register, sync_managers_in,
+};
 pub use soe::SoeHeader;
 
 /// Bytes that occupy the wire for one Ethernet frame *beyond* the captured bytes:
