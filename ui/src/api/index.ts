@@ -66,6 +66,8 @@ export type { TransferSpec } from "./gen/TransferSpec";
 export type { WhatIf } from "./gen/WhatIf";
 export type { WhatIfResult } from "./gen/WhatIfResult";
 export type { WhatIfRun } from "./gen/WhatIfRun";
+export type { WhatIfRanking } from "./gen/WhatIfRanking";
+export type { RankedChange } from "./gen/RankedChange";
 export type { DeviceDescription } from "./gen/DeviceDescription";
 export type { EsiImport } from "./gen/EsiImport";
 export type { PlanCheck } from "./gen/PlanCheck";

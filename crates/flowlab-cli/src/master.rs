@@ -28,8 +28,9 @@ mod imp {
     use std::path::{Path, PathBuf};
     use std::time::Duration;
 
-    use flowlab_live::{ETHERCAT_FILTER, LiveOptions, LiveSession, LiveState, Source, Tool};
+    use flowlab_live::Tool;
     use flowlab_master::hardware::{Session, SessionOptions};
+    use flowlab_master::safety::{SegmentCheck, check_segment};
     use flowlab_master::{
         EoeAddresses, MeasuredTransfer, Payload, PollMode, TransferJob, TransferOptions, TransferProtocol, policy_text,
         setup_like,
@@ -247,17 +248,9 @@ mod imp {
         s.parse::<std::net::Ipv4Addr>().map(|a| a.octets()).map_err(|_| format!("`{s}` is not an IPv4 address"))
     }
 
-    /// Refuse unless the user confirmed an isolated segment and no other master is heard.
-    fn safety_check(s: &Safety) -> Result<()> {
-        if !s.isolated_lab_network {
-            return Err(format!(
-                "refusing to send on {}: `flowlab master` sends EtherCAT frames. Pass --isolated-lab-network to confirm \
-                 that this interface is on an isolated lab segment with no other master and no production equipment.",
-                s.interface
-            )
-            .into());
-        }
-        if s.listen.is_nan() || s.listen < 0.0 {
+    /// The checks `flowlab_master::safety` runs before anything is sent, from the flags.
+    fn segment_check(s: &Safety) -> Result<SegmentCheck> {
+        if !(s.listen.is_finite() && s.listen >= 0.0) {
             return Err("--listen must be zero or more seconds".into());
         }
         let tool = match s.tool.as_deref() {
@@ -265,60 +258,26 @@ mod imp {
             Some("tcpdump") => Some(Tool::Tcpdump),
             _ => None,
         };
-        let (t, path) = match flowlab_live::find_tool(tool) {
-            Ok(found) => found,
-            Err(e) if s.no_master_check => {
-                eprintln!("warning: not checking for another master ({e}); --no-master-check given");
-                return Ok(());
-            }
-            Err(e) => {
-                return Err(format!(
-                    "cannot check {} for another master: {e}. Install Wireshark's dumpcap or tcpdump, or pass \
-                     --no-master-check if you are certain the segment is quiet.",
-                    s.interface
-                )
-                .into());
-            }
-        };
-        eprintln!("listening on {} for {:.1} s with {} for another master's frames…", s.interface, s.listen, t.name());
-        let options = LiveOptions { tick: Duration::from_millis(250), save_to: None, ..LiveOptions::default() };
-        let session = LiveSession::start(Source::interface(t, path, &s.interface, Some(ETHERCAT_FILTER)), options)?;
-        std::thread::sleep(Duration::from_secs_f64(s.listen));
-        let done = session.stop();
-        if done.packets > 0 {
-            return Err(format!(
-                "{} EtherCAT frame(s) on {} in {:.1} s: another master (or something sending EtherCAT) is active. \
-                 FlowLab never runs as a second master; stop the other one first.",
-                done.packets, s.interface, s.listen
-            )
-            .into());
-        }
-        if done.state == LiveState::Failed {
-            let why = done.message.unwrap_or_else(|| "the capture tool failed".into());
-            if s.no_master_check {
-                eprintln!("warning: the check for another master failed ({why}); --no-master-check given");
-            } else {
-                return Err(format!(
-                    "cannot check {} for another master: {why}. Fix the capture permissions, or pass \
-                     --no-master-check if you are certain the segment is quiet.",
-                    s.interface
-                )
-                .into());
-            }
-        } else {
-            eprintln!("no EtherCAT frames heard; starting");
+        Ok(SegmentCheck {
+            interface: s.interface.clone(),
+            isolated_lab_network: s.isolated_lab_network,
+            listen: Duration::from_secs_f64(s.listen),
+            tool,
+            no_master_check: s.no_master_check,
+        })
+    }
+
+    fn open(s: &Safety) -> Result<Session> {
+        let segment = check_segment(&segment_check(s)?, |m| eprintln!("{m}"))?;
+        for note in segment.notes() {
+            eprintln!("{note}");
         }
         eprintln!(
             "tip: `flowlab capture {} -o results/master/run.pcapng` in another terminal records this master's frames",
             s.interface
         );
-        Ok(())
-    }
-
-    fn open(s: &Safety) -> Result<Session> {
-        safety_check(s)?;
         let o = SessionOptions { pdu_timeout: Duration::from_millis(s.pdu_timeout_ms), ..SessionOptions::default() };
-        Session::open(&s.interface, &o).map_err(|e| {
+        Session::open(&segment, &o).map_err(|e| {
             format!(
                 "{e}\n(Linux: run as root or `sudo setcap cap_net_raw,cap_net_admin=eip $(which flowlab)`; \
                  Windows: install Npcap and use the \\Device\\NPF_{{…}} name)"
@@ -605,7 +564,7 @@ mod imp {
 
         #[test]
         fn nothing_is_sent_without_the_acknowledgement() {
-            let s = Safety {
+            let mut s = Safety {
                 interface: "lo".into(),
                 isolated_lab_network: false,
                 no_master_check: true,
@@ -613,8 +572,11 @@ mod imp {
                 tool: None,
                 pdu_timeout_ms: 30,
             };
-            let e = safety_check(&s).unwrap_err().to_string();
+            let Err(e) = open(&s) else { panic!("a session opened without the acknowledgement") };
+            let e = e.to_string();
             assert!(e.contains("--isolated-lab-network"), "{e}");
+            s.listen = f64::NAN;
+            assert!(segment_check(&s).is_err());
         }
     }
 }

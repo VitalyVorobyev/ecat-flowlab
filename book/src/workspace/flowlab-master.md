@@ -41,7 +41,13 @@ engine without hardware dependencies, a virtual slave to test it, and, behind th
   master](../guide/master.md#retries-and-counters)).
 - **`setup_like(spec, k)`** builds transfer `k` of a `SimSpec` with the simulator's payload bytes
   (`flowlab_sim::transfer_seed` and `payload_bytes`), so measured and simulated SHA-256s match.
-- **Hardware** (`hardware` module): `Session::open` splits EtherCrab's static PDU storage (one
+- **Safety** (`safety` module, feature `hardware`): `check_segment(&SegmentCheck, progress)`
+  refuses without an interface name and the isolated-network acknowledgement. It then listens
+  through `flowlab-live` (dumpcap or tcpdump, EtherCAT filter) and refuses if any EtherCAT frame
+  arrives, or if no tool can check unless `no_master_check` is set. On success it returns a
+  `QuietSegment`, the only way to obtain one, and `Session::open` requires it. The CLI only maps
+  its flags onto `SegmentCheck`.
+- **Hardware** (`hardware` module): `Session::open(&QuietSegment, &SessionOptions)` splits EtherCrab's static PDU storage (one
   session per process), starts the TX/RX thread (`tx_rx_task` on a raw socket under Linux and
   macOS, `tx_rx_task_blocking` with Npcap on Windows) and creates the `MainDevice` with
   `RetryBehaviour::None` (a lost frame must reach the engine, not be resent behind its back) and
@@ -63,7 +69,8 @@ engine without hardware dependencies, a virtual slave to test it, and, behind th
 | `VirtualSlave`, `VirtualSlaveConfig`, `VirtualSlaveLog` | the simulated slave and what it received |
 | `MeasuredTransfer`, `RunResult`, `ScanResult` (`network_config()` → ENI), `CycleTiming`, `CycleRecord`, `Summary` | results ([reports](../reference/reports.md#lab-master-results)) |
 | `udp_frame`, `udp_payload`, `eoe_fragments`, `EoeReassembler` | EoE helpers |
-| `hardware::Session::{open, scan, run, transfer}`, `SessionOptions` | EtherCrab (feature `hardware`) |
+| `safety::{check_segment, SegmentCheck, QuietSegment}` | the checks before anything is sent (feature `hardware`) |
+| `hardware::Session::{open, scan, run, transfer}`, `SessionOptions` | EtherCrab (feature `hardware`); `open` needs a `QuietSegment` |
 
 ## The virtual slave
 

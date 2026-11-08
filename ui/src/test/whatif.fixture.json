@@ -13,7 +13,8 @@
       "Each change is a separate simulation of the scenario with one parameter doubled or halved, or one choice switched; the simulator's own assumptions apply to each run.",
       "Pairs of the first 8 changes that are not protocol switches are also simulated together, since two limits can coincide; larger combinations are not tried.",
       "The opportunistic policy tried uses 60 % of the cycle and a 10 µs master turnaround; a PDO channel tried in place of a mailbox protocol carries 256 B per cycle with a window of 2. These are model choices, not properties of a particular master.",
-      "Whether a slave or master supports a change (a faster SPI clock, larger mailboxes, another protocol) is not checked beyond the ESC RAM the SyncManagers need."
+      "Whether a slave or master supports a change (a faster SPI clock, larger mailboxes, another protocol) is not checked beyond the ESC RAM the SyncManagers need.",
+      "A change within 1 % of the scenario's time counts as having no effect; a pair is listed when it beats both of its parts alone, and the scenario, by more than that."
     ]
   },
   "base": {
@@ -1448,6 +1449,511 @@
         "pdi_busy_percent_max": null,
         "dpram_used_percent_max": null
       }
+    }
+  ],
+  "no_effect": 0.01,
+  "rankings": [
+    {
+      "transfer": null,
+      "helps": [
+        {
+          "change": 7,
+          "time_ns": 43367069.0,
+          "delta": -0.5201146309730872
+        },
+        {
+          "change": 12,
+          "time_ns": 45573150.0,
+          "delta": -0.49570288216921343
+        },
+        {
+          "change": 18,
+          "time_ns": 59868244.0,
+          "delta": -0.3375181900134118
+        },
+        {
+          "change": 20,
+          "time_ns": 76365532.0,
+          "delta": -0.15496476128565387
+        },
+        {
+          "change": 21,
+          "time_ns": 81366447.0,
+          "delta": -0.09962632141444137
+        },
+        {
+          "change": 22,
+          "time_ns": 86365707.0,
+          "delta": -0.04430619521542423
+        }
+      ],
+      "flat": [
+        {
+          "change": 25,
+          "time_ns": 90214442.0,
+          "delta": -0.0017173908910693705
+        },
+        {
+          "change": 31,
+          "time_ns": 90359642.0,
+          "delta": -0.00011065662957921201
+        },
+        {
+          "change": 33,
+          "time_ns": 90363642.0,
+          "delta": -0.0000663939777475272
+        },
+        {
+          "change": 35,
+          "time_ns": 90364642.0,
+          "delta": -0.000055328314789606006
+        },
+        {
+          "change": 37,
+          "time_ns": 90369642.0,
+          "delta": 0.0
+        },
+        {
+          "change": 38,
+          "time_ns": 90369642.0,
+          "delta": 0.0
+        },
+        {
+          "change": 39,
+          "time_ns": 90492522.0,
+          "delta": 0.0013597486642693572
+        }
+      ],
+      "hurts": [
+        {
+          "change": 40,
+          "time_ns": 92366931.0,
+          "delta": 0.02210132690356348
+        },
+        {
+          "change": 41,
+          "time_ns": 100370576.0,
+          "delta": 0.11066696490841471
+        },
+        {
+          "change": 42,
+          "time_ns": 104365531.0,
+          "delta": 0.1548737904704768
+        },
+        {
+          "change": 43,
+          "time_ns": 113284523.0,
+          "delta": 0.2535683498668723
+        },
+        {
+          "change": 44,
+          "time_ns": 122279390.0,
+          "delta": 0.35310251644020013
+        },
+        {
+          "change": 45,
+          "time_ns": 124281118.0,
+          "delta": 0.3752529638216338
+        }
+      ],
+      "impossible": [
+        {
+          "change": 46,
+          "time_ns": null,
+          "delta": null
+        },
+        {
+          "change": 47,
+          "time_ns": null,
+          "delta": null
+        },
+        {
+          "change": 48,
+          "time_ns": null,
+          "delta": null
+        }
+      ],
+      "together": [
+        {
+          "change": 0,
+          "time_ns": 32565974.0,
+          "delta": -0.639635907819575
+        },
+        {
+          "change": 1,
+          "time_ns": 33572676.0,
+          "delta": -0.6284960827885099
+        },
+        {
+          "change": 2,
+          "time_ns": 34082656.0,
+          "delta": -0.6228528159932293
+        },
+        {
+          "change": 3,
+          "time_ns": 34135456.0,
+          "delta": -0.622268548989051
+        },
+        {
+          "change": 4,
+          "time_ns": 34135456.0,
+          "delta": -0.622268548989051
+        }
+      ]
+    },
+    {
+      "transfer": 0,
+      "helps": [
+        {
+          "change": 7,
+          "time_ns": 7364265.0,
+          "delta": -0.6553350681093586
+        },
+        {
+          "change": 12,
+          "time_ns": 10572838.0,
+          "delta": -0.505166301163689
+        },
+        {
+          "change": 18,
+          "time_ns": 10866447.0,
+          "delta": -0.49142470903093993
+        }
+      ],
+      "flat": [
+        {
+          "change": 25,
+          "time_ns": 21211247.0,
+          "delta": -0.007263725223009703
+        },
+        {
+          "change": 33,
+          "time_ns": 21256847.0,
+          "delta": -0.005129537915218192
+        },
+        {
+          "change": 31,
+          "time_ns": 21356447.0,
+          "delta": -0.000468023532410419
+        },
+        {
+          "change": 35,
+          "time_ns": 21361447.0,
+          "delta": -0.0002340117662052095
+        },
+        {
+          "change": 37,
+          "time_ns": 21366447.0,
+          "delta": 0.0
+        }
+      ],
+      "hurts": [
+        {
+          "change": 41,
+          "time_ns": 30367144.0,
+          "delta": 0.4212538004095861
+        },
+        {
+          "change": 42,
+          "time_ns": 32365256.0,
+          "delta": 0.5147701440487509
+        }
+      ],
+      "impossible": [
+        {
+          "change": 46,
+          "time_ns": null,
+          "delta": null
+        }
+      ],
+      "together": [
+        {
+          "change": 2,
+          "time_ns": 4367738.0,
+          "delta": -0.7955795832596781
+        },
+        {
+          "change": 4,
+          "time_ns": 5572394.0,
+          "delta": -0.7391988476137376
+        },
+        {
+          "change": 3,
+          "time_ns": 5756234.0,
+          "delta": -0.7305947029939044
+        },
+        {
+          "change": 1,
+          "time_ns": 7108224.0,
+          "delta": -0.6673183894355482
+        },
+        {
+          "change": 9,
+          "time_ns": 10344638.0,
+          "delta": -0.5158465981732948
+        }
+      ]
+    },
+    {
+      "transfer": 1,
+      "helps": [
+        {
+          "change": 12,
+          "time_ns": 17001478.0,
+          "delta": -0.4848370888929351
+        },
+        {
+          "change": 7,
+          "time_ns": 17004086.0,
+          "delta": -0.48475806371217334
+        },
+        {
+          "change": 20,
+          "time_ns": 22001903.0,
+          "delta": -0.3333188797247354
+        },
+        {
+          "change": 18,
+          "time_ns": 23502668.0,
+          "delta": -0.2878441000445456
+        },
+        {
+          "change": 22,
+          "time_ns": 30998487.0,
+          "delta": -0.06071279197993803
+        }
+      ],
+      "flat": [
+        {
+          "change": 25,
+          "time_ns": 33002139.0,
+          "delta": 0.0
+        },
+        {
+          "change": 31,
+          "time_ns": 33002139.0,
+          "delta": 0.0
+        },
+        {
+          "change": 35,
+          "time_ns": 33002139.0,
+          "delta": 0.0
+        },
+        {
+          "change": 37,
+          "time_ns": 33002139.0,
+          "delta": 0.0
+        },
+        {
+          "change": 33,
+          "time_ns": 33121739.0,
+          "delta": 0.00362400752266391
+        }
+      ],
+      "hurts": [],
+      "impossible": [
+        {
+          "change": 47,
+          "time_ns": null,
+          "delta": null
+        }
+      ],
+      "together": [
+        {
+          "change": 3,
+          "time_ns": 7938634.0,
+          "delta": -0.7594509252869943
+        },
+        {
+          "change": 2,
+          "time_ns": 8891510.0,
+          "delta": -0.7305777664896206
+        },
+        {
+          "change": 4,
+          "time_ns": 9072437.0,
+          "delta": -0.7250954854774716
+        },
+        {
+          "change": 0,
+          "time_ns": 10101922.0,
+          "delta": -0.6939009922962872
+        },
+        {
+          "change": 1,
+          "time_ns": 12964545.0,
+          "delta": -0.6071604631445253
+        }
+      ]
+    },
+    {
+      "transfer": 2,
+      "helps": [
+        {
+          "change": 12,
+          "time_ns": 15455924.0,
+          "delta": -0.5061572486637648
+        },
+        {
+          "change": 7,
+          "time_ns": 15744061.0,
+          "delta": -0.49695078719036667
+        },
+        {
+          "change": 18,
+          "time_ns": 21794304.0,
+          "delta": -0.3036353536146841
+        },
+        {
+          "change": 21,
+          "time_ns": 22294063.0,
+          "delta": -0.2876672135303355
+        }
+      ],
+      "flat": [
+        {
+          "change": 25,
+          "time_ns": 31142058.0,
+          "delta": -0.0049589008724023045
+        },
+        {
+          "change": 31,
+          "time_ns": 31287258.0,
+          "delta": -0.0003195168087888083
+        },
+        {
+          "change": 33,
+          "time_ns": 31291258.0,
+          "delta": -0.00019171008527328495
+        },
+        {
+          "change": 35,
+          "time_ns": 31292258.0,
+          "delta": -0.00015975840439440414
+        },
+        {
+          "change": 37,
+          "time_ns": 31297258.0,
+          "delta": 0.0
+        }
+      ],
+      "hurts": [
+        {
+          "change": 40,
+          "time_ns": 33294547.0,
+          "delta": 0.063816740750899
+        }
+      ],
+      "impossible": [
+        {
+          "change": 48,
+          "time_ns": null,
+          "delta": null
+        }
+      ],
+      "together": [
+        {
+          "change": 3,
+          "time_ns": 7447706.0,
+          "delta": -0.762033274608274
+        },
+        {
+          "change": 2,
+          "time_ns": 7505746.0,
+          "delta": -0.7601787990500637
+        },
+        {
+          "change": 4,
+          "time_ns": 7523561.0,
+          "delta": -0.7596095798552065
+        },
+        {
+          "change": 0,
+          "time_ns": 9321634.0,
+          "delta": -0.7021581251622746
+        },
+        {
+          "change": 1,
+          "time_ns": 11457437.0,
+          "delta": -0.6339156292861183
+        }
+      ]
+    },
+    {
+      "transfer": 3,
+      "helps": [
+        {
+          "change": 39,
+          "time_ns": 15264812.0,
+          "delta": -0.5249853619628114
+        },
+        {
+          "change": 18,
+          "time_ns": 16189189.0,
+          "delta": -0.4962203430379205
+        },
+        {
+          "change": 43,
+          "time_ns": 22233600.0,
+          "delta": -0.308128691249939
+        },
+        {
+          "change": 44,
+          "time_ns": 31228467.0,
+          "delta": -0.028223934335955898
+        }
+      ],
+      "flat": [
+        {
+          "change": 25,
+          "time_ns": 32082656.0,
+          "delta": -0.0016430449905549807
+        },
+        {
+          "change": 35,
+          "time_ns": 32132956.0,
+          "delta": -0.00007779569084067144
+        },
+        {
+          "change": 7,
+          "time_ns": 32135456.0,
+          "delta": 0.0
+        },
+        {
+          "change": 12,
+          "time_ns": 32135456.0,
+          "delta": 0.0
+        },
+        {
+          "change": 31,
+          "time_ns": 32135456.0,
+          "delta": 0.0
+        },
+        {
+          "change": 33,
+          "time_ns": 32135456.0,
+          "delta": 0.0
+        },
+        {
+          "change": 37,
+          "time_ns": 32135456.0,
+          "delta": 0.0
+        },
+        {
+          "change": 38,
+          "time_ns": 32135456.0,
+          "delta": 0.0
+        }
+      ],
+      "hurts": [
+        {
+          "change": 45,
+          "time_ns": 33230195.0,
+          "delta": 0.034066390718090325
+        }
+      ],
+      "impossible": [],
+      "together": []
     }
   ]
 }

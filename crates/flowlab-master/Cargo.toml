@@ -16,14 +16,16 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 futures-lite = "2"
+flowlab-live = { workspace = true, optional = true }
 ethercrab = { version = "0.7.1", default-features = false, features = ["std"], optional = true }
 async-io = { version = "2", optional = true }
 
 [features]
 default = []
 # EtherCrab on a real network interface: raw socket on Linux and macOS, Npcap on Windows.
-hardware = ["dep:ethercrab", "dep:async-io"]
+hardware = ["dep:ethercrab", "dep:async-io", "dep:flowlab-live"]
 
 [lints]
 workspace = true

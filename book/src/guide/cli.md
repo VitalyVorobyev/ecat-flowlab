@@ -28,7 +28,7 @@ flowlab <COMMAND>
 | `capture [INTERFACE]` | `--list` · `--tool dumpcap\|tcpdump` · `-o/--out FILE` · `--duration S` · `--window S` (10) · `--all-traffic` · `--replay FILE` `--speed X` · `--report JSON` · `--eni XML` · `--mailbox …` · `--link-mbps N` ([Live capture](live.md)) |
 | `synth [SPEC]` | `-o/--out FILE` (required) · `--truth FILE` · `--eni FILE` |
 | `simulate [SPECS…]` | `-o/--out FILE` frames (one spec) · `--result FILE` JSON (an array for several specs) |
-| `what-if [SPEC]` | `--result FILE` JSON: the scenario, every single change and pair, best first |
+| `what-if [SPEC]` | `--result FILE` JSON: the scenario, every single change and pair, best first, and their rankings · `--no-effect-percent P` (1) |
 | `study [SPEC]` | `--capture FILE` to calibrate against · `--eni XML` and `--mailbox …` for that capture · `--result FILE` |
 | `plan [SPEC]` | `--json` |
 | `esi FILE` | `--json` |

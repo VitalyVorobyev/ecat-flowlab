@@ -1,5 +1,6 @@
 //! Distributions (percentiles, mean, σ) and fixed-width histograms of samples.
 
+use flowlab_core::stats::quantile;
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -55,16 +56,6 @@ pub(crate) fn nice_step(raw: f64) -> f64 {
         }
     }
     10.0 * mag
-}
-
-fn quantile(sorted: &[f64], q: f64) -> f64 {
-    if sorted.is_empty() {
-        return 0.0;
-    }
-    let pos = q * (sorted.len() - 1) as f64;
-    let lo = pos.floor() as usize;
-    let hi = pos.ceil() as usize;
-    sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo as f64)
 }
 
 impl Distribution {

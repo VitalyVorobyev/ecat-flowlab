@@ -152,6 +152,8 @@ pub struct CyclicStream {
     pub unanswered: u64,
     /// Working counters per datagram position.
     pub wkc: Vec<WkcSlot>,
+    /// Returning frames with a WKC mismatch (all of them; known directions only).
+    pub wkc_mismatch_frames: u64,
     /// Frames with a WKC mismatch (first 2000).
     pub wkc_events: Vec<FrameEvent>,
     /// Unanswered TX frames (first 2000).

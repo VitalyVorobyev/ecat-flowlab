@@ -10,6 +10,7 @@
 use std::collections::BTreeMap;
 
 use flowlab_analysis::ServicePattern;
+use flowlab_core::stats::quantile;
 use flowlab_core::{InputRef, Provenance, ReportMeta};
 use flowlab_sim::{MailboxAccess, MailboxPolicy, SimSpec};
 use schemars::JsonSchema;
@@ -34,6 +35,21 @@ pub enum LabError {
     /// The lab inputs do not fit the spec.
     #[error("cannot apply lab inputs: {0}")]
     Apply(String),
+    /// Only measured data becomes a lab input.
+    #[error("{input} is {provenance}: only measured data becomes a lab input")]
+    NotMeasured {
+        /// The input's name.
+        input: String,
+        /// Its provenance.
+        provenance: &'static str,
+    },
+}
+
+fn measured(meta: &ReportMeta) -> Result<(), LabError> {
+    match meta.source {
+        Provenance::Measured => Ok(()),
+        p => Err(LabError::NotMeasured { input: meta.input.name.clone(), provenance: p.as_str() }),
+    }
 }
 
 /// Direction of a PDI access.
@@ -165,12 +181,6 @@ pub struct PdiFit {
     pub write: Option<LineFit>,
     /// Values for the simulator's `pdi` of the slave.
     pub pdi: PdiValues,
-}
-
-fn quantile(sorted: &[f64], q: f64) -> f64 {
-    let pos = q * (sorted.len() - 1) as f64;
-    let (lo, hi) = (pos.floor() as usize, pos.ceil() as usize);
-    sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo as f64)
 }
 
 fn fit_line(samples: &[PdiSample]) -> Result<LineFit, LabError> {
@@ -312,12 +322,44 @@ pub struct LabInputs {
     pub sources: Vec<String>,
 }
 
+fn short(meta: &ReportMeta) -> &str {
+    meta.input.sha256.get(..16).unwrap_or(&meta.input.sha256)
+}
+
 /// JSON Schema of [`LabInputs`] (draft 2020-12).
 pub fn schema() -> serde_json::Value {
     serde_json::to_value(schemars::schema_for!(LabInputs)).unwrap_or_default()
 }
 
 impl LabInputs {
+    /// Store the PDI values of a fit (keeping a `mailbox_access` set by hand) and name the
+    /// samples in `sources`. Refuses a fit of samples that are not measured.
+    pub fn set_pdi_fit(&mut self, fit: &PdiFit) -> Result<(), LabError> {
+        measured(&fit.meta)?;
+        let access = self.pdi.as_ref().and_then(|x| x.mailbox_access);
+        self.pdi = Some(PdiValues { mailbox_access: access, ..fit.pdi.clone() });
+        self.sources.push(format!("pdi: flowlab pdi-fit {} (sha256 {})", fit.meta.input.name, short(&fit.meta)));
+        Ok(())
+    }
+
+    /// Store the master's mailbox policy read from the analysis `report_meta` of a capture
+    /// (`flowlab policy`), for `station`. Refuses a capture that is not measured.
+    pub fn set_mailbox_policy(
+        &mut self,
+        policy: MailboxPolicy,
+        station: u16,
+        report_meta: &ReportMeta,
+    ) -> Result<(), LabError> {
+        measured(report_meta)?;
+        self.mailbox_policy = Some(policy);
+        self.sources.push(format!(
+            "mailbox_policy: flowlab policy {}, station 0x{station:04X} (sha256 {})",
+            report_meta.input.name,
+            short(report_meta)
+        ));
+        Ok(())
+    }
+
     /// Apply to `spec`: PDI and application time to slave `slave`, the policy to the master.
     pub fn apply(&self, spec: &mut SimSpec, slave: usize) -> Result<(), LabError> {
         let n = spec.slaves.len();
@@ -421,5 +463,30 @@ mod tests {
         assert_eq!(s.app_processing_ns, 50_000);
         assert_eq!(spec.mailbox_policy, MailboxPolicy::FixedQuota { accesses_per_cycle: 1 });
         assert!(lab.apply(&mut spec, 9).is_err());
+    }
+
+    #[test]
+    fn only_measured_data_becomes_a_lab_input() {
+        let text = "direction,bytes,duration_ns\nread,4,1000\nread,64,2000\n";
+        let mut fit = fit_pdi(&parse_samples(text).unwrap(), "spi.csv", text.as_bytes()).unwrap();
+        let mut lab = LabInputs {
+            pdi: Some(PdiValues { mailbox_access: Some(MailboxAccess::MessageOnly), ..fit.pdi.clone() }),
+            ..LabInputs::default()
+        };
+        lab.set_pdi_fit(&fit).unwrap();
+        assert_eq!(lab.pdi.as_ref().unwrap().mailbox_access, Some(MailboxAccess::MessageOnly));
+        assert!(lab.sources[0].starts_with("pdi: flowlab pdi-fit spi.csv"), "{:?}", lab.sources);
+
+        let policy = MailboxPolicy::FixedQuota { accesses_per_cycle: 3 };
+        lab.set_mailbox_policy(policy.clone(), 0x1001, &fit.meta).unwrap();
+        assert_eq!(lab.mailbox_policy, Some(policy.clone()));
+        assert!(lab.sources[1].contains("station 0x1001"));
+
+        fit.meta.source = Provenance::Simulated;
+        let before = lab.clone();
+        assert!(matches!(lab.set_pdi_fit(&fit), Err(LabError::NotMeasured { provenance: "simulated", .. })));
+        fit.meta.source = Provenance::Synthetic;
+        assert!(lab.set_mailbox_policy(policy, 0x1001, &fit.meta).is_err());
+        assert_eq!(lab, before);
     }
 }

@@ -7,6 +7,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+pub mod stats;
 pub mod units;
 
 /// Version of the JSON report schemas. Bump on any breaking change.

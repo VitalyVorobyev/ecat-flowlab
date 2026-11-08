@@ -59,7 +59,7 @@ impl Default for AnalysisOptions {
 
 /// Sentinel for "none" in the per-frame side tables.
 pub(crate) const NONE: u32 = u32::MAX;
-const MAX_EVENTS: usize = 2000;
+pub(crate) const MAX_EVENTS: usize = 2000;
 
 /// The report plus per-frame tables used to query frames.
 #[derive(Debug)]
@@ -331,6 +331,7 @@ fn build_stream(
     let rx: Vec<u32> = tx.iter().map(|&i| pair_of[i as usize]).filter(|&r| r != NONE).collect();
     let mut wkc = Vec::new();
     let mut wkc_events = Vec::new();
+    let mut wkc_mismatch_frames = 0u64;
     if directions_known && !rx.is_empty() {
         let mut counts: Vec<BTreeMap<u16, u64>> = vec![BTreeMap::new(); dgs.len()];
         for &r in &rx {
@@ -379,6 +380,7 @@ fn build_stream(
                 }
             }
             if bad {
+                wkc_mismatch_frames += 1;
                 wkc_mismatch[r as usize] = true;
                 wkc_mismatch[pair_of[r as usize] as usize] = true;
                 if wkc_events.len() < MAX_EVENTS {
@@ -410,6 +412,7 @@ fn build_stream(
         round_trip: Distribution::of(&rtts, bins),
         unanswered: unanswered_events.len() as u64,
         wkc,
+        wkc_mismatch_frames,
         wkc_events,
         unanswered_events: unanswered_events.into_iter().take(MAX_EVENTS).collect(),
         interval_series: series(&interval_points),
@@ -715,8 +718,7 @@ fn findings(
         let mism: u64 = s.wkc.iter().map(|w| w.mismatches).sum();
         if mism > 0 {
             let worst = s.wkc.iter().max_by_key(|w| w.mismatches).map(|w| w.label.clone()).unwrap_or_default();
-            let frames = s.wkc_events.len().max(1);
-            let frames = if frames >= MAX_EVENTS { format!("≥ {frames}") } else { frames.to_string() };
+            let frames = s.wkc_mismatch_frames.max(1);
             add(Severity::Defect, format!("{name}: {frames} working-counter mismatches"), {
                 let basis = if s.wkc.iter().all(|w| w.expected_from == "eni") {
                     "the value configured in the ENI"
