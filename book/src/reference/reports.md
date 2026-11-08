@@ -1,7 +1,8 @@
 # Report and result files
 
 Every FlowLab tool writes JSON: the analysis report of a capture, the ground truth of a
-synthetic capture, simulation, planning and study results, and parsed ESI files. This page
+synthetic capture, simulation, what-if, planning and study results, live snapshots, the lab
+master's measurements, PDI fits, and parsed ESI files. This page
 lists what each file holds. The tables show the fields a reader needs most; the full
 definitions are the Rust structs, exported as TypeScript by ts-rs into
 [`ui/src/api/gen/`](https://github.com/VitalyVorobyev/ecat-flowlab/tree/main/ui/src/api/gen)

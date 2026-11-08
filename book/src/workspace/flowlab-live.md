@@ -1,11 +1,12 @@
 # flowlab-live
 
 Live capture through an external capture tool, analysed in a rolling window. Used by
-`flowlab capture` and by the server's `/api/live` endpoints ([Live capture](../guide/live.md)).
+`flowlab capture`, by the server's `/api/live` endpoints ([Live capture](../guide/live.md)) and
+by the lab master's check for another master (`flowlab_master::safety`).
 
 ## Design
 
-FlowLab never opens a network interface ([ADR-035](decisions.md#live-capture-and-hardware)). A
+Live capture never opens a network interface itself ([ADR-035](decisions.md#live-capture-and-hardware)). A
 `LiveSession` runs a program that writes pcap or pcapng to its standard output: `dumpcap -i IF -n
 -q -w - -f FILTER`, or `tcpdump -i IF -U --immediate-mode -s 0 --time-stamp-precision nano -w -
 FILTER` (`Tool::capture_args`).

@@ -12,7 +12,7 @@ source: [`crates/flowlab-core`](https://github.com/VitalyVorobyev/ecat-flowlab/b
 | | |
 |---|---|
 | Depends on | `serde`, `ts-rs` (TypeScript export) |
-| Used by | `flowlab-capture`, `flowlab-analysis`, `flowlab-synth`, `flowlab-sim`, `flowlab-study`, `flowlab-server`, `flowlab-cli` |
+| Used by | `flowlab-capture`, `flowlab-analysis`, `flowlab-synth`, `flowlab-sim`, `flowlab-study`, `flowlab-live`, `flowlab-pdi`, `flowlab-master`, `flowlab-server`, `flowlab-cli` |
 
 It must not depend on anything heavier than serialization.
 

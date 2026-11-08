@@ -17,7 +17,7 @@ source: [crates/flowlab-study](https://github.com/VitalyVorobyev/ecat-flowlab/bl
 |---|---|
 | Depends on | `flowlab-sim` (`simulate`, `SimSpec`, `SimResult`), `flowlab-analysis` (`CaptureReport` for capture targets), `flowlab-core` |
 | Dev-depends on | `flowlab-capture` (the calibration test builds a capture) |
-| Used by | `flowlab-server` (`POST /api/study`, `POST /api/sim/what-if`), `flowlab-cli` (`flowlab study`, `flowlab what-if`) |
+| Used by | `flowlab-server` (`POST /api/study`, `POST /api/sim/what-if`), `flowlab-cli` (`flowlab study`, `flowlab what-if`, and the lab inputs of `pdi-fit`, `pdi-bench --fit` and `policy`) |
 
 ## Main types and functions
 

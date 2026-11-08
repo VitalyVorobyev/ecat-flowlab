@@ -1,7 +1,8 @@
 # Getting started
 
-FlowLab is one program, `flowlab`, with the web UI built in. It needs no EtherCAT hardware,
-network adapter, root rights or libpcap. Install a release binary, or build it from source.
+FlowLab is one program, `flowlab`, with the web UI built in. Analysis, simulation and planning
+need no EtherCAT hardware, network adapter, root rights or libpcap. Install a release binary, or
+build it from source.
 
 ## Install a release binary
 
@@ -169,8 +170,20 @@ If the capture starts after the master configured the mailboxes, give their addr
 `--mailbox 0x1001=0x1000,0x1080`. If you have the master's ENI file, add `--eni network.xml`, so
 working counters are judged against the configuration rather than the most frequent value.
 
-**Safety:** FlowLab only reads files and the output of capture tools. It never sends frames. Record on an isolated lab network, and
-never run a second master on a segment that is in use.
+## Safety
+
+What each part of FlowLab does to a network:
+
+| Part | Touches the network | Guard |
+|---|---|---|
+| `analyze`, `serve`, `synth`, `simulate`, `what-if`, `study`, `plan`, `esi`, `policy`, `pdi-fit` | no: files only | — |
+| `capture` and the Live view | listens through dumpcap or tcpdump; sends nothing | the Live view only after `serve --live` |
+| `pdi-bench` | the slave's SPI to its ESC, on the slave's host | refuses unless the ESC answers and is in INIT; never touches AL Control or SyncManager registers; writes only with `--allow-writes` into an `--area` of process RAM ([Measuring the SPI](studies/bulk-transfer/lab.md#measuring-the-spi)) |
+| `master scan\|run\|transfer` | **sends EtherCAT frames** | only in a build with the feature `master` (the Linux release binaries); an interface name, `--isolated-lab-network`, and no other master heard first ([Lab master](guide/master.md#safety-checks)) |
+
+Capture on an isolated lab network where you can. Never connect production equipment to a lab
+master, and never start a second master on a segment that is in use. `flowlab serve` has no
+authentication and reads any file you can: keep it on loopback.
 
 ## Next
 

@@ -12,7 +12,7 @@ source: [`crates/flowlab-capture`](https://github.com/VitalyVorobyev/ecat-flowla
 | | |
 |---|---|
 | Depends on | `ecat-wire`, `flowlab-core`, `sha2`, `serde`, `ts-rs`, `thiserror` |
-| Used by | `flowlab-analysis`, `flowlab-synth` and `flowlab-sim` (writing), `flowlab-study`, `flowlab-server`, `flowlab-cli` |
+| Used by | `flowlab-analysis`, `flowlab-synth` and `flowlab-sim` (writing), `flowlab-live` (the pcap/pcapng stream of the capture tool), `flowlab-study`, `flowlab-server`, `flowlab-cli` |
 
 ```text
 bytes ──CaptureFile::parse──▶ CaptureFile ──Trace::build──▶ Trace ──▶ flowlab-analysis

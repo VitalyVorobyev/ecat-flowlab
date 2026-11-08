@@ -6,9 +6,12 @@ state machines and their mailbox conversations (CoE, FoE, EoE). It also simulate
 do not exist yet, and searches their parameter space. Simulated and measured traffic go through
 the same decoder and the same analysis, so they can be compared view for view.
 
-It runs on a laptop: a command-line tool (`flowlab`) and a local web UI (`flowlab serve`). It
-needs no EtherCAT hardware, no network adapter, no root and no libpcap. To watch a running
-segment, it reads what Wireshark's dumpcap or tcpdump captures; it never sends frames.
+It runs on a laptop: a command-line tool (`flowlab`) and a local web UI (`flowlab serve`). Reading
+captures, simulating and planning need no EtherCAT hardware, no network adapter, no root and no
+libpcap. To watch a running segment, it reads what Wireshark's dumpcap or tcpdump captures, which
+only listen. Two opt-in tools reach hardware on a lab rig: a benchmark of a slave's SPI to its
+ESC, and a lab master that sends frames on an isolated segment
+([Safety](getting-started.md#safety)).
 
 ## What it does
 
@@ -22,6 +25,10 @@ segment, it reads what Wireshark's dumpcap or tcpdump captures; it never sends f
 | Lay out the cyclic frames of a network and check its budget | `flowlab plan`, `flowlab esi` | Planner |
 | Sweep simulator parameters, find the Pareto frontier, calibrate | `flowlab study` | Study |
 | Compare two captures, e.g. a measurement and its simulation | — | Compare |
+| Read the master's mailbox service pattern from a capture, as a simulator policy | `flowlab policy` | Mailbox |
+| Time a slave's SPI accesses to its ESC (LAN9252) and fit the simulator's PDI model | `flowlab pdi-bench`, `flowlab pdi-fit` | — |
+| Scan a lab network and measure transfers on it with FlowLab's own master (opt-in build) | `flowlab master scan\|run\|transfer` | — |
+| Print the JSON Schema of an input file | `flowlab schema` | the spec forms |
 
 ## Three kinds of data, never mixed
 

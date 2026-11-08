@@ -2,7 +2,8 @@
 
 `flowlab-server` is the local HTTP server behind the workbench: it keeps loaded captures in memory,
 answers the UI's queries and serves the built UI. `flowlab-cli` builds the `flowlab` binary, which
-exposes every pipeline stage — synthesis, analysis, ESI summary, planning, simulation, studies,
+exposes every pipeline stage — synthesis, analysis, live capture, ESI summary, planning,
+simulation, what-if, studies, lab inputs (`pdi-bench`, `pdi-fit`, `policy`), the lab master,
 schemas — and starts the server. Both are thin: the work happens in the library crates.
 
 API: [`flowlab_server`](../../api/flowlab_server/index.html) ·
@@ -13,8 +14,9 @@ source: [crates/flowlab-server](https://github.com/VitalyVorobyev/ecat-flowlab/b
 
 ### Position in the pipeline
 
-Depends on `flowlab-core`, `-capture`, `-analysis`, `-synth`, `-sim`, `-devices`, `-study`, and
-`axum`, `tokio`, `tower-http`. Used by `flowlab-cli` (`flowlab serve`).
+Depends on `flowlab-core`, `-capture`, `-analysis`, `-synth`, `-sim`, `-devices`, `-study`,
+`-live`, and `axum`, `tokio`, `tower-http`; not on `flowlab-pdi` or `flowlab-master`, so the server
+never reaches hardware. Used by `flowlab-cli` (`flowlab serve`).
 
 | Item | What it is |
 |---|---|
@@ -68,6 +70,10 @@ From the module documentation of `crates/flowlab-server/src/lib.rs`:
 | GET | `/api/sim/presets` | | `SimPreset[]` |
 | POST | `/api/sim/run` | `SimSpec` | `SimResult` (no capture is kept) |
 | POST | `/api/sim/what-if` | `SimSpec` | `WhatIfResult` |
+| GET | `/api/live/interfaces` | | `LiveInterfaces` |
+| POST | `/api/live/start` | `LiveStart` | `LiveSnapshot` (403 for an interface without `--live`, 409 while a session runs) |
+| GET | `/api/live` | | `LiveSnapshot` or `null` |
+| POST | `/api/live/stop` | | `LiveStopped` |
 
 Handler errors are `{ "error": "…" }` with status 400 (bad input, including a spec the simulator
 or study rejects), 404 (unknown capture or frame) or 500. Requests axum rejects before a handler
@@ -113,10 +119,13 @@ created. Spec arguments that are omitted fall back to the built-in example.
 | `esi <FILE>` | `--json` print JSON instead of the summary |
 | `plan [SPEC]` | `--json` print JSON instead of the summary |
 | `simulate [SPECS]...` | `-o, --out <OUT>` simulated frames (one spec only); `--result <RESULT>` result JSON (one spec) or a JSON array (several). Several specs print one table each, for comparison |
-| `study [SPEC]` | `--capture <CAPTURE>` capture to calibrate against (targets with `from_capture`); `--eni <XML>` network configuration for analysing that capture; `--result <RESULT>` result JSON |
+| `study [SPEC]` | `--capture <CAPTURE>` capture to calibrate against (targets with `from_capture`); `--eni <XML>` and `--mailbox <STATION=OUT,IN>` for analysing that capture; `--result <RESULT>` result JSON |
+| `what-if [SPEC]` | `--result <RESULT>` result JSON with the rankings; `--no-effect-percent <P>` (default 1) |
+| `pdi-fit <SAMPLES>` | `--result <JSON>` the fit with residuals; `--lab <JSON>` store the values in a lab-inputs file (measured samples only) |
+| `policy <CAPTURE>` | `--station`, `--mailbox`, `--eni`; `--lab <JSON>` store the policy in a lab-inputs file (measured captures only) |
 | `serve [CAPTURES]...` | `-p, --port <PORT>` (default 7878); `--host <HOST>` (default 127.0.0.1); `--ui-dir <UI_DIR>` built UI (default `ui/dist`); `--open` open the browser; `--mailbox <STATION=OUT,IN>` repeatable; `--eni <XML>` applied to every capture; `--live` allow live capture from interfaces; `--live-dir <DIR>` where live captures are saved (default `results/live`) |
 | `capture [INTERFACE]` | live capture through dumpcap or tcpdump ([flowlab-live](flowlab-live.md)): `--list`; `--tool`; `-o, --out`; `--duration`; `--window`; `--all-traffic`; `--replay <FILE>` with `--speed`; `--report <JSON>` the last window's analysis; `--eni`, `--mailbox`, `--link-mbps` |
-| `schema <WHICH>` | One of `synth`, `sim`, `plan`, `study`; prints the JSON Schema |
+| `schema <WHICH>` | One of `synth`, `sim`, `plan`, `study`, `lab`; prints the JSON Schema |
 | `pdi-bench` | timed ESC accesses over a LAN9252's SPI ([flowlab-pdi](flowlab-pdi.md), `src/pdi_bench.rs`): `--device <PATH>` spidev device (Linux) or `--sim` a simulated LAN9252 (samples marked simulated); `-o, --out <CSV>` samples (required); `--clock-hz`; `--mode`; `--read-instruction read\|fast-read`; `--sizes`; `--reps`; `--warmup`; `--area <START+LEN>`; `--allow-writes`; `--no-al-event`; `--chip-id`; `--seed`; `--fit`, `--result <JSON>`, `--lab <JSON>` as `pdi-fit` (lab inputs from hardware runs only); `--sim-transaction-ns` |
 | `master <scan\|run\|transfer>` | the lab master ([flowlab-master](flowlab-master.md)), compiled only with the feature `master` (`flowlab-master/hardware`); without it the command prints how to build it. Every subcommand: `-i, --interface` (required); `--isolated-lab-network` (required to send); `--listen <SECONDS>` (2), `--tool`, `--no-master-check` for the check for another master; `--pdu-timeout-ms` (30); `-o, --out` (default `results/master/<command>-UNIXTIME.json`). `scan --eni <XML>`; `run --cycle-us --duration --records`; `transfer --station` plus protocol, payload, policy and retry options ([Lab master](../guide/master.md#transfer)) |
 

@@ -8,6 +8,7 @@ experiment can answer them.
 
 - **ADR-001** Name **ECAT FlowLab**, repository `ecat-flowlab`.
 - **ADR-002** Rust first; everything runs offline on macOS without hardware or privileges.
+  Refined by ADR-036 and ADR-037: the lab master and the PDI benchmark reach hardware, opt-in.
 - **ADR-003** Keep layers separate: application transfer, protocol transport, bus/ESC/PDI model, real drivers.
 - **ADR-004** A bulk payload is a logical multi-frame transfer, never one EtherCAT frame.
 - **ADR-005** Ordinary Ethernet is a mandatory baseline in transport comparisons.
@@ -115,13 +116,27 @@ experiment can answer them.
 
 - **ADR-035 Live capture through an external capture tool.** `flowlab capture` and the Live view
   run Wireshark's `dumpcap` (or `tcpdump`) as a child process and read pcap/pcapng from its
-  standard output; FlowLab never opens an interface. The tools already handle capture
+  standard output; live capture never opens an interface itself. The tools already handle capture
   permissions (the `wireshark` group, ChmodBPF, Npcap), timestamp precision and filters on every
   platform. FlowLab gains no native dependency, the offline build stays free of libpcap
   (ADR-011), and the stream is read by the same parser and analysis as a file. Capturing only
   listens, so it needs no cargo feature. The server still asks for `--live` before it starts a
   capture from an HTTP request, and the interface is always named explicitly.
   Consequence: the timestamps are the tool's. NIC hardware timestamps need the tool's own option.
+- **ADR-036 Lab master on EtherCrab, behind a feature.** `flowlab master` (crate
+  `flowlab-master`) measures transfers on the lab rig so they compare with simulated ones.
+  EtherCrab (MIT OR Apache-2.0, pure Rust, raw socket on Linux, Npcap on Windows) initialises the
+  network; SOEM and IgH were not taken (GPLv3 or commercial, C). Mailbox transfers do not use
+  EtherCrab's mailbox code: FlowLab's own engine issues every mailbox access as an FPWR or FPRD,
+  so counters, retries and the service policy are FlowLab's, the policies are the simulator's
+  `MailboxPolicy`, and the engine is tested without hardware against a virtual ESC. The hardware
+  layer is thin glue behind the cargo feature `hardware` (CLI: `master`), off by default: a
+  default build cannot send frames, and only the master needs the Npcap SDK on Windows. Every
+  command needs an interface name, `--isolated-lab-network`, and a quiet segment (it listens
+  first through `flowlab-live`); `flowlab_master::safety` runs these checks, and a session opens
+  only with the evidence they return, so no caller of the library skips them. Consequences: timings are the host's, not the wire's; EtherCrab
+  sends each access as its own frame where the simulator packs a write and a read into one; and
+  the glue is untested until it runs on the rig.
 - **ADR-037 PDI timing measured by a benchmark that speaks the ESC's protocol.** `flowlab
   pdi-bench` performs complete ESC accesses through the LAN9252's SPI protocol, the same paths a
   slave stack's hardware layer takes (CSR interface below 0x1000, process RAM FIFOs above, AL
@@ -138,19 +153,6 @@ experiment can answer them.
   read for protocol facts only; no code was copied.
   Consequence: the samples time user-space spidev, one driver variant; a kernel driver or
   another stack's access pattern needs its own measurement.
-- **ADR-036 Lab master on EtherCrab, behind a feature.** `flowlab master` (crate
-  `flowlab-master`) measures transfers on the lab rig so they compare with simulated ones.
-  EtherCrab (MIT OR Apache-2.0, pure Rust, raw socket on Linux, Npcap on Windows) initialises the
-  network; SOEM and IgH were not taken (GPLv3 or commercial, C). Mailbox transfers do not use
-  EtherCrab's mailbox code: FlowLab's own engine issues every mailbox access as an FPWR or FPRD,
-  so counters, retries and the service policy are FlowLab's, the policies are the simulator's
-  `MailboxPolicy`, and the engine is tested without hardware against a virtual ESC. The hardware
-  layer is thin glue behind the cargo feature `hardware` (CLI: `master`), off by default: a
-  default build cannot send frames, and only the master needs the Npcap SDK on Windows. Every
-  command needs an interface name, `--isolated-lab-network`, and a quiet segment (it listens
-  first through `flowlab-live`). Consequences: timings are the host's, not the wire's; EtherCrab
-  sends each access as its own frame where the simulator packs a write and a read into one; and
-  the glue is untested until it runs on the rig.
 
 ## Open questions
 
