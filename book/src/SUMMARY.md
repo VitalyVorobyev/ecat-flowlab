@@ -40,6 +40,7 @@
 - [Testing and validation](workspace/testing.md)
 - [Contributing](workspace/contributing.md)
 - [Design decisions](workspace/decisions.md)
+- [Open work](workspace/open-work.md)
 
 # Studies
 
