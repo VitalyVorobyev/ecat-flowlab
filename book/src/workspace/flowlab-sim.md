@@ -33,7 +33,7 @@ source: [crates/flowlab-sim](https://github.com/VitalyVorobyev/ecat-flowlab/blob
 | `CaptureSpec` | `enabled`, `max_frames` |
 | `SimResult`, `TransferResult`, `SlaveResult` | Serialized results, exported to TypeScript by ts-rs |
 | `spec_schema()` | JSON Schema (draft 2020-12) of `SimSpec`, served to the UI's form |
-| `payload_bytes`, `payload_sha256` | The deterministic payload generator and its hash |
+| `payload_bytes`, `payload_sha256`, `transfer_seed` | The deterministic payload generator, its hash, and the seed of transfer `k` of a spec (`flowlab master transfer --like` sends the same bytes) |
 | `FIRST_STATION` (`0x1001`), `MBX_BASE` (`0x1000`), `MASTER_MAC` | Addressing used in every simulated capture |
 | `PDO_CHUNK_HEADER` (8), `PDO_ACK_BYTES` (4) | PDO channel framing, bytes |
 

@@ -16,6 +16,8 @@ flowlab <COMMAND>
   pdi-fit   Fit the simulator's PDI model (cost per access + effective rate) to timed ESC accesses
   pdi-bench Time complete ESC reads and writes over a LAN9252's SPI (Linux spidev), as samples for `pdi-fit`
   policy    Read the master's mailbox service pattern from a capture, as a simulator policy
+  master    FlowLab's own EtherCAT master on an isolated lab segment: scan, run, transfer
+            (in a build with --features master)
 ```
 
 `flowlab <command> --help` prints every option. The most used:
@@ -35,6 +37,7 @@ flowlab <COMMAND>
 | `pdi-fit SAMPLES.csv` | `--result FILE` the fit with residuals · `--lab JSON` store the values in a lab-inputs file (measured samples only) |
 | `pdi-bench` | `--device /dev/spidevB.C` or `--sim` · `-o/--out CSV` (required) · `--clock-hz HZ` (10000000) · `--mode 0-3` (0) · `--read-instruction read\|fast-read` · `--sizes 1,2,…` (1–1024, powers of two) · `--reps N` (50) · `--warmup N` (3) · `--area START+LEN` · `--allow-writes` · `--no-al-event` · `--chip-id HEX` (0x9252) · `--seed N` · `--fit` · `--result FILE` · `--lab JSON` ([Measuring the SPI](../studies/bulk-transfer/lab.md#measuring-the-spi)) |
 | `policy CAPTURE` | `--station N` · `--mailbox …` · `--eni XML` · `--lab JSON` store the policy in a lab-inputs file |
+| `master scan\|run\|transfer` | always `-i/--interface IF` and `--isolated-lab-network` · `--listen S` (2) · `--tool` · `--no-master-check` · `--pdu-timeout-ms` (30) · `-o/--out FILE`; `scan --eni XML`; `run --cycle-us US --duration S`; `transfer --station N --protocol foe\|coe\|eoe --direction to-slave\|from-slave --file F\|--bytes N --policy … --cycle-us US --poll read\|status --op` or `--like SIM_JSON --transfer K` ([Lab master](master.md)) |
 
 Commands that take a spec use a built-in example when it is omitted. Errors go to stderr with
 a non-zero exit code. Specs with unknown fields are rejected, so a typo cannot silently fall
@@ -61,4 +64,10 @@ flowlab pdi-bench --device /dev/spidev1.0 --clock-hz 20000000 -o spi-timing.csv 
 flowlab pdi-fit spi-timing.csv --lab lab.json
 flowlab policy master-foe.pcapng --lab lab.json
 python3 scripts/bulk-transfer-report.py --lab lab.json --out results/report-lab
+
+# On the lab rig (build with --features master): the network as ENI, then a transfer set up like
+# a simulated one, captured meanwhile in a second terminal (`flowlab capture enp3s0 -o foe.pcapng`)
+flowlab master scan -i enp3s0 --isolated-lab-network --eni lab.eni.xml
+flowlab master transfer -i enp3s0 --isolated-lab-network --station 0x1000 --like configs/sim/example.json --transfer 1
+flowlab analyze foe.pcapng --eni lab.eni.xml
 ```

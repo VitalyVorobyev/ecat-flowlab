@@ -44,15 +44,17 @@ jobs:
         # `features`: cargo features of flowlab-cli, space-separated. `zig`: cross-link with
         # cargo-zigbuild (static musl binaries for Linux PCs and the Verdin). `rustflags`: the
         # Windows binary links the C runtime statically, so it needs no Visual C++ runtime.
+        # `master` (the lab master, EtherCrab) is in the Linux binaries only: on Windows it links
+        # against Npcap's wpcap.dll, which every user of the binary would then need installed.
         include:
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             zig: true
-            features: embed-ui
+            features: embed-ui master
           - target: aarch64-unknown-linux-musl
             os: ubuntu-latest
             zig: true
-            features: embed-ui
+            features: embed-ui master
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             features: embed-ui

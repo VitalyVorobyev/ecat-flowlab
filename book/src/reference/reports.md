@@ -19,6 +19,9 @@ whenever `cargo test` runs.
 | Study result | `flowlab study SPEC --result FILE`; `POST /api/study` | `flowlab_study::StudyResult` | `meta.source`: `simulated` | `StudyResult.ts` |
 | ESI summary | `flowlab esi FILE --json`; `POST /api/esi` (as `EsiImport`) | `flowlab_devices::EsiFile` | device description, not a result | `EsiFile.ts`, `EsiImport.ts` |
 | PDI fit | `flowlab pdi-fit SAMPLES --result FILE`, `flowlab pdi-bench … --result FILE` | `flowlab_study::PdiFit` | `meta.source`: `measured`, or the samples file's marker (`simulated` from `pdi-bench --sim`) | not exported |
+| Lab master scan | `flowlab master scan -o FILE` (`--eni` also writes ENI XML) | `flowlab_master::ScanResult` | `meta.source`: `measured` | not exported |
+| Lab master run | `flowlab master run -o FILE` | `flowlab_master::RunResult` | `meta.source`: `measured` | not exported |
+| Lab master transfer | `flowlab master transfer -o FILE` | `flowlab_master::MeasuredTransfer` | `meta.source`: `measured` | not exported |
 
 `flowlab analyze --eoe-out FILE` and `GET /api/captures/{id}/eoe.pcapng` also write the
 Ethernet frames reassembled from EoE as a pcapng; it carries the provenance of the capture it
@@ -305,6 +308,38 @@ The state of a live session ([Live capture](../guide/live.md)), from `GET /api/l
 | `series[]` | `LivePoint` per second: `t_s`, `frames`, `tx_percent`, `period_ns`, `jitter_p99_ns`, `round_trip_p99_ns` (main cyclic stream, or `null`), `wkc_mismatches`, `unanswered`, `missed_cycles`, `mailbox_messages`, `malformed` |
 | `totals` | sums of the points: `ethercat_frames`, `wkc_mismatches`, `unanswered`, `missed_cycles`, `mailbox_messages`, `malformed` |
 | `assumptions` | how the live figures are made |
+
+## Lab master results
+
+Written by `flowlab master` ([Lab master](../guide/master.md)); `meta.input` names the payload
+(transfer) or the interface (scan, run), and `meta.assumptions` say where the timing comes from.
+Times are ns relative to the start of the transfer or run, on the host's clock.
+
+`MeasuredTransfer` uses the names of the simulator's [`TransferResult`](#simresult) wherever a
+field means the same:
+
+| Field | Meaning |
+|---|---|
+| `station`, `slave`, `protocol`, `direction`, `payload_bytes`, `sha256` | as in `TransferResult` (`protocol` is `"EoE"`, `"FoE"` or `"CoE"`) |
+| `policy`, `poll`, `cycle_time_ns`, `mailbox_out_bytes`, `mailbox_in_bytes` | how it ran: the policy in the simulator's words, `read` or `status` polling |
+| `delivered_bytes` | to the slave: payload in writes the slave accepted; from the slave: payload received in order |
+| `verified` | from the slave: the received bytes hash to the expected SHA-256; `null` to the slave (the master cannot see the slave's copy) or without an expected hash |
+| `completed`, `error` | the protocol finished; why it stopped otherwise (FoE error, SDO abort, mailbox error, no reply, time limit) |
+| `start_ns` (0), `first_byte_ns`, `end_ns`, `duration_ns`, `goodput_bps` | return of the access with the first payload byte; of the access that completed the transfer (to the slave: the last acknowledgement read) |
+| `exchange_ns` | first to last mailbox message, defined as in `TransferResult` |
+| `messages_to_slave`, `messages_from_slave`, `rejected_writes`, `empty_reads` | as in `TransferResult` |
+| `status_reads`, `lost_frames`, `repeat_requests`, `resent_messages`, `duplicate_messages`, `other_messages`, `drained_messages` | the master's own work ([Retries and counters](../guide/master.md#retries-and-counters)) |
+| `physical_bound_ns`, `link_bps` | the payload at the link rate, as in the simulator |
+| `timing` | `CycleTiming`: `cycles`, `skipped_cycles`, `overruns`, `max_accesses_per_cycle`, and summaries (`count`, `min_ns`, `p50_ns`, `p99_ns`, `max_ns`, `mean_ns`) of `start_late`, `period`, `cyclic`, `mailbox_access` and `busy` |
+| `cycle_records[]`, `cycle_records_truncated` | per cycle: `index`, `start_ns`, `late_ns`, `cyclic_ns`, `cyclic_wkc`, `mailbox_accesses`, `busy_ns` |
+
+`RunResult`: `interface`, `slaves`, `cycle_time_ns`, `process_image_bytes`, `expected_wkc`,
+`wkc_mismatches`, `lost_frames`, `final_states`, `timing` and `cycle_records[]` as above.
+
+`ScanResult`: `interface` and `slaves[]` with `position`, `station`, `alias`, `name`,
+`vendor_id`, `product_code`, `revision`, `serial`, `al_state`, `al_status_code`,
+`mailbox_protocols`, `sync_managers[]` (`index`, `start`, `length`, `control`, `mode`,
+`direction`), `dc_support` and `propagation_delay_ns`.
 
 ## PlanResult
 

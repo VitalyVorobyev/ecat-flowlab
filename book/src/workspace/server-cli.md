@@ -117,9 +117,10 @@ created. Spec arguments that are omitted fall back to the built-in example.
 | `capture [INTERFACE]` | live capture through dumpcap or tcpdump ([flowlab-live](flowlab-live.md)): `--list`; `--tool`; `-o, --out`; `--duration`; `--window`; `--all-traffic`; `--replay <FILE>` with `--speed`; `--report <JSON>` the last window's analysis; `--eni`, `--mailbox`, `--link-mbps` |
 | `schema <WHICH>` | One of `synth`, `sim`, `plan`, `study`; prints the JSON Schema |
 | `pdi-bench` | timed ESC accesses over a LAN9252's SPI ([flowlab-pdi](flowlab-pdi.md), `src/pdi_bench.rs`): `--device <PATH>` spidev device (Linux) or `--sim` a simulated LAN9252 (samples marked simulated); `-o, --out <CSV>` samples (required); `--clock-hz`; `--mode`; `--read-instruction read\|fast-read`; `--sizes`; `--reps`; `--warmup`; `--area <START+LEN>`; `--allow-writes`; `--no-al-event`; `--chip-id`; `--seed`; `--fit`, `--result <JSON>`, `--lab <JSON>` as `pdi-fit` (lab inputs from hardware runs only); `--sim-transaction-ns` |
+| `master <scan\|run\|transfer>` | the lab master ([flowlab-master](flowlab-master.md)), compiled only with the feature `master` (`flowlab-master/hardware`); without it the command prints how to build it. Every subcommand: `-i, --interface` (required); `--isolated-lab-network` (required to send); `--listen <SECONDS>` (2), `--tool`, `--no-master-check` for the check for another master; `--pdu-timeout-ms` (30); `-o, --out` (default `results/master/<command>-UNIXTIME.json`). `scan --eni <XML>`; `run --cycle-us --duration --records`; `transfer --station` plus protocol, payload, policy and retry options ([Lab master](../guide/master.md#transfer)) |
 
 `analyze` prints the capture's provenance in brackets (`[MEASURED]`, `[SYNTHETIC]`, `[SIMULATED]`),
-`simulate` and `study` print `[SIMULATED]`, and `synth` reports its output as synthetic. `study` prints
+`simulate` and `study` print `[SIMULATED]`, `master` prints `[MEASURED]`, and `synth` reports its output as synthetic. `study` prints
 up to 15 Pareto-optimal runs sorted by the first objective (the best marked `*`), up to three
 infeasible runs with their reasons, and the residuals of a calibration.
 
@@ -142,4 +143,6 @@ for a spec over its ESC RAM (`simulate_then_read_result`); ENI attach/detach wit
 ESI import and plan (`eni_attach_esi_import_and_plan`); a study, a calibration without and with a
 loaded capture (`study_runs_and_calibrates_against_a_loaded_capture`); garbage uploads and path
 stripping (`upload_rejects_garbage_and_accepts_pcapng`); clean errors for a missing path. The CLI
-is exercised by the CI steps listed in [Testing and validation](testing.md).
+is exercised by the CI steps listed in [Testing and validation](testing.md). `src/master.rs`
+tests the policy, object, MAC and IP parsers and that nothing is sent without
+`--isolated-lab-network`.
