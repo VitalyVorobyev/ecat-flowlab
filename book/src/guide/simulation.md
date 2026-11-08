@@ -50,7 +50,8 @@ Only slaves and transfers that carry a transfer are changed. What tops the list 
 scenario; a change with no effect (within 1 %) does not. When two limits coincide, for example
 a PDI read that takes most of a cycle when the cycle also allows one message, no single change
 helps: pairs of the first eight non-protocol changes are simulated too, and those that beat
-both of their parts are shown as *two changes together*. Changes that make the spec invalid
+both of their parts alone, and the scenario, by more than 1 % are shown as *two changes
+together*. `flowlab what-if` prints the same ranking (`--no-effect-percent` sets the 1 %). Changes that make the spec invalid
 (ESC RAM, frame size, one PDO channel per slave) or leave a transfer unfinished are listed with
 the reason. *Apply* puts a change into the setup.
 

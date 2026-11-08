@@ -4,10 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { WhatIfResult } from "../api";
 import fixture from "../test/whatif.fixture.json";
-import { NO_EFFECT, rank, WhatIfPanel } from "./WhatIfPanel";
+import { rank, WhatIfPanel } from "./WhatIfPanel";
 
 // Output of `flowlab what-if` (see ui/src/test/README.md).
 const result = fixture as unknown as WhatIfResult;
+const NO_EFFECT = result.no_effect;
 
 describe("what-if ranking", () => {
   it("sorts single changes into helps, no effect, slower and not possible", () => {
@@ -29,7 +30,7 @@ describe("what-if ranking", () => {
     );
     for (const p of r.together) {
       for (const part of p.change.parts) {
-        expect(p.delta ?? 0).toBeLessThan(Math.min(single.get(part) ?? 0, 0));
+        expect(p.delta ?? 0).toBeLessThan(Math.min(single.get(part) ?? 0, 0) - NO_EFFECT);
       }
     }
   });

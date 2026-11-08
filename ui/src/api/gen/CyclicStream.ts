@@ -69,6 +69,10 @@ unanswered: number,
  */
 wkc: Array<WkcSlot>, 
 /**
+ * Returning frames with a WKC mismatch (all of them; known directions only).
+ */
+wkc_mismatch_frames: number, 
+/**
  * Frames with a WKC mismatch (first 2000).
  */
 wkc_events: Array<FrameEvent>, 

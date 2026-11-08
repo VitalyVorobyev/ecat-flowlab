@@ -427,8 +427,13 @@ async fn attach_eni(
     body: axum::body::Bytes,
 ) -> Result<Json<CaptureInfo>, ApiError> {
     let text = xml_body(&body)?;
-    let network = flowlab_devices::parse_eni(&text).map_err(|e| ApiError::bad_request(format!("ENI: {e}")))?;
-    Ok(Json(blocking(move || s.set_network(id, Some(network))).await?))
+    Ok(Json(
+        blocking(move || {
+            let network = flowlab_devices::parse_eni(&text).map_err(|e| ApiError::bad_request(format!("ENI: {e}")))?;
+            s.set_network(id, Some(network))
+        })
+        .await?,
+    ))
 }
 
 async fn detach_eni(State(s): State<AppState>, UrlPath(id): UrlPath<u32>) -> Result<Json<CaptureInfo>, ApiError> {
@@ -437,9 +442,15 @@ async fn detach_eni(State(s): State<AppState>, UrlPath(id): UrlPath<u32>) -> Res
 
 async fn esi(body: axum::body::Bytes) -> Result<Json<EsiImport>, ApiError> {
     let text = xml_body(&body)?;
-    let file = flowlab_devices::parse_esi(&text).map_err(|e| ApiError::bad_request(format!("ESI: {e}")))?;
-    let slaves = file.devices.iter().map(PlanSlave::from_device).collect();
-    Ok(Json(EsiImport { file, slaves }))
+    // ESI files run to megabytes: parse them off the async runtime.
+    Ok(Json(
+        blocking(move || {
+            let file = flowlab_devices::parse_esi(&text).map_err(|e| ApiError::bad_request(format!("ESI: {e}")))?;
+            let slaves = file.devices.iter().map(PlanSlave::from_device).collect();
+            Ok(EsiImport { file, slaves })
+        })
+        .await?,
+    ))
 }
 
 async fn plan_schema() -> Json<serde_json::Value> {
@@ -552,7 +563,11 @@ async fn sim_run(Json(mut spec): Json<SimSpec>) -> Result<Json<flowlab_sim::SimR
 }
 
 async fn sim_what_if(Json(spec): Json<SimSpec>) -> Result<Json<flowlab_study::WhatIfResult>, ApiError> {
-    let r = blocking(move || flowlab_study::what_if(&spec).map_err(|e| ApiError::bad_request(e.to_string()))).await?;
+    let r = blocking(move || {
+        flowlab_study::what_if(&spec, &flowlab_study::WhatIfOptions::default())
+            .map_err(|e| ApiError::bad_request(e.to_string()))
+    })
+    .await?;
     Ok(Json(r))
 }
 
@@ -639,11 +654,39 @@ impl Ui {
     }
 }
 
+/// Whether a request's `Host` names this machine by address or as `localhost`. A browser sends
+/// the name it resolved, so a page that rebinds its own domain name to 127.0.0.1 (DNS
+/// rebinding) is refused: the API reads local files and has no authentication.
+fn host_allowed(host: &str) -> bool {
+    let name = match host.strip_prefix('[') {
+        Some(rest) => return rest.split_once(']').is_some_and(|(ip, _)| ip.parse::<std::net::Ipv6Addr>().is_ok()),
+        None => {
+            host.rsplit_once(':').filter(|(_, port)| port.bytes().all(|b| b.is_ascii_digit())).map_or(host, |(n, _)| n)
+        }
+    };
+    name.eq_ignore_ascii_case("localhost") || name.parse::<std::net::Ipv4Addr>().is_ok()
+}
+
+async fn check_host(req: axum::extract::Request, next: axum::middleware::Next) -> Response {
+    match req.headers().get(axum::http::header::HOST).map(|h| h.to_str().map(host_allowed)) {
+        // Clients other than browsers may omit it; a browser always sends it.
+        None | Some(Ok(true)) => next.run(req).await,
+        Some(_) => (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "error": "open FlowLab by address (http://127.0.0.1:PORT) or as localhost, not by another host name"
+            })),
+        )
+            .into_response(),
+    }
+}
+
 /// API plus the built UI, with `index.html` as the SPA fallback. Without `ui`, or with
-/// [`Ui::Embedded`] in a binary built without it, only the API.
+/// [`Ui::Embedded`] in a binary built without it, only the API. Requests whose `Host` is
+/// neither an IP address nor `localhost` are refused (403).
 pub fn app(state: AppState, ui: Option<&Ui>) -> Router {
     let router = api(state);
-    match ui {
+    let router = match ui {
         Some(Ui::Dir(dir)) => {
             let index = dir.join("index.html");
             router.fallback_service(ServeDir::new(dir).fallback(ServeFile::new(index)))
@@ -653,7 +696,8 @@ pub fn app(state: AppState, ui: Option<&Ui>) -> Router {
         #[cfg(not(feature = "embed-ui"))]
         Some(Ui::Embedded) => router,
         None => router,
-    }
+    };
+    router.layer(axum::middleware::from_fn(check_host))
 }
 
 /// Bind and serve until Ctrl-C.
@@ -981,6 +1025,29 @@ mod tests {
         let res = app.clone().oneshot(Request::get("/timing").body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn hosts_by_address_or_localhost_only() {
+        for ok in ["127.0.0.1:7878", "localhost:5173", "LOCALHOST", "[::1]:7878", "192.168.1.20:7878", "10.0.0.1"] {
+            assert!(host_allowed(ok), "{ok}");
+        }
+        for bad in ["evil.example:7878", "evil.example", "127.0.0.1.nip.io:7878", "[::1", "[nope]:1", "local:host"] {
+            assert!(!host_allowed(bad), "{bad}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_foreign_host_name_is_refused() {
+        let app = app(AppState::default(), None);
+        let get = |host: &str| Request::get("/api/health").header("host", host).body(Body::empty()).unwrap();
+        let (st, e) = call(&app, get("rebound.example:7878")).await;
+        assert_eq!(st, StatusCode::FORBIDDEN, "{e}");
+        assert!(e["error"].as_str().unwrap().contains("127.0.0.1"), "{e}");
+        let (st, _) = call(&app, get("127.0.0.1:7878")).await;
+        assert_eq!(st, StatusCode::OK);
+        let (st, _) = call(&app, Request::get("/api/health").body(Body::empty()).unwrap()).await;
+        assert_eq!(st, StatusCode::OK, "no Host header: not a browser");
     }
 
     #[tokio::test]

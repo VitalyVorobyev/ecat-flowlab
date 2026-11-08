@@ -6,6 +6,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use flowlab_core::Provenance;
+use flowlab_core::stats::quantile;
 
 use crate::PdiError;
 use crate::lan9252::{Lan9252, LinkInfo, check_range, reg};
@@ -283,12 +284,6 @@ pub struct SizeSummary {
     pub median_ns: f64,
     /// 95th percentile, ns.
     pub p95_ns: f64,
-}
-
-fn quantile(sorted: &[f64], q: f64) -> f64 {
-    let pos = q * (sorted.len() - 1) as f64;
-    let (lo, hi) = (pos.floor() as usize, pos.ceil() as usize);
-    sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo as f64)
 }
 
 /// Median and 95th percentile (linear interpolation, as `flowlab pdi-fit`) per direction and size.

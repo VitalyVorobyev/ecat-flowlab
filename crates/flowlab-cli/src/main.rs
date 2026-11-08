@@ -124,6 +124,9 @@ enum Cmd {
         /// Write the result JSON.
         #[arg(long)]
         result: Option<PathBuf>,
+        /// A change within this share of the scenario's time counts as having no effect, %.
+        #[arg(long, default_value_t = 1.0)]
+        no_effect_percent: f64,
     },
     /// Serve the web UI and API on localhost.
     Serve {
@@ -490,12 +493,8 @@ fn run(cli: Cli) -> Result<()> {
             println!("simulator policy: {}", serde_json::to_string(&policy)?);
             if let Some(p) = lab {
                 let mut l = read_lab(&p)?;
-                l.mailbox_policy = Some(policy);
-                l.sources.push(format!(
-                    "mailbox_policy: flowlab policy {name}, station 0x{:04X} (sha256 {})",
-                    chosen.station,
-                    &report.meta.input.sha256[..16]
-                ));
+                l.set_mailbox_policy(policy, chosen.station, &report.meta)
+                    .map_err(|e| format!("{e}; {} is unchanged", p.display()))?;
                 write_lab(&p, &l)?;
             }
         }
@@ -511,13 +510,14 @@ fn run(cli: Cli) -> Result<()> {
                 print_plan(&r);
             }
         }
-        Cmd::WhatIf { spec, result } => {
+        Cmd::WhatIf { spec, result, no_effect_percent } => {
             let spec: SimSpec = match &spec {
                 Some(p) => serde_json::from_reader(File::open(p).map_err(|e| format!("{}: {e}", p.display()))?)
                     .map_err(|e| format!("{}: {e}", p.display()))?,
                 None => SimSpec::example(),
             };
-            let r = flowlab_study::what_if(&spec)?;
+            let opts = flowlab_study::WhatIfOptions { no_effect: no_effect_percent / 100.0, ..Default::default() };
+            let r = flowlab_study::what_if(&spec, &opts)?;
             print_what_if(&spec, &r);
             if let Some(p) = result {
                 ensure_parent(&p)?;
@@ -585,28 +585,13 @@ fn print_what_if(spec: &SimSpec, r: &flowlab_study::WhatIfResult) {
         let tail = c.run.reason.as_deref().map(|r| format!("  ({r})")).unwrap_or_default();
         println!("  {:>10}  {:>8}  {}{tail}", secs(c.run.finish_ns), delta, c.label);
     }
-    // Pairs worth showing: better than either change alone by more than 1 % of the base.
-    let alone = |label: &str| {
-        r.changes.iter().find(|c| c.label == label).and_then(|c| c.run.finish_ns).unwrap_or(f64::INFINITY)
-    };
-    let together: Vec<_> = r
-        .changes
-        .iter()
-        .filter(|c| c.parts.len() == 2)
-        .filter(|c| match (c.run.finish_ns, r.base.finish_ns) {
-            (Some(x), Some(b)) => x < alone(&c.parts[0]).min(alone(&c.parts[1])) - 0.01 * b,
-            _ => false,
-        })
-        .take(5)
-        .collect();
+    // Pairs worth showing, as the study ranks them for the whole run.
+    let together = r.rankings.first().map(|k| k.together.as_slice()).unwrap_or_default();
     if !together.is_empty() {
-        println!("  two changes together, better than either alone:");
-        for c in together {
-            let delta = match (c.run.finish_ns, r.base.finish_ns) {
-                (Some(x), Some(b)) if b > 0.0 => format!("{:+.1} %", 100.0 * (x - b) / b),
-                _ => "–".into(),
-            };
-            println!("  {:>10}  {:>8}  {}", secs(c.run.finish_ns), delta, c.label);
+        println!("  two changes together, better than either alone by more than {} %:", 100.0 * r.no_effect);
+        for p in together {
+            let delta = p.delta.map_or("–".into(), |d| format!("{:+.1} %", 100.0 * d));
+            println!("  {:>10}  {:>8}  {}", secs(p.time_ns), delta, r.changes[p.change as usize].label);
         }
     }
 }

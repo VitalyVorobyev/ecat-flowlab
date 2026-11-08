@@ -23,6 +23,10 @@ The server binds to `127.0.0.1` by default. It has **no authentication**, and
 `flowlab serve` logs a warning when `--host` is not a loopback address. Do not expose it to a
 network.
 
+Every request whose `Host` header is neither an IP address nor `localhost` gets `403`. A web page
+that points its own domain name at 127.0.0.1 (DNS rebinding) therefore cannot reach the API. Open
+the UI as `http://127.0.0.1:7878` or `http://localhost:7878`, also through an SSH tunnel.
+
 ## Endpoints
 
 From the module documentation of

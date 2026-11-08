@@ -708,12 +708,14 @@ dependencies = [
  "ethercrab",
  "flowlab-core",
  "flowlab-devices",
+ "flowlab-live",
  "flowlab-sim",
  "futures-lite",
  "serde",
  "serde_json",
  "sha2",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]

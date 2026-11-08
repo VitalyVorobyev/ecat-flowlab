@@ -17,7 +17,7 @@ const DIRECTIONS = {
 } as const;
 
 function wkcMismatches(s: CyclicStream): number {
-  return s.wkc_events.length;
+  return s.wkc_mismatch_frames;
 }
 
 const STREAM_COLUMNS: Column<CyclicStream>[] = [

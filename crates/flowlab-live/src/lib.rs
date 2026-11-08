@@ -644,7 +644,7 @@ fn point(t_s: f64, r: &CaptureReport) -> LivePoint {
         period_ns: s0.map(|s| s.period_ns),
         jitter_p99_ns: s0.and_then(|s| s.phase_jitter_abs_p99_ns),
         round_trip_p99_ns: s0.and_then(|s| s.round_trip.as_ref().map(|d| d.p99)),
-        wkc_mismatches: r.streams.iter().map(|s| s.wkc_events.len() as u64).sum(),
+        wkc_mismatches: r.streams.iter().map(|s| s.wkc_mismatch_frames).sum(),
         unanswered: r.summary.unanswered_frames,
         missed_cycles: r.streams.iter().map(|s| s.missed_cycles).sum(),
         mailbox_messages: r.mailbox.channels.iter().map(|c| c.messages_out + c.messages_in).sum(),

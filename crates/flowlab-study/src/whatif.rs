@@ -99,6 +99,108 @@ pub struct WhatIfResult {
     /// Feasible changes by finish time (earliest first), then the infeasible ones. Single
     /// changes, and pairs of them (`lever` `combined`).
     pub changes: Vec<WhatIf>,
+    /// Relative change below which a change counts as having no effect (0.01 = 1 %).
+    pub no_effect: f64,
+    /// The changes ranked by when all transfers are done (`transfer` `null`, first), then by
+    /// each transfer's own duration.
+    pub rankings: Vec<WhatIfRanking>,
+}
+
+/// Options of [`what_if`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct WhatIfOptions {
+    /// Relative change below which a change counts as having no effect (default 0.01).
+    pub no_effect: f64,
+    /// Pairs listed at most in each ranking (default 5).
+    pub max_pairs: usize,
+}
+
+impl Default for WhatIfOptions {
+    fn default() -> Self {
+        Self { no_effect: 0.01, max_pairs: 5 }
+    }
+}
+
+/// One change in a [`WhatIfRanking`].
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct RankedChange {
+    /// Index into [`WhatIfResult::changes`].
+    pub change: u32,
+    /// The ranked time (all transfers done, or the transfer's duration), ns; `null` if the run is
+    /// not feasible.
+    pub time_ns: Option<f64>,
+    /// Relative change of that time against the scenario as given (−0.25 = 25 % shorter).
+    pub delta: Option<f64>,
+}
+
+/// The changes sorted by their effect on one time, best first in each list.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub struct WhatIfRanking {
+    /// The transfer whose duration is ranked; `null` ranks when all transfers are done. Protocol
+    /// switches of other transfers are left out.
+    pub transfer: Option<u32>,
+    /// Single changes that shorten the time by more than `no_effect`.
+    pub helps: Vec<RankedChange>,
+    /// Single changes within `no_effect`.
+    pub flat: Vec<RankedChange>,
+    /// Single changes that lengthen the time by more than `no_effect`.
+    pub hurts: Vec<RankedChange>,
+    /// Single changes whose run is not feasible, or does not finish the transfer.
+    pub impossible: Vec<RankedChange>,
+    /// Pairs that beat both of their parts alone, and the scenario, by more than `no_effect`.
+    pub together: Vec<RankedChange>,
+}
+
+fn ranking(base: &WhatIfRun, changes: &[WhatIf], transfer: Option<u32>, o: &WhatIfOptions) -> WhatIfRanking {
+    let pick = |run: &WhatIfRun| match transfer {
+        None => run.finish_ns,
+        Some(t) if run.feasible => run.transfer_ns.get(t as usize).copied().flatten(),
+        Some(_) => None,
+    };
+    let b = pick(base).filter(|b| *b > 0.0);
+    let mut scored: Vec<(&WhatIf, RankedChange)> = changes
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| transfer.is_none() || c.transfer.is_none() || c.transfer == transfer)
+        .map(|(i, c)| {
+            let time_ns = pick(&c.run);
+            let delta = time_ns.zip(b).map(|(t, b)| (t - b) / b);
+            (c, RankedChange { change: i as u32, time_ns, delta })
+        })
+        .collect();
+    scored.sort_by(|x, y| x.1.delta.unwrap_or(f64::INFINITY).total_cmp(&y.1.delta.unwrap_or(f64::INFINITY)));
+    let alone = |label: &str| {
+        scored
+            .iter()
+            .find(|(c, _)| c.parts.is_empty() && c.label == label)
+            .and_then(|(_, r)| r.delta)
+            .unwrap_or(f64::INFINITY)
+    };
+    let singles = || scored.iter().filter(|(c, _)| c.parts.is_empty());
+    let take =
+        |keep: &dyn Fn(Option<f64>) -> bool| singles().filter(|(_, r)| keep(r.delta)).map(|(_, r)| r.clone()).collect();
+    let ne = o.no_effect;
+    WhatIfRanking {
+        transfer,
+        helps: take(&|d| d.is_some_and(|d| d < -ne)),
+        flat: take(&|d| d.is_some_and(|d| d.abs() <= ne)),
+        hurts: take(&|d| d.is_some_and(|d| d > ne)),
+        impossible: take(&|d| d.is_none()),
+        together: scored
+            .iter()
+            .filter(|(c, r)| {
+                c.parts.len() == 2
+                    && r.delta.is_some_and(|d| {
+                        let best = c.parts.iter().map(|p| alone(p)).fold(f64::INFINITY, f64::min);
+                        d < best.min(0.0) - ne
+                    })
+            })
+            .take(o.max_pairs)
+            .map(|(_, r)| r.clone())
+            .collect(),
+    }
 }
 
 /// Mailbox policy tried by a switch: the master fills up to 60 % of the cycle with mailbox
@@ -367,8 +469,12 @@ fn simulate(spec: &Value) -> Result<SimResult, String> {
     flowlab_sim::simulate(&sim, None::<std::io::Sink>).map_err(|e| e.to_string())
 }
 
-/// Simulate `spec` and every one-change variant of it (see the module docs), best first.
-pub fn what_if(spec: &SimSpec) -> Result<WhatIfResult, StudyError> {
+/// Simulate `spec` and every one-change variant of it (see the module docs), best first, and
+/// rank the changes by their effect on each transfer and on the whole run.
+pub fn what_if(spec: &SimSpec, o: &WhatIfOptions) -> Result<WhatIfResult, StudyError> {
+    if !(0.0..1.0).contains(&o.no_effect) {
+        return Err(StudyError::Spec(format!("no_effect must be at least 0 and below 1, not {}", o.no_effect)));
+    }
     if spec.transfers.is_empty() {
         return Err(StudyError::Spec("the scenario has no transfers to speed up".into()));
     }
@@ -443,6 +549,20 @@ pub fn what_if(spec: &SimSpec) -> Result<WhatIfResult, StudyError> {
             us(OPPORTUNISTIC.1.into())
         ),
         "Whether a slave or master supports a change (a faster SPI clock, larger mailboxes, another protocol) is not checked beyond the ESC RAM the SyncManagers need.".into(),
+        format!(
+            "A change within {} % of the scenario's time counts as having no effect; a pair is listed when it beats both of its parts alone, and the scenario, by more than that.",
+            100.0 * o.no_effect
+        ),
     ];
-    Ok(WhatIfResult { meta: ReportMeta::new(Provenance::Simulated, input, assumptions), base: base_run, changes })
+    let rankings = std::iter::once(None)
+        .chain((0..spec.transfers.len() as u32).map(Some))
+        .map(|t| ranking(&base_run, &changes, t, o))
+        .collect();
+    Ok(WhatIfResult {
+        meta: ReportMeta::new(Provenance::Simulated, input, assumptions),
+        base: base_run,
+        changes,
+        no_effect: o.no_effect,
+        rankings,
+    })
 }

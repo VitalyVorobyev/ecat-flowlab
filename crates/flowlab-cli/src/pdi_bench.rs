@@ -203,18 +203,8 @@ pub(crate) fn fit_samples(
         serde_json::to_writer_pretty(BufWriter::new(File::create(&p)?), &fit)?;
     }
     if let Some(p) = lab {
-        if fit.meta.source != Provenance::Measured {
-            return Err(format!(
-                "{label} is marked {}: only measured samples become lab inputs; {} is unchanged",
-                fit.meta.source.as_str(),
-                p.display()
-            )
-            .into());
-        }
         let mut l = crate::read_lab(&p)?;
-        let access = l.pdi.as_ref().and_then(|x| x.mailbox_access);
-        l.pdi = Some(flowlab_study::lab::PdiValues { mailbox_access: access, ..fit.pdi.clone() });
-        l.sources.push(format!("pdi: flowlab pdi-fit {name} (sha256 {})", &fit.meta.input.sha256[..16]));
+        l.set_pdi_fit(&fit).map_err(|e| format!("{e}; {} is unchanged", p.display()))?;
         crate::write_lab(&p, &l)?;
     }
     Ok(())

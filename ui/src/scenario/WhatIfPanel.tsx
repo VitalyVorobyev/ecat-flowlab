@@ -2,7 +2,7 @@ import { Button, Disclosure, Panel, SkeletonRows, cn } from "@vitavision/ui";
 import { Check } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { Lever, SpecEdit, WhatIf, WhatIfResult, WhatIfRun } from "../api";
+import type { Lever, RankedChange, SpecEdit, WhatIf, WhatIfResult, WhatIfRun } from "../api";
 import { ns, percent } from "../lib/format";
 
 const LEVER: Record<Lever, string> = {
@@ -15,11 +15,6 @@ const LEVER: Record<Lever, string> = {
   combined: "two changes",
 };
 
-/** Below this relative change a lever counts as having no effect. */
-export const NO_EFFECT = 0.01;
-/** Pairs shown at most. */
-const MAX_PAIRS = 5;
-
 export interface Scored {
   change: WhatIf;
   /** Relative change of the measured time, or null when the run is not feasible. */
@@ -28,43 +23,32 @@ export interface Scored {
 }
 
 export interface Ranking {
-  /** Single changes that shorten the time by more than `NO_EFFECT`, best first. */
+  /** Single changes that shorten the time by more than the result's `no_effect`, best first. */
   helps: Scored[];
   flat: Scored[];
   hurts: Scored[];
   impossible: Scored[];
-  /** Pairs that beat both of their parts alone by more than `NO_EFFECT`, best first. */
+  /** Pairs that beat both of their parts alone by more than `no_effect`, best first. */
   together: Scored[];
 }
 
-/** Rank the changes by their effect on one transfer's duration, or on when all are done. */
+/**
+ * The study's ranking of the changes by their effect on one transfer's duration, or on when all
+ * are done (`flowlab_study::WhatIfRanking`, the same ranking `flowlab what-if` prints).
+ */
 export function rank(r: WhatIfResult, transfer: number | null): Ranking {
-  const pick = (run: WhatIfRun) =>
-    transfer === null ? run.finish_ns : run.feasible ? (run.transfer_ns[transfer] ?? null) : null;
-  const base = pick(r.base);
-  const scored = r.changes
-    .filter((c) => transfer === null || c.transfer === null || c.transfer === transfer)
-    .map((change) => {
-      const time = pick(change.run);
-      const delta = time !== null && base !== null && base > 0 ? (time - base) / base : null;
-      return { change, delta, time };
-    })
-    .sort((a, b) => (a.delta ?? Infinity) - (b.delta ?? Infinity));
-  const singles = scored.filter((s) => s.change.parts.length === 0);
-  const alone = new Map(singles.map((s) => [s.change.label, s.delta ?? Infinity]));
-  const together = scored
-    .filter((s) => s.change.parts.length === 2 && s.delta !== null)
-    .filter((s) => {
-      const best = Math.min(...s.change.parts.map((p) => alone.get(p) ?? Infinity));
-      return (s.delta ?? Infinity) < Math.min(best, 0) - NO_EFFECT;
-    })
-    .slice(0, MAX_PAIRS);
+  const ranking = r.rankings.find((k) => k.transfer === transfer) ?? r.rankings[0];
+  const scored = (list: readonly RankedChange[] | undefined): Scored[] =>
+    (list ?? []).flatMap((x) => {
+      const change = r.changes[x.change];
+      return change ? [{ change, delta: x.delta, time: x.time_ns }] : [];
+    });
   return {
-    helps: singles.filter((s) => s.delta !== null && s.delta < -NO_EFFECT),
-    flat: singles.filter((s) => s.delta !== null && Math.abs(s.delta) <= NO_EFFECT),
-    hurts: singles.filter((s) => s.delta !== null && s.delta > NO_EFFECT),
-    impossible: singles.filter((s) => s.delta === null),
-    together,
+    helps: scored(ranking?.helps),
+    flat: scored(ranking?.flat),
+    hurts: scored(ranking?.hurts),
+    impossible: scored(ranking?.impossible),
+    together: scored(ranking?.together),
   };
 }
 

@@ -83,7 +83,9 @@ Status-register polls are not counted. The quota is per slave: a master that sha
 among several slaves needs the sum. The rule is written into the report's assumptions.
 
 `flowlab policy CAPTURE --lab lab.json` prints the pattern and stores the policy in a
-lab-inputs file for the simulator (see [Input files](../reference/specs.md#lab-inputs)).
+lab-inputs file for the simulator (see [Input files](../reference/specs.md#lab-inputs)). It
+stores it only from a measured capture: a synthetic or simulated one prints the pattern and
+leaves the file unchanged.
 
 ## Agreement with Wireshark
 

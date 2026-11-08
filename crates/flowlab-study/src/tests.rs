@@ -233,7 +233,7 @@ fn what_if_ranks_one_change_runs_and_its_edits_reproduce_them() {
     let mut spec = SimSpec::example();
     spec.transfers.truncate(1);
     spec.transfers[0].payload_bytes = 64_000;
-    let r = what_if(&spec).unwrap();
+    let r = what_if(&spec, &WhatIfOptions::default()).unwrap();
     assert!(r.base.feasible, "{:?}", r.base.reason);
     assert!(!r.changes.is_empty());
     // Feasible first, earliest finish first.
@@ -251,6 +251,42 @@ fn what_if_ranks_one_change_runs_and_its_edits_reproduce_them() {
     }
     // Slaves without transfers are left alone.
     assert!(r.changes.iter().all(|c| c.slave.is_none_or(|s| s == 2)));
+    // One ranking for the whole run, one per transfer; the best change helps.
+    assert_eq!(r.rankings.len(), 2);
+    let all = &r.rankings[0];
+    assert_eq!(all.transfer, None);
+    let first_single = r.changes.iter().position(|c| c.parts.is_empty()).unwrap() as u32;
+    assert_eq!(all.helps[0].change, first_single);
+    let deltas: Vec<f64> = all.helps.iter().map(|h| h.delta.unwrap()).collect();
+    assert!(deltas.windows(2).all(|w| w[0] <= w[1]) && deltas.iter().all(|d| *d < -r.no_effect));
+    assert!(all.flat.iter().all(|f| f.delta.unwrap().abs() <= r.no_effect));
+    let n = all.helps.len() + all.flat.len() + all.hurts.len() + all.impossible.len();
+    assert_eq!(n, r.changes.iter().filter(|c| c.parts.is_empty()).count());
+}
+
+#[test]
+fn what_if_lists_a_pair_only_when_it_beats_both_parts_and_the_scenario() {
+    let mut spec = SimSpec::example();
+    spec.transfers.truncate(1);
+    spec.transfers[0].payload_bytes = 64_000;
+    let r = what_if(&spec, &WhatIfOptions::default()).unwrap();
+    let alone = |label: &str| {
+        let i = r.changes.iter().position(|c| c.parts.is_empty() && c.label == label).unwrap() as u32;
+        let all = &r.rankings[0];
+        [&all.helps, &all.flat, &all.hurts, &all.impossible]
+            .iter()
+            .flat_map(|l| l.iter())
+            .find(|x| x.change == i)
+            .and_then(|x| x.delta)
+            .unwrap_or(f64::INFINITY)
+    };
+    for p in &r.rankings[0].together {
+        let c = &r.changes[p.change as usize];
+        let d = p.delta.unwrap();
+        assert!(d < -r.no_effect, "{}: {d}", c.label);
+        assert!(c.parts.iter().all(|part| d < alone(part).min(0.0) - r.no_effect), "{}", c.label);
+    }
+    assert!(what_if(&spec, &WhatIfOptions { no_effect: 1.5, ..Default::default() }).is_err());
 }
 
 #[test]
@@ -258,7 +294,7 @@ fn what_if_reports_why_a_change_does_not_fit() {
     let mut spec = SimSpec::example();
     spec.transfers.truncate(2);
     spec.slaves[2].dpram_bytes = 1200; // 2 × 512 B mailboxes + process data fit; doubled they do not
-    let r = what_if(&spec).unwrap();
+    let r = what_if(&spec, &WhatIfOptions::default()).unwrap();
     let mbx = r.changes.iter().find(|c| c.lever == Lever::Mailbox).unwrap();
     assert!(!mbx.run.feasible);
     assert!(mbx.run.reason.as_deref().unwrap().contains("RAM"), "{:?}", mbx.run.reason);

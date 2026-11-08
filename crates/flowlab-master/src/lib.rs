@@ -15,8 +15,9 @@
 //!   virtual time. The engine is tested end to end against it;
 //! * with the cargo feature **`hardware`**, the `hardware` module: EtherCrab on a network
 //!   interface for `scan`, a cyclic `run` and `transfer`. It sends frames, so it is
-//!   behind a feature and the command line asks for an explicit acknowledgement that the
-//!   segment is an isolated lab network.
+//!   behind a feature, and opening a session needs the `QuietSegment`
+//!   that only the `safety` module's checks hand out: a named interface, an explicit
+//!   acknowledgement that the segment is an isolated lab network, and no other master heard.
 //!
 //! ```
 //! use flowlab_master::{Payload, TransferJob, TransferOptions, TransferProtocol, VirtualSlave, VirtualSlaveConfig, run_transfer};
@@ -44,6 +45,8 @@ mod virtual_slave;
 
 #[cfg(feature = "hardware")]
 pub mod hardware;
+#[cfg(feature = "hardware")]
+pub mod safety;
 
 pub use bus::{
     BusError, MailboxBus, MailboxLayout, Reply, SM_MAILBOX_IN, SM_MAILBOX_OUT, SM_REPEAT_ACK, SM_REPEAT_REQUEST,
@@ -68,6 +71,10 @@ pub enum MasterError {
     /// The bus failed in a way the transfer cannot recover from.
     #[error("bus: {0}")]
     Bus(String),
+    /// A safety check refused to start (no acknowledgement, another master heard, no way to
+    /// check).
+    #[error("{0}")]
+    Refused(String),
 }
 
 /// The policy in the simulator's words (`SimResult::policy`), so results read alike.

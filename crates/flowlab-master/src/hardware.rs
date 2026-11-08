@@ -1,8 +1,8 @@
 //! EtherCrab on a network interface: scan, a cyclic run, and mailbox transfers.
 //!
 //! **This sends EtherCAT frames.** Use it only on an isolated lab segment with no other
-//! master; the command line (`flowlab master`) checks that the segment is quiet first. Nothing
-//! here writes a slave's EEPROM.
+//! master. [`Session::open`] takes the [`QuietSegment`] of [`crate::safety::check_segment`],
+//! so a session exists only after those checks passed. Nothing here writes a slave's EEPROM.
 //!
 //! EtherCrab (MIT OR Apache-2.0) initialises the network: it assigns station addresses,
 //! configures the mailbox SyncManagers from each slave's EEPROM and, for `run` and `transfer
@@ -35,6 +35,7 @@ use crate::engine::{TransferJob, TransferOptions, run_transfer};
 use crate::result::{
     CycleRecord, CycleTiming, MeasuredTransfer, RunResult, ScanResult, ScannedSlave, ScannedSm, Summary,
 };
+use crate::safety::QuietSegment;
 
 /// Most slaves a session handles.
 pub const MAX_SUBDEVICES: usize = 16;
@@ -163,10 +164,11 @@ fn protocols(word: u16) -> Vec<String> {
 }
 
 impl Session {
-    /// Open `interface` and start EtherCrab's TX/RX thread. Fails without the permission to
-    /// open a raw socket (Linux: `CAP_NET_RAW`), or if a session was opened before in this
-    /// process.
-    pub fn open(interface: &str, o: &SessionOptions) -> Result<Self, MasterError> {
+    /// Open the interface `segment` checked and start EtherCrab's TX/RX thread. Fails without
+    /// the permission to open a raw socket (Linux: `CAP_NET_RAW`), or if a session was opened
+    /// before in this process.
+    pub fn open(segment: &QuietSegment, o: &SessionOptions) -> Result<Self, MasterError> {
+        let interface = segment.interface();
         let (tx, rx, pdu_loop) =
             PDU_STORAGE.try_split().map_err(|_| MasterError::Invalid("one EtherCrab session per process".into()))?;
         let (started, ready) = std::sync::mpsc::channel::<Result<(), String>>();
@@ -179,7 +181,7 @@ impl Session {
                     Ok(task) => {
                         let _ = started.send(Ok(()));
                         if let Err(e) = async_io::block_on(task) {
-                            eprintln!("EtherCrab TX/RX on {iface} stopped: {e}");
+                            tracing::error!("EtherCrab TX/RX on {iface} stopped: {e}");
                         }
                     }
                     Err(e) => {
@@ -191,7 +193,7 @@ impl Session {
                     let _ = started.send(Ok(()));
                     let cfg = ethercrab::std::TxRxTaskConfig { spinloop: false };
                     if let Err(e) = ethercrab::std::tx_rx_task_blocking(&iface, tx, rx, cfg) {
-                        eprintln!("EtherCrab TX/RX on {iface} stopped: {e}");
+                        tracing::error!("EtherCrab TX/RX on {iface} stopped: {e}");
                     }
                 }
             })

@@ -184,11 +184,11 @@ fn parse_pcap(bytes: Vec<u8>, big: bool, nanos: bool) -> Result<CaptureFile, Cap
     })
 }
 
+/// Timestamp in ns since the epoch. Saturates instead of overflowing: a file may carry any
+/// 64-bit timestamp with any resolution (`if_tsresol` down to one tick per second).
 fn ts_to_ns(raw: u64, iface: &InterfaceInfo) -> u64 {
-    let per = iface.ts_per_sec;
-    let secs = raw / per;
-    let rem = raw % per;
-    let ns = (secs * 1_000_000_000).saturating_add((rem as u128 * 1_000_000_000 / per as u128) as u64);
+    let per = iface.ts_per_sec.max(1) as u128;
+    let ns = (raw as u128 * 1_000_000_000 / per).min(u64::MAX as u128) as u64;
     ns.saturating_add_signed(iface.ts_offset_s.saturating_mul(1_000_000_000))
 }
 
@@ -325,4 +325,29 @@ fn parse_pcapng(bytes: Vec<u8>) -> Result<CaptureFile, CaptureError> {
         at += total;
     }
     Ok(CaptureFile { format: CaptureFormat::Pcapng, bytes, packets, interfaces, comments, user_application })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn iface(ts_per_sec: u64, ts_offset_s: i64) -> InterfaceInfo {
+        InterfaceInfo { link_type: 1, name: None, description: None, ts_per_sec, ts_offset_s }
+    }
+
+    #[test]
+    fn timestamps_convert_at_any_resolution() {
+        assert_eq!(ts_to_ns(1_500_000, &iface(1_000_000, 0)), 1_500_000_000);
+        assert_eq!(ts_to_ns(7, &iface(1_000_000_000, 2)), 2_000_000_007);
+        assert_eq!(ts_to_ns(3, &iface(1, 0)), 3_000_000_000);
+        assert_eq!(ts_to_ns(1 << 10, &iface(1 << 10, -1)), 0);
+    }
+
+    #[test]
+    fn huge_timestamps_saturate_instead_of_overflowing() {
+        assert_eq!(ts_to_ns(u64::MAX, &iface(1, 0)), u64::MAX);
+        assert_eq!(ts_to_ns(u64::MAX, &iface(1_000_000, 0)), u64::MAX);
+        assert_eq!(ts_to_ns(u64::MAX, &iface(1_000_000, i64::MAX)), u64::MAX);
+        assert_eq!(ts_to_ns(u64::MAX, &iface(u64::MAX, 0)), 1_000_000_000);
+    }
 }

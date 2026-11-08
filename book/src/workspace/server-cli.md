@@ -94,7 +94,8 @@ arithmetic and a small XML read, run inline.
 
 The server has no authentication and `POST /api/captures/open` reads any file the user can, so it
 belongs on loopback. `flowlab serve` binds 127.0.0.1 by default and logs a warning for any other
-`--host`. `Ui::find(dir)` picks the UI: `dir` (`--ui-dir`, default `ui/dist`) when it holds an
+`--host`. `app()` wraps every route, the UI included, in a `Host` check: a host name other than
+`localhost` gets 403, which stops DNS rebinding; a request without `Host` (not a browser) passes. `Ui::find(dir)` picks the UI: `dir` (`--ui-dir`, default `ui/dist`) when it holds an
 `index.html`, else the UI built into the binary (feature `embed-ui`, through `rust-embed`), else
 none. `app(state, Some(&ui))` serves it with `index.html` as the SPA fallback for unknown paths;
 without a UI only the API is served.

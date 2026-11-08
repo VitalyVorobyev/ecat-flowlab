@@ -53,4 +53,6 @@ Pareto-optimal or best run.
 ## Security
 
 The server has no authentication and can read any file the user can (`Open path`). It binds to
-loopback by default. Do not bind it to a public address with `--host`.
+loopback by default. Do not bind it to a public address with `--host`. It answers only requests
+addressed to an IP address or `localhost`, so open it as <http://127.0.0.1:7878> (a host name
+gets *403*).

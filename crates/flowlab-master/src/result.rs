@@ -5,6 +5,7 @@
 //! provenance `measured` in its `meta`.
 
 use flowlab_core::ReportMeta;
+use flowlab_core::stats::quantile;
 use serde::Serialize;
 
 /// Summary of a set of durations, ns.
@@ -16,7 +17,7 @@ pub struct Summary {
     pub min_ns: f64,
     /// Median, ns.
     pub p50_ns: f64,
-    /// 99th percentile (nearest rank), ns.
+    /// 99th percentile (linear interpolation, as every FlowLab percentile), ns.
     pub p99_ns: f64,
     /// Largest, ns.
     pub max_ns: f64,
@@ -32,12 +33,11 @@ impl Summary {
         }
         let mut v = values.to_vec();
         v.sort_by(f64::total_cmp);
-        let rank = |p: f64| v[((p * v.len() as f64).ceil() as usize).clamp(1, v.len()) - 1];
         Self {
             count: v.len() as u64,
             min_ns: v[0],
-            p50_ns: rank(0.5),
-            p99_ns: rank(0.99),
+            p50_ns: quantile(&v, 0.5),
+            p99_ns: quantile(&v, 0.99),
             max_ns: v[v.len() - 1],
             mean_ns: v.iter().sum::<f64>() / v.len() as f64,
         }
@@ -315,10 +315,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn summary_ranks() {
+    fn summary_interpolates_like_the_analysis() {
         let s = Summary::of(&[5.0, 1.0, 3.0, 2.0, 4.0]);
         assert_eq!((s.count, s.min_ns, s.p50_ns, s.max_ns, s.mean_ns), (5, 1.0, 3.0, 5.0, 3.0));
-        assert_eq!(s.p99_ns, 5.0);
+        // Position 0.99 · 4 = 3.96 between 4 and 5, as `Distribution::p99` of a capture.
+        assert!((s.p99_ns - 4.96).abs() < 1e-9, "{}", s.p99_ns);
         assert_eq!(Summary::of(&[]), Summary::default());
     }
 }

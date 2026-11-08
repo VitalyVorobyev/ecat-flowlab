@@ -71,6 +71,19 @@ fn recovers_cycle_timing() {
 }
 
 #[test]
+fn counts_every_wkc_mismatch_beyond_the_event_list() {
+    let mut s = spec(FaultSpec { wkc_error_probability: 0.3, ..FaultSpec::default() });
+    s.cycles = 10_000;
+    let (_, a, truth) = run(&s);
+    let st = &a.report.streams[0];
+    assert!(truth.wkc_errors > analyze::MAX_EVENTS as u64, "{}", truth.wkc_errors);
+    assert_eq!(st.wkc_events.len(), analyze::MAX_EVENTS);
+    assert_eq!(st.wkc_mismatch_frames, truth.wkc_errors);
+    let f = a.report.findings.iter().find(|f| f.title.contains("working-counter")).unwrap();
+    assert!(f.title.contains(&truth.wkc_errors.to_string()), "{}", f.title);
+}
+
+#[test]
 fn recovers_faults() {
     let (trace, a, truth) = run(&faulty());
     let r = &a.report;
@@ -79,6 +92,7 @@ fn recovers_faults() {
     assert_eq!(s.unanswered, truth.lost_frames);
     assert_eq!(r.summary.unanswered_frames, truth.lost_frames);
     assert_eq!(s.wkc_events.len() as u64, truth.wkc_errors);
+    assert_eq!(s.wkc_mismatch_frames, truth.wkc_errors);
     let lrw = s.wkc.iter().find(|w| w.label.starts_with("LRW")).unwrap();
     assert_eq!(lrw.expected, truth.expected_lrw_wkc);
     assert_eq!(lrw.mismatches, truth.wkc_errors);

@@ -43,6 +43,9 @@ came from. The API's own types (`CaptureInfo`, `FramePage`, `FrameDetail`) are i
   (ns unless stated): `count`, `min`, `max`, `mean`, `std` (population), `p1`, `p5`, `p50`,
   `p95`, `p99` and a `histogram` (`lo`, `bin_width`, `counts`). It is `null` when there is no
   sample.
+- **Percentiles** everywhere (distributions, the lab master's summaries, PDI benchmark and fit)
+  interpolate linearly between the two closest ranks, at position *q* · (*n* − 1), so a
+  measured, a simulated and a captured p99 are computed the same way.
 
 ## ReportMeta
 
@@ -123,7 +126,8 @@ capture views read the same object.
 | `gaps`, `missed_cycles` | intervals longer than `gap_factor` periods (1.5); cycles missing inside them |
 | `round_trip`, `unanswered` | TX → RX time at the capture point; TX frames that did not return |
 | `wkc` | `WkcSlot` per datagram position: `label`, `expected`, `expected_from` (`"eni"` or `"most_frequent"`), `mismatches`, `zero`, `mailbox` (mailbox positions are not counted as mismatches) |
-| `wkc_events`, `unanswered_events` | `{ frame, t_ns }` of the affected frames |
+| `wkc_mismatch_frames` | returning frames with at least one working-counter mismatch, all of them |
+| `wkc_events`, `unanswered_events` | `{ frame, t_ns }` of the affected frames (first 2000) |
 | `interval_series`, `round_trip_series` | `{ t_ns, v }` points, decimated |
 
 **`utilization`**: `link_bps` (assumed rate), `bin_ns`, `mean_tx_percent`, `peak_tx_percent`,
@@ -283,6 +287,8 @@ The scenario rerun with one change at a time, and with pairs of changes
 | `meta` | provenance `simulated`, hash of the scenario, the method's assumptions |
 | `base` | `WhatIfRun` of the scenario as given |
 | `changes[]` | `WhatIf`: feasible first, by when the last transfer finished |
+| `no_effect` | relative change below which a change has no effect (0.01 = 1 %, `--no-effect-percent`) |
+| `rankings[]` | `WhatIfRanking`: first by when all transfers are done (`transfer` `null`), then one per transfer |
 
 `WhatIf`: `label` (what changes, old → new), `lever` (`master`, `mailbox_policy`, `pdi`,
 `mailbox`, `application`, `protocol`, or `combined` for a pair), `slave` and `transfer` (indices
@@ -293,6 +299,13 @@ changes), `run`.
 `WhatIfRun`: `feasible` and `reason` (an invalid spec, or a transfer that did not finish
 verified), `transfer_ns[]` (duration per transfer), `finish_ns` (when the last transfer
 finished), `link_utilization_percent`, `pdi_busy_percent_max`, `dpram_used_percent_max`.
+
+`WhatIfRanking`: `transfer`, and lists of `{ change, time_ns, delta }` (`change` indexes
+`changes`, `delta` is the relative change against the scenario as given), best first. `helps`,
+`flat` and `hurts` sort the single changes by `delta` against ±`no_effect`; `impossible` holds the
+ones whose run is not feasible. `together` holds up to five pairs that beat both of their parts
+alone, and the scenario, by more than `no_effect`. A ranking for one transfer leaves out the
+other transfers' protocol switches. The Simulate view and `flowlab what-if` show these rankings.
 
 ## LiveSnapshot
 

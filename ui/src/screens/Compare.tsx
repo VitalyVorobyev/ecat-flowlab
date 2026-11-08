@@ -33,7 +33,11 @@ const QUANTITIES: Quantity[] = [
     show: (v) => ns(v),
   },
   { name: "Lost cyclic frames", value: (r) => sum(r.streams, (s) => s.unanswered), show: count },
-  { name: "WKC mismatches", value: (r) => sum(r.streams, (s) => s.wkc_events.length), show: count },
+  {
+    name: "WKC mismatches",
+    value: (r) => sum(r.streams, (s) => s.wkc_mismatch_frames),
+    show: count,
+  },
   { name: "Link load TX (mean)", value: (r) => r.utilization.mean_tx_percent, show: percent },
   {
     name: "Mailbox messages to slaves",

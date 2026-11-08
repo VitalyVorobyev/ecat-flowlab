@@ -379,7 +379,8 @@ mailbox durations with `exchange_time_s`, which both sides observe:
 
 `LabInputs` carries measured values that replace the simulator's placeholders for one slave and
 the master. Every field is optional; `flowlab pdi-fit --lab` and `flowlab policy --lab` create
-the file or update their part of it and append to `sources`.
+the file or update their part of it and append to `sources`. Both take only measured data: samples
+marked `simulated` and synthetic or simulated captures are refused, and the file stays as it was.
 
 | Field | Meaning |
 |---|---|
