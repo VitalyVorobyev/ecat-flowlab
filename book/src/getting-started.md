@@ -156,19 +156,17 @@ property of any device.
 ## Your own capture
 
 Record at the master's network interface, or with a tap between master and first slave, for
-example with Wireshark or `tcpdump -i eth1 -w run.pcapng ether proto 0x88a4`. Then:
+example with `flowlab capture eth1 -o run.pcapng` or `tcpdump -i eth1 -w run.pcapng ether proto
+0x88a4`. Then:
 
 ```bash
-flowlab analyze run.pcapng --out run.json
+flowlab analyze run.pcapng --out run.json [--eni network.xml]
 flowlab serve run.pcapng --open
 ```
 
-To watch the segment instead, while it runs: `flowlab capture eth1`, or the **Live** view of
-`cargo ui -- --live` ([Live capture](guide/live.md)).
-
-If the capture starts after the master configured the mailboxes, give their addresses:
-`--mailbox 0x1001=0x1000,0x1080`. If you have the master's ENI file, add `--eni network.xml`, so
-working counters are judged against the configuration rather than the most frequent value.
+[Investigating your own network](guide/own-network.md) goes on from there: where to capture,
+what each finding means and what to check, and how to model the segment, fit the model to the
+capture and check a change.
 
 ## Safety
 
@@ -187,6 +185,7 @@ authentication and reads any file you can: keep it on loopback.
 
 ## Next
 
+- [Investigating your own network](guide/own-network.md): from a capture to a model and back.
 - [The workbench](guide/ui.md): what each view shows.
 - [Analysing a capture](guide/analysis.md): how each number is derived.
 - [Simulation](guide/simulation.md) and [studies](guide/studies.md): model a segment before you build it.

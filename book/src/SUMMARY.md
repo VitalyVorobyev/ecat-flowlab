@@ -5,6 +5,7 @@
 
 # User guide
 
+- [Investigating your own network](guide/own-network.md)
 - [The workbench](guide/ui.md)
 - [Analysing a capture](guide/analysis.md)
 - [Live capture](guide/live.md)

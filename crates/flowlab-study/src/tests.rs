@@ -174,6 +174,30 @@ fn calibration_recovers_hidden_pdi_parameters_from_a_capture() {
     assert!(r.meta.assumptions.iter().any(|a| a.contains("not that its parameters are the physical ones")));
 }
 
+/// The shipped calibration example finds the parameters a capture was made with, when that
+/// capture comes from its own model (here: simulated, with values from its grid).
+#[test]
+fn shipped_calibration_example_recovers_its_own_capture() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../configs/calibration/foe-span.json");
+    let spec: StudySpec = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let mut hidden = spec.base.clone();
+    hidden.slaves[2].pdi.read_bps = 10_000_000;
+    hidden.slaves[2].pdi.write_bps = 10_000_000;
+    hidden.slaves[2].pdi.access_overhead_ns = 20_000;
+    hidden.slaves[2].app_processing_ns = 40_000;
+    hidden.capture.enabled = true;
+    let mut bytes = Vec::new();
+    flowlab_sim::simulate(&hidden, Some(&mut bytes)).unwrap();
+    let trace = Trace::build(CaptureFile::parse(bytes).unwrap(), "hidden.pcapng");
+    let report = analyze(&trace, &AnalysisOptions::default()).report;
+    assert_eq!(report.meta.source, flowlab_core::Provenance::Simulated);
+
+    let r = run_study(&spec, Some(&report)).unwrap();
+    let best = &r.runs[r.best.unwrap() as usize];
+    assert_eq!(best.values, ["10000000", "20000", "40000"], "{:#?}", r.residuals);
+    assert!(r.residuals.iter().all(|x| x.relative_error.unwrap().abs() < 1e-9), "{:#?}", r.residuals);
+}
+
 #[test]
 fn shipped_study_is_the_example() {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../configs/studies/bulk-transfer/foe-sweep.json");

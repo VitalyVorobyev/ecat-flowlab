@@ -16,6 +16,7 @@ flowlab <COMMAND>
   pdi-fit   Fit the simulator's PDI model (cost per access + effective rate) to timed ESC accesses
   pdi-bench Time complete ESC reads and writes over a LAN9252's SPI (Linux spidev), as samples for `pdi-fit`
   policy    Read the master's mailbox service pattern from a capture, as a simulator policy
+  apply-lab Put measured lab inputs (from pdi-fit --lab, policy --lab) into a simulator spec
   master    FlowLab's own EtherCAT master on an isolated lab segment: scan, run, transfer
             (in a build with --features master)
 ```
@@ -36,7 +37,8 @@ flowlab <COMMAND>
 | `schema WHICH` | `synth`, `sim`, `plan`, `study` or `lab` |
 | `pdi-fit SAMPLES.csv` | `--result FILE` the fit with residuals · `--lab JSON` store the values in a lab-inputs file (measured samples only) |
 | `pdi-bench` | `--device /dev/spidevB.C` or `--sim` · `-o/--out CSV` (required) · `--clock-hz HZ` (10000000) · `--mode 0-3` (0) · `--read-instruction read\|fast-read` · `--sizes 1,2,…` (1–1024, powers of two) · `--reps N` (50) · `--warmup N` (3) · `--area START+LEN` · `--allow-writes` · `--no-al-event` · `--chip-id HEX` (0x9252) · `--seed N` · `--sim-transaction-ns NS` (5000; with `--sim`, the fixed cost of every SPI transaction, a chosen value) · `--fit` · `--result FILE` · `--lab JSON` ([Measuring the SPI](../studies/bulk-transfer/lab.md#measuring-the-spi)) |
-| `policy CAPTURE` | `--station N` · `--mailbox …` · `--eni XML` · `--lab JSON` store the policy in a lab-inputs file |
+| `policy CAPTURE` | `--station N` · `--mailbox …` · `--eni XML` · `--lab JSON` store the policy in a lab-inputs file (measured captures only) |
+| `apply-lab SPEC` | `--lab JSON` (required) · `--slave N` (required: index in `slaves`, which gets the PDI and application time) · `-o/--out FILE` (default: print) |
 | `master scan\|run\|transfer` | always `-i/--interface IF` and `--isolated-lab-network` · `--listen S` (2) · `--tool` · `--no-master-check` · `--pdu-timeout-ms` (30) · `-o/--out FILE`; `scan --eni XML`; `run --cycle-us US --duration S --records N`; `transfer --station N --protocol foe\|coe\|eoe --direction to-slave\|from-slave --file F\|--bytes N --policy … --cycle-us US --poll read\|status --op` or `--like SIM_JSON --transfer K`; payload, FoE, CoE, EoE and retry options in [Lab master § transfer](master.md#transfer) |
 
 Commands that take a spec use a built-in example when it is omitted. Errors go to stderr with
@@ -63,6 +65,7 @@ flowlab study fit.json --capture lab.pcapng --result fit-result.json
 flowlab pdi-bench --device /dev/spidev1.0 --clock-hz 20000000 -o spi-timing.csv   # on the slave, ESC in INIT
 flowlab pdi-fit spi-timing.csv --lab lab.json
 flowlab policy master-foe.pcapng --lab lab.json
+flowlab apply-lab spec.json --lab lab.json --slave 2 -o spec.lab.json && flowlab what-if spec.lab.json
 python3 scripts/bulk-transfer-report.py --lab lab.json --out results/report-lab
 
 # On the lab rig (build with --features master): the network as ENI, then a transfer set up like

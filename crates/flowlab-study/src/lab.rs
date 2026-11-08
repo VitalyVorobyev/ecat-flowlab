@@ -361,7 +361,12 @@ impl LabInputs {
     }
 
     /// Apply to `spec`: PDI and application time to slave `slave`, the policy to the master.
+    /// The spec's description gains the [`sources`](Self::sources), so the result says what it
+    /// was simulated with. Fails if `slave` is not in the spec or the file holds no value.
     pub fn apply(&self, spec: &mut SimSpec, slave: usize) -> Result<(), LabError> {
+        if self.pdi.is_none() && self.app_processing_ns.is_none() && self.mailbox_policy.is_none() {
+            return Err(LabError::Apply("the lab inputs hold no value".into()));
+        }
         let n = spec.slaves.len();
         let s =
             spec.slaves.get_mut(slave).ok_or_else(|| LabError::Apply(format!("no slave {slave} in a line of {n}")))?;
@@ -379,6 +384,10 @@ impl LabInputs {
         if let Some(p) = &self.mailbox_policy {
             spec.mailbox_policy = p.clone();
         }
+        let from = if self.sources.is_empty() { self.description.clone() } else { self.sources.join("; ") };
+        let note =
+            format!("lab inputs on slave {slave}: {}", if from.is_empty() { "(no sources given)" } else { &from });
+        spec.description = if spec.description.is_empty() { note } else { format!("{} ({note})", spec.description) };
         Ok(())
     }
 }
@@ -462,7 +471,9 @@ mod tests {
         assert_eq!(s.pdi.mailbox_access, MailboxAccess::MessageOnly);
         assert_eq!(s.app_processing_ns, 50_000);
         assert_eq!(spec.mailbox_policy, MailboxPolicy::FixedQuota { accesses_per_cycle: 1 });
+        assert!(spec.description.ends_with("(lab inputs on slave 2: spi.csv)"), "{}", spec.description);
         assert!(lab.apply(&mut spec, 9).is_err());
+        assert!(LabInputs::default().apply(&mut spec, 2).is_err(), "an empty file applies nothing");
     }
 
     #[test]
