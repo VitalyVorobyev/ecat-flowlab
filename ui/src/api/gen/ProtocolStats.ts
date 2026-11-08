@@ -31,4 +31,9 @@ first_ns: number,
 /**
  * Last message, ns.
  */
-last_ns: number, };
+last_ns: number, 
+/**
+ * Payload bytes both ways over the span from the first to the last message, bit/s; `null`
+ * for a single message.
+ */
+mean_rate_bps: number | null, };

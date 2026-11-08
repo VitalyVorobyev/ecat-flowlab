@@ -23,7 +23,6 @@ import {
   type MailboxErrorEvent,
   type ProtocolStats,
   type SdoOutcome,
-  type ServicePattern,
   type SdoTransaction,
 } from "../api";
 import { TimeHistogram } from "../components/charts";
@@ -111,12 +110,6 @@ const CHANNEL_COLUMNS: Column<MailboxChannel>[] = [
   },
 ];
 
-function policy(p: ServicePattern): string {
-  return p.kind === "fixed_quota"
-    ? `fixed quota, ${p.accesses_per_cycle} per cycle`
-    : `back to back ≤ ${p.bus_budget_percent.toFixed(0)} % of the cycle, turnaround ${ns(p.turnaround_ns)}`;
-}
-
 type Served = MailboxChannel & { service: NonNullable<MailboxChannel["service"]> };
 
 const SERVICE_COLUMNS: Column<Served>[] = [
@@ -160,7 +153,7 @@ const SERVICE_COLUMNS: Column<Served>[] = [
   {
     key: "pol",
     header: "Simulator policy",
-    cell: (c) => <span className="text-xs">{policy(c.service.pattern)}</span>,
+    cell: (c) => <span className="text-xs">{c.service.policy}</span>,
   },
 ];
 
@@ -180,10 +173,7 @@ const PROTOCOL_COLUMNS: Column<ProtocolStats>[] = [
     key: "rate",
     header: "Mean rate",
     numeric: true,
-    cell: (p) => {
-      const span = p.last_ns - p.first_ns;
-      return span > 0 ? bitRate(((p.bytes_out + p.bytes_in) * 8) / (span / 1e9)) : "–";
-    },
+    cell: (p) => (p.mean_rate_bps === null ? "–" : bitRate(p.mean_rate_bps)),
   },
 ];
 

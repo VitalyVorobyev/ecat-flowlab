@@ -68,6 +68,7 @@ From the module documentation of `crates/flowlab-server/src/lib.rs`:
 | GET | `/api/sim/example` | | `SimSpec` |
 | POST | `/api/simulate` | `SimSpec` | `CaptureInfo` (capture of the run; result via `/simulation`) |
 | GET | `/api/sim/presets` | | `SimPreset[]` |
+| GET | `/api/sim/slave` | | `SimSlave::new("slave")`: the defaults of a new slave |
 | POST | `/api/sim/run` | `SimSpec` | `SimResult` (no capture is kept) |
 | POST | `/api/sim/what-if` | `SimSpec` | `WhatIfResult` |
 | GET | `/api/live/interfaces` | | `LiveInterfaces` |

@@ -440,7 +440,16 @@ function TransferFields({
  * The scenario as a form: master and link, the slaves in ring order, the transfers. Values are
  * shown in the units people use (Mbit/s, µs, MB) and stored in the spec's units.
  */
-export function SetupEditor({ spec, onChange }: { spec: SimSpec; onChange: (s: SimSpec) => void }) {
+export function SetupEditor({
+  spec,
+  slaveTemplate,
+  onChange,
+}: {
+  spec: SimSpec;
+  /** A slave with the simulator's defaults; adding a slave waits for it. */
+  slaveTemplate: SimSlave | null;
+  onChange: (s: SimSpec) => void;
+}) {
   const [openSlave, setOpenSlave] = useState<number | null>(null);
   const [openTransfer, setOpenTransfer] = useState<number | null>(0);
   const set = <K extends keyof SimSpec>(k: K, v: SimSpec[K]) => onChange({ ...spec, [k]: v });
@@ -495,8 +504,10 @@ export function SetupEditor({ spec, onChange }: { spec: SimSpec; onChange: (s: S
             variant="ghost"
             size="sm"
             icon={<Plus className="size-3.5" />}
+            disabled={!slaveTemplate}
             onClick={() => {
-              set("slaves", [...spec.slaves, newSlave(spec.slaves.length)]);
+              if (!slaveTemplate) return;
+              set("slaves", [...spec.slaves, newSlave(slaveTemplate, spec.slaves.length)]);
               setOpenSlave(spec.slaves.length);
             }}
           >

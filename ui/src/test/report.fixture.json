@@ -67,6 +67,7 @@
       "id": 0,
       "signature": "FRMW 0x1001:0x0910 · LRW 0x00010000 · BRD 0x0130",
       "frame_bytes": 130,
+      "frame_wire_ns": 12320.0,
       "frames": 400,
       "first_ns": 35201908.0,
       "last_ns": 434196393.0,
@@ -11101,7 +11102,8 @@
           "pattern": {
             "kind": "fixed_quota",
             "accesses_per_cycle": 1
-          }
+          },
+          "policy": "fixed quota: 1 mailbox datagrams per cycle"
         }
       },
       {
@@ -11243,7 +11245,8 @@
         "bytes_out": 819,
         "bytes_in": 1108,
         "first_ns": 6818600.0,
-        "last_ns": 35729800.0
+        "last_ns": 35729800.0,
+        "mean_rate_bps": 533218.9601261795
       },
       {
         "protocol": "EoE",
@@ -11252,7 +11255,8 @@
         "bytes_out": 4944,
         "bytes_in": 4944,
         "first_ns": 35729800.0,
-        "last_ns": 148718600.0
+        "last_ns": 148718600.0,
+        "mean_rate_bps": 700104.7891472429
       },
       {
         "protocol": "FoE",
@@ -11261,7 +11265,8 @@
         "bytes_out": 4330,
         "bytes_in": 222,
         "first_ns": 149718600.0,
-        "last_ns": 296718600.0
+        "last_ns": 296718600.0,
+        "mean_rate_bps": 247727.8911564626
       }
     ],
     "coe": {

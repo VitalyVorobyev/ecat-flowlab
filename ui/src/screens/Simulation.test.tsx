@@ -23,7 +23,7 @@ describe("Simulation", () => {
     expect(screen.getAllByText("Simulated").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/a model prediction, not a measurement/).length).toBeGreaterThan(0);
     expect(screen.getByText("What was simulated")).toBeInTheDocument();
-    expect(screen.getByText(/fixed quota, 2 mailbox datagrams per cycle/)).toBeInTheDocument();
+    expect(screen.getByText(/fixed quota: 2 mailbox datagrams per cycle/)).toBeInTheDocument();
     expect(screen.getAllByText(/EoE ↓ 8 kB to bulk-endpoint/).length).toBeGreaterThan(0);
   });
 

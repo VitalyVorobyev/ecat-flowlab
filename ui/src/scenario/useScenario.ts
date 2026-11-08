@@ -5,6 +5,7 @@ import {
   errorMessage,
   type SimPreset,
   type SimResult,
+  type SimSlave,
   type SimSpec,
   type SpecEdit,
   type WhatIfResult,
@@ -24,6 +25,8 @@ export interface Baseline {
 
 export interface Scenario {
   presets: SimPreset[];
+  /** A slave with the simulator's defaults (`GET /api/sim/slave`), once loaded. */
+  slaveTemplate: SimSlave | null;
   spec: SimSpec | null;
   /** Result of the last spec that simulated; may be older than `spec` while `running`. */
   result: SimResult | null;
@@ -71,6 +74,7 @@ function store(spec: SimSpec): void {
  */
 export function useScenario(): Scenario {
   const [presets, setPresets] = useState<SimPreset[]>([]);
+  const [slaveTemplate, setSlaveTemplate] = useState<SimSlave | null>(null);
   const [spec, setSpecState] = useState<SimSpec | null>(null);
   const [history, setHistory] = useState<SimSpec[]>([]);
   const [result, setResult] = useState<SimResult | null>(null);
@@ -96,6 +100,7 @@ export function useScenario(): Scenario {
       },
       (e: unknown) => setError(errorMessage(e)),
     );
+    api.simSlave().then(setSlaveTemplate, (e: unknown) => setError(errorMessage(e)));
   }, []);
 
   // Simulate shortly after the last edit; a newer edit cancels the older run.
@@ -175,6 +180,7 @@ export function useScenario(): Scenario {
 
   return {
     presets,
+    slaveTemplate,
     spec,
     result,
     resultSpec,

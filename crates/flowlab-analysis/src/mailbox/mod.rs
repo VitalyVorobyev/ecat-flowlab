@@ -197,6 +197,7 @@ pub(crate) fn analyze(
                         bytes_in: 0,
                         first_ns: t,
                         last_ns: t,
+                        mean_rate_bps: None,
                     });
                     ps.last_ns = t;
                     if direction == MailboxDirection::ToSlave {
@@ -281,7 +282,14 @@ pub(crate) fn analyze(
         .collect();
     let report = MailboxReport {
         channels: channels_report,
-        protocols: protocols.into_values().collect(),
+        protocols: protocols
+            .into_values()
+            .map(|p| {
+                let span_s = (p.last_ns - p.first_ns) / 1e9;
+                let mean_rate_bps = (span_s > 0.0).then(|| (p.bytes_out + p.bytes_in) as f64 * 8.0 / span_s);
+                ProtocolStats { mean_rate_bps, ..p }
+            })
+            .collect(),
         coe: coe.finish(bins),
         foe: foe.finish(),
         eoe: eoe.finish(),

@@ -270,6 +270,24 @@ impl SimSlave {
     }
 }
 
+impl SimSlave {
+    /// A slave named `name` with every other field at its default: no process data, no
+    /// mailbox, 700 ns forwarding, 4096 B of ESC RAM, the default PDI and application time.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            outputs_bytes: 0,
+            inputs_bytes: 0,
+            forwarding_delay_ns: default_forwarding(),
+            mailbox_out_bytes: 0,
+            mailbox_in_bytes: 0,
+            dpram_bytes: default_dpram(),
+            pdi: PdiSpec::default(),
+            app_processing_ns: default_app_processing(),
+        }
+    }
+}
+
 impl TransferProtocol {
     /// Short name: `EoE`, `FoE`, `CoE` or `PDO channel`, as results write it.
     pub const fn name(&self) -> &'static str {

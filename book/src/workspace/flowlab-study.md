@@ -33,7 +33,6 @@ source: [crates/flowlab-study](https://github.com/VitalyVorobyev/ecat-flowlab/bl
 | `Objective` | `metric` + `goal` (`minimize` default, or `maximize`) |
 | `Constraint` | `metric` + optional `max` / `min` |
 | `lab::fit_pdi` → `PdiFit` | PDI timing samples (CSV) → the PDI model's cost per access and effective rates, with residuals per access size; provenance `measured` |
-| `lab::mailbox_policy(&ServicePattern) -> MailboxPolicy` | the analysis's service pattern as a simulator policy |
 | `lab::LabInputs` (+ `apply(&mut SimSpec, slave)`, `lab::schema()`) | measured values replacing the placeholders of one slave and the master |
 | `Target`, `CaptureMetric` | A measured value to fit: `measured` directly, or `from_capture` |
 | `StudyResult`, `StudyRun`, `Residual` | Serialized results, exported to TypeScript |
@@ -126,8 +125,8 @@ samples takes the other's values, and the assumptions say so. The fit's provenan
 (`flowlab_core::pdi_samples::provenance`); `flowlab pdi-bench --sim` ([flowlab-pdi](flowlab-pdi.md)) writes
 `simulated`.
 
-`mailbox_policy` maps the analysis's `ServicePattern` (see
-[flowlab-analysis § Mailbox](flowlab-analysis.md#mailbox)) one to one onto `MailboxPolicy`.
+The analysis reports the master's service pattern as a `MailboxPolicy` already (see
+[flowlab-analysis § Mailbox](flowlab-analysis.md#mailbox)); `flowlab policy` stores it as is.
 `LabInputs::set_pdi_fit` and `set_mailbox_policy` store a fit or a policy and append to `sources`;
 both return `LabError::NotMeasured` for input that is not measured, so a simulated fit or a
 synthetic capture never becomes a lab input. `LabInputs::apply` writes `pdi`,

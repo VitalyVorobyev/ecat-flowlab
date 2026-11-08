@@ -7,6 +7,7 @@ import type { FramePage } from "./gen/FramePage";
 import type { EsiImport } from "./gen/EsiImport";
 import type { PlanResult } from "./gen/PlanResult";
 import type { SimPreset } from "./gen/SimPreset";
+import type { SimSlave } from "./gen/SimSlave";
 import type { SimResult } from "./gen/SimResult";
 import type { SimSpec } from "./gen/SimSpec";
 import type { WhatIfResult } from "./gen/WhatIfResult";
@@ -41,7 +42,6 @@ export type { EoeFrame } from "./gen/EoeFrame";
 export type { FoeTransfer } from "./gen/FoeTransfer";
 export type { MailboxChannel } from "./gen/MailboxChannel";
 export type { MailboxService } from "./gen/MailboxService";
-export type { ServicePattern } from "./gen/ServicePattern";
 export type { MailboxErrorEvent } from "./gen/MailboxErrorEvent";
 export type { MailboxInfo } from "./gen/MailboxInfo";
 export type { MailboxReport } from "./gen/MailboxReport";
@@ -190,6 +190,8 @@ export const api = {
   simulate: (spec: unknown) => request<CaptureInfo>("/api/simulate", json("POST", spec)),
   simulation: (id: number) => request<SimResult>(`/api/captures/${id}/simulation`),
   simPresets: () => request<SimPreset[]>("/api/sim/presets"),
+  /** A slave with the simulator's defaults, for adding one to a scenario. */
+  simSlave: () => request<SimSlave>("/api/sim/slave"),
   /** Simulate without keeping a capture. */
   simRun: (spec: SimSpec, signal?: AbortSignal) =>
     request<SimResult>("/api/sim/run", { ...json("POST", spec), signal: signal ?? null }),

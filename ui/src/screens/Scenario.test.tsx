@@ -14,6 +14,7 @@ const whatIf = whatIfFixture as unknown as WhatIfResult;
 function state(over: Partial<ScenarioState> = {}): ScenarioState {
   return {
     presets: [{ id: "example", title: "Example", spec: result.spec }],
+    slaveTemplate: result.spec.slaves[0] ?? null,
     spec: result.spec,
     result,
     resultSpec: result.spec,

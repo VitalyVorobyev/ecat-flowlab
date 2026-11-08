@@ -33,6 +33,7 @@ source: [crates/flowlab-sim](https://github.com/VitalyVorobyev/ecat-flowlab/blob
 | `CaptureSpec` | `enabled`, `max_frames` |
 | `SimResult`, `TransferResult`, `SlaveResult` | Serialized results, exported to TypeScript by ts-rs |
 | `spec_schema()` | JSON Schema (draft 2020-12) of `SimSpec`, served to the UI's form |
+| `SimSlave::new(name)` | a slave with the serde defaults of every other field (the Simulate view adds slaves from it, `GET /api/sim/slave`) |
 | `presets()` → `SimPreset[]` | the scenarios the Simulate view starts from (`GET /api/sim/presets`): the bulk-transfer study's specs, built in, and the example; a test checks that each is valid |
 | `MailboxPolicy`, `TransferDirection`, `payload_bytes`, `payload_sha256`, `transfer_seed` | Re-exported from [flowlab-mailbox](flowlab-mailbox.md): the policies, and the deterministic payload generator with its hash and the seed of transfer `k` |
 | `SimSpec::transfer_plan(k)` | Transfer `k` as a `TransferPlan` for the lab master (`flowlab master transfer --like` sends the same bytes) |

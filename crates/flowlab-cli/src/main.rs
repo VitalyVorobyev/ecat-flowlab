@@ -509,7 +509,7 @@ fn run(cli: Cli) -> Result<()> {
                 None if served.len() == 1 => served[0],
                 None => return Err("several stations have a pattern: choose one with --station".into()),
             };
-            let policy = flowlab_study::mailbox_policy(&chosen.service.as_ref().expect("filtered").pattern);
+            let policy = chosen.service.as_ref().expect("filtered").pattern.clone();
             println!("simulator policy: {}", serde_json::to_string(&policy)?);
             if let Some(p) = lab {
                 let mut l = read_lab(&p)?;

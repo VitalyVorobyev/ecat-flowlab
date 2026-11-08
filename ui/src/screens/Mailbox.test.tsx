@@ -59,7 +59,7 @@ describe("Mailbox", () => {
     const pattern = served[0]?.service?.pattern;
     expect(pattern?.kind).toBe("fixed_quota");
     screen.getByText("How the master serves the mailbox");
-    expect(screen.getByText("fixed quota, 1 per cycle")).toBeInTheDocument();
+    expect(screen.getByText("fixed quota: 1 mailbox datagrams per cycle")).toBeInTheDocument();
   });
 
   it("explains an empty mailbox", () => {
