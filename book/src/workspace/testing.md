@@ -148,6 +148,9 @@ New mailbox encodings in synth must keep this check passing.
 
 | Job | Runs on | Steps |
 |---|---|---|
-| `rust` | ubuntu-latest, macos-latest | `cargo fmt --check`; `cargo clippy --all-targets -- -D warnings`; `cargo test`; `git diff --exit-code -- ui/src/api/gen` (generated types committed); synth → analyze round trip; synth with `--eni` → analyze with `--eni`, `esi` on the fixture, `plan`; `simulate` of `configs/sim/example.json` and the three bulk-transfer specs, `study` of `foe-sweep.json` (release) |
+| `rust` | ubuntu-latest, macos-latest, windows-latest (bash) | `cargo fmt --check`; `cargo clippy --all-targets -- -D warnings`; `cargo test`; `git diff --exit-code -- ui/src/api/gen` (generated types committed); synth → analyze round trip; synth with `--eni` → analyze with `--eni`, `esi` on the fixture, `plan`; `simulate` of `configs/sim/example.json` and the three bulk-transfer specs, `study` of `foe-sweep.json` (release) |
+| `musl` | ubuntu-latest, per target `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl` | stand-in `ui/dist`; `cargo zigbuild --release -p flowlab-cli --features embed-ui`; `file` must say statically linked; the x86-64 binary, started outside the repository, must serve the embedded UI |
 | `wireshark` | ubuntu-latest | Install tshark; synth → analyze → `crosscheck-tshark.py`; simulate the example with `-o` → analyze → `crosscheck-tshark.py` |
 | `ui` | ubuntu-latest | `bun install --frozen-lockfile`; `fmt:check`, `lint`, `typecheck`, `test:run`, `build` |
+
+`.github/workflows/release.yml` builds the release archives ([Contributing](contributing.md#releases-and-cross-compiling)).

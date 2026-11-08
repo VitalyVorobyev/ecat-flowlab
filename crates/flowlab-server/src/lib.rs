@@ -615,27 +615,78 @@ pub fn api(state: AppState) -> Router {
         .with_state(state)
 }
 
-/// API plus the built UI from `ui_dir`, with `index.html` as the SPA fallback.
-pub fn app(state: AppState, ui_dir: Option<&Path>) -> Router {
+/// Where the built UI's files come from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Ui {
+    /// A directory with the built UI: `index.html` and its assets (`ui/dist`).
+    Dir(PathBuf),
+    /// The UI built into the binary (cargo feature `embed-ui`).
+    Embedded,
+}
+
+/// The binary carries the built UI (cargo feature `embed-ui`).
+pub const EMBEDDED_UI: bool = cfg!(feature = "embed-ui");
+
+impl Ui {
+    /// `dir` if it holds a built UI (an `index.html`), else the UI built into the binary if it
+    /// has one, else `None`.
+    pub fn find(dir: &Path) -> Option<Ui> {
+        if dir.join("index.html").is_file() {
+            Some(Ui::Dir(dir.to_path_buf()))
+        } else {
+            EMBEDDED_UI.then_some(Ui::Embedded)
+        }
+    }
+}
+
+/// API plus the built UI, with `index.html` as the SPA fallback. Without `ui`, or with
+/// [`Ui::Embedded`] in a binary built without it, only the API.
+pub fn app(state: AppState, ui: Option<&Ui>) -> Router {
     let router = api(state);
-    match ui_dir {
-        Some(dir) => {
+    match ui {
+        Some(Ui::Dir(dir)) => {
             let index = dir.join("index.html");
             router.fallback_service(ServeDir::new(dir).fallback(ServeFile::new(index)))
         }
+        #[cfg(feature = "embed-ui")]
+        Some(Ui::Embedded) => router.fallback(embedded::serve),
+        #[cfg(not(feature = "embed-ui"))]
+        Some(Ui::Embedded) => router,
         None => router,
     }
 }
 
 /// Bind and serve until Ctrl-C.
-pub async fn serve(state: AppState, addr: SocketAddr, ui_dir: Option<PathBuf>) -> std::io::Result<()> {
+pub async fn serve(state: AppState, addr: SocketAddr, ui: Option<Ui>) -> std::io::Result<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("listening on http://{}", listener.local_addr()?);
-    axum::serve(listener, app(state, ui_dir.as_deref()))
+    axum::serve(listener, app(state, ui.as_ref()))
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;
         })
         .await
+}
+
+/// The UI built into the binary.
+#[cfg(feature = "embed-ui")]
+mod embedded {
+    use axum::http::{StatusCode, Uri, header};
+    use axum::response::{IntoResponse, Response};
+
+    /// `ui/dist` at build time.
+    #[derive(rust_embed::Embed)]
+    #[folder = "../../ui/dist/"]
+    struct Assets;
+
+    /// The file at the request's path, else `index.html` (the UI routes in the browser).
+    pub(crate) async fn serve(uri: Uri) -> Response {
+        let path = uri.path().trim_start_matches('/');
+        let file = Some(path).filter(|p| !p.is_empty()).and_then(Assets::get).or_else(|| Assets::get("index.html"));
+        match file {
+            Some(f) => ([(header::CONTENT_TYPE, f.metadata.mimetype().to_owned())], f.data).into_response(),
+            None => (StatusCode::NOT_FOUND, "this binary was built without a UI").into_response(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -918,7 +969,9 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("flowlab-ui-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("index.html"), "<!doctype html><title>ui</title>").unwrap();
-        let app = app(AppState::new(AnalysisOptions::default()), Some(&dir));
+        let ui = Ui::find(&dir).unwrap();
+        assert_eq!(ui, Ui::Dir(dir.clone()));
+        let app = app(AppState::new(AnalysisOptions::default()), Some(&ui));
         for uri in ["/api/nope", "/api/captures/1/nope", "/api"] {
             let (st, e) = call(&app, Request::get(uri).body(Body::empty()).unwrap()).await;
             assert_eq!(st, StatusCode::NOT_FOUND, "{uri}");
@@ -928,6 +981,24 @@ mod tests {
         let res = app.clone().oneshot(Request::get("/timing").body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn a_directory_without_a_ui_falls_back_to_the_embedded_one() {
+        let missing = Path::new("definitely/not/a/ui/dist");
+        assert_eq!(Ui::find(missing), EMBEDDED_UI.then_some(Ui::Embedded));
+        let app = app(AppState::default(), Some(&Ui::Embedded));
+        let res = app.clone().oneshot(Request::get("/timing").body(Body::empty()).unwrap()).await.unwrap();
+        if EMBEDDED_UI {
+            assert_eq!(res.status(), StatusCode::OK);
+            assert!(res.headers()["content-type"].to_str().unwrap().starts_with("text/html"));
+            let body = res.into_body().collect().await.unwrap().to_bytes();
+            assert!(String::from_utf8_lossy(&body).contains('<'), "index.html is served");
+        } else {
+            assert_eq!(res.status(), StatusCode::NOT_FOUND, "API only");
+        }
+        let (st, _) = call(&app, Request::get("/api/nope").body(Body::empty()).unwrap()).await;
+        assert_eq!(st, StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]

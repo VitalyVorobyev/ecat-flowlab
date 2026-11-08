@@ -13,11 +13,16 @@ One capture tool, allowed to capture without root:
 |---|---|---|
 | Linux | `sudo apt install wireshark-common` (or `tshark`), or tcpdump | answer *yes* to "non-superusers capture", or `sudo dpkg-reconfigure wireshark-common`, then `sudo usermod -aG wireshark $USER` and log in again |
 | macOS | Wireshark (`brew install --cask wireshark`) | the ChmodBPF helper that comes with the Wireshark package (`brew install --cask wireshark-chmodbpf` with Homebrew) |
-| Windows | Wireshark with Npcap | dumpcap must be on `PATH` |
+| Windows | [Wireshark](https://www.wireshark.org) with Npcap (its installer offers Npcap) | none, unless Npcap was installed with access restricted to administrators |
 
-FlowLab uses `dumpcap` when it finds one (on `PATH`, or in the Wireshark app bundle on macOS),
-otherwise `tcpdump`. `flowlab capture --list` shows the interfaces the tool can open; if
-capturing is not allowed, the tool's own error message is shown.
+FlowLab uses `dumpcap` when it finds one (on `PATH`, in the Wireshark app bundle on macOS, in
+`C:\Program Files\Wireshark` on Windows), otherwise `tcpdump`. tcpdump does not exist on Windows,
+so there it uses `dumpcap.exe` only.
+
+`flowlab capture --list` shows the interfaces the tool can open; if capturing is not allowed,
+the tool's own error message is shown. Windows interface names look like `\Device\NPF_{GUID}`;
+the list prints each with its description (for example `Ethernet 2`), and that name goes to
+`flowlab capture` or the Live view.
 
 ## Where to capture
 

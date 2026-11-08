@@ -16,9 +16,13 @@ env:
 jobs:
   rust:
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -44,6 +48,44 @@ jobs:
         run: |
           cargo run -q --release -p flowlab-cli -- simulate configs/sim/example.json configs/studies/bulk-transfer/{smoke,large-payload,mixed-load}.json
           cargo run -q --release -p flowlab-cli -- study configs/studies/bulk-transfer/foe-sweep.json
+
+  musl:
+    # Static binaries for Linux PCs and the Verdin (aarch64), as the release workflow builds
+    # them; the UI is a stand-in here.
+    name: Static Linux build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86_64-unknown-linux-musl, aarch64-unknown-linux-musl]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.14.1
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+      - name: Stand-in UI to embed
+        run: mkdir -p ui/dist && echo '<!doctype html><title>FlowLab stand-in</title>' > ui/dist/index.html
+      - run: cargo zigbuild --locked --release -p flowlab-cli --features embed-ui --target ${{ matrix.target }}
+      - name: The binary is static
+        run: file target/${{ matrix.target }}/release/flowlab | tee /dev/stderr | grep -q 'statically linked'
+      - name: The binary serves its embedded UI from any directory
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        working-directory: ${{ runner.temp }}
+        run: |
+          "$GITHUB_WORKSPACE/target/${{ matrix.target }}/release/flowlab" serve --port 7979 &
+          server=$!
+          for _ in $(seq 50); do curl -sf http://127.0.0.1:7979/api/health && break; sleep 0.2; done
+          curl -sf http://127.0.0.1:7979/simulate | grep -q 'FlowLab stand-in'
+          kill $server
 
   wireshark:
     name: Cross-check with Wireshark

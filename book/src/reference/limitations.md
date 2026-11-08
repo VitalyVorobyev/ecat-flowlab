@@ -6,7 +6,9 @@ What FlowLab does not do, or does only partly. Each item is a property of the cu
 
 - **No own capture or master.** FlowLab never sends frames. Live capture runs Wireshark's
   dumpcap or tcpdump and reads what they write; their timestamps are the capturing host's. It has
-  been tested with replays and stand-in tools, not yet on a real segment, and not on Windows.
+  been tested with replays and stand-in tools, not yet on a real segment. On Windows, where
+  FlowLab looks for `dumpcap.exe` and how it reads the interface list are tested; capturing
+  through it has not been tried on a Windows machine.
 - **Live figures** come from one second of frames each (cycles slower than about 50 ms show no
   per-second period) and from a rolling window ([Live capture](../guide/live.md#how-the-live-figures-are-made)).
 - **Validated on generated traffic.** The analysis is tested against synthetic captures with
@@ -51,6 +53,14 @@ What FlowLab does not do, or does only partly. Each item is a property of the cu
   against a real one.
 - **Its own access pattern.** It times one access at a fixed address per size; a stack that
   splits or merges accesses differently can time differently.
+
+## Platforms
+
+- **Release binaries** exist for Linux x86-64 and aarch64 (static, musl), Windows x86-64 and
+  macOS on Apple silicon. Other platforms (Intel Macs, 32-bit Arm, Windows on Arm) build from
+  source.
+- **macOS binaries are not signed**: a downloaded one needs its quarantine mark removed
+  ([Getting started](../getting-started.md#install-a-release-binary)).
 
 ## Server
 

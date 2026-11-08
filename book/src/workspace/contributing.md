@@ -23,7 +23,56 @@ scripts/build-site.sh                          # the whole Pages site in _site/
 ```
 
 CI runs all of these, plus the Wireshark cross-check, the licence check (`cargo deny`) and the
-report regeneration below. See [Testing and validation](testing.md).
+report regeneration below. See [Testing and validation](testing.md). The Rust checks and tests
+run on Linux, macOS and Windows; a further job builds the static Linux binaries (below) for
+x86-64 and aarch64. `.gitattributes` keeps text files at LF line endings in every checkout, so
+generated files and fixtures compare equal on Windows too.
+
+## Releases and cross-compiling
+
+`.github/workflows/release.yml` builds the release archives. It runs on a `v*` tag, on demand
+(`gh workflow run release.yml --ref BRANCH`) and for pull requests that change the workflow:
+
+1. One job builds the UI with Bun (`ui/dist`).
+2. One job per target builds `flowlab` with that UI built in (feature `embed-ui`) and packs it
+   with the README, the licences and `configs/`:
+
+   | Target | Runner | Linking |
+   |---|---|---|
+   | `x86_64-unknown-linux-musl` | Ubuntu, `cargo zigbuild` | static (musl) |
+   | `aarch64-unknown-linux-musl` | Ubuntu, `cargo zigbuild` | static (musl) |
+   | `x86_64-pc-windows-msvc` | Windows | static C runtime (`+crt-static`) |
+   | `aarch64-apple-darwin` | macOS | system libraries |
+
+   Each matrix entry names its cargo `features`, space-separated; a feature that only some
+   targets support is added to those entries alone. The job fails if a Linux binary is not
+   statically linked.
+3. Every run uploads the archives as workflow artifacts. On a tag, a last job attaches them,
+   with `SHA256SUMS.txt`, to a GitHub release of that name.
+
+To release, push a tag: `git tag v0.2.0 && git push origin v0.2.0`.
+
+**For the Verdin by hand.** The Verdin modules run aarch64 Linux. A static musl binary runs on
+any of their images, whatever glibc the Yocto or Torizon build has.
+[cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild) uses Zig as the cross linker and
+needs no Docker:
+
+```bash
+rustup target add aarch64-unknown-linux-musl
+cargo install --locked cargo-zigbuild         # and Zig: https://ziglang.org/download/
+(cd ui && bun install && bun run build)       # the UI to build in
+cargo zigbuild --release -p flowlab-cli --features embed-ui --target aarch64-unknown-linux-musl
+file target/aarch64-unknown-linux-musl/release/flowlab   # ELF 64-bit, ARM aarch64, statically linked
+```
+
+The same works from Linux, macOS or Windows, and for `x86_64-unknown-linux-musl`. Without
+`embed-ui` the UI build is not needed, and `flowlab serve` serves only the API unless it finds
+`ui/dist`.
+
+**`embed-ui`.** The feature of `flowlab-cli` (and `flowlab-server`) builds `ui/dist` into the
+binary with `rust-embed`; the build fails with a message if `ui/dist/index.html` is missing.
+Default builds leave it off and read `ui/dist` from disk, so `cargo ui` always serves the
+current UI build and `cargo ui-dev` the Vite dev server.
 
 ## Generated files
 

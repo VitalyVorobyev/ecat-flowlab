@@ -30,7 +30,7 @@ flowlab <COMMAND>
 | `study [SPEC]` | `--capture FILE` to calibrate against · `--eni XML` and `--mailbox …` for that capture · `--result FILE` |
 | `plan [SPEC]` | `--json` |
 | `esi FILE` | `--json` |
-| `serve [CAPTURES…]` | `-p/--port` (7878) · `--host` (127.0.0.1) · `--ui-dir` (ui/dist) · `--open` · `--eni XML` · `--mailbox …` · `--live` · `--live-dir DIR` (results/live) |
+| `serve [CAPTURES…]` | `-p/--port` (7878) · `--host` (127.0.0.1) · `--ui-dir` (ui/dist; a release binary serves its built-in UI when the directory has none) · `--open` · `--eni XML` · `--mailbox …` · `--live` · `--live-dir DIR` (results/live) |
 | `schema WHICH` | `synth`, `sim`, `plan`, `study` or `lab` |
 | `pdi-fit SAMPLES.csv` | `--result FILE` the fit with residuals · `--lab JSON` store the values in a lab-inputs file (measured samples only) |
 | `pdi-bench` | `--device /dev/spidevB.C` or `--sim` · `-o/--out CSV` (required) · `--clock-hz HZ` (10000000) · `--mode 0-3` (0) · `--read-instruction read\|fast-read` · `--sizes 1,2,…` (1–1024, powers of two) · `--reps N` (50) · `--warmup N` (3) · `--area START+LEN` · `--allow-writes` · `--no-al-event` · `--chip-id HEX` (0x9252) · `--seed N` · `--fit` · `--result FILE` · `--lab JSON` ([Measuring the SPI](../studies/bulk-transfer/lab.md#measuring-the-spi)) |
