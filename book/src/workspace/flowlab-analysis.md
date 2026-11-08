@@ -105,6 +105,10 @@ threshold. `Warn` and `Defect` are verdicts against a declared threshold; `Info`
 
 ## Mailbox
 
+The `mailbox` module has one file per concern: `channels` (where each mailbox is), the main pass
+in `mod.rs`, the trackers `coe`, `foe` and `eoe`, `describe` (one message in words),
+`findings` (findings and assumptions) and `export` (the EoE pcapng).
+
 **Channels.** `Channels` maps each station to its "mailbox out" (master → slave) and
 "mailbox in" (slave → master) start addresses. The source is reported per station as
 `ChannelSource`, in this priority:
@@ -196,7 +200,7 @@ generates captures with `flowlab-synth` and asserts against its `GroundTruth`: p
 and interval jitter (σ and √2 σ), missed cycles, round trip (wire time plus slave delays),
 lost frames, WKC errors, stations, positions and AL states, mailbox counts, SDO, FoE and EoE
 results, hint and heuristic channels without start-up, ENI-based WKC when errors dominate, and
-byte-identical JSON across runs. Unit tests in `mailbox.rs` cover a toggle violation,
+byte-identical JSON across runs. Unit tests in `mailbox/tests.rs` cover a toggle violation,
 superseded and orphan aborts, an FoE error and an EoE gap; `stats.rs` covers percentiles,
 histogram bins and decimation.
 

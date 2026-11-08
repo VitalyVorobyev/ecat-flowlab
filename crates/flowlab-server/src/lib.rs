@@ -507,53 +507,8 @@ async fn simulate(State(s): State<AppState>, Json(spec): Json<SimSpec>) -> Resul
     Ok(Json(blocking(move || s.load_simulation(spec)).await?))
 }
 
-/// A scenario to start from in the UI.
-#[derive(Debug, Clone, Serialize, ts_rs::TS)]
-#[ts(export)]
-pub struct SimPreset {
-    /// Stable identifier.
-    pub id: String,
-    /// What the scenario is, in one line.
-    pub title: String,
-    /// The scenario.
-    pub spec: SimSpec,
-}
-
-/// The shipped scenarios: the bulk-transfer study's specs and the built-in example.
-pub fn presets() -> Vec<SimPreset> {
-    const SHIPPED: [(&str, &str, &str); 3] = [
-        (
-            "download-10mb",
-            "10 MB download over SPI: FoE, then EoE",
-            include_str!("../../../configs/studies/bulk-transfer/large-payload.json"),
-        ),
-        (
-            "upload-beside-io",
-            "10 MB upload by EoE beside cyclic I/O",
-            include_str!("../../../configs/studies/bulk-transfer/mixed-load.json"),
-        ),
-        (
-            "four-protocols",
-            "64 KiB by each protocol, 1 ms cycle",
-            include_str!("../../../configs/studies/bulk-transfer/smoke.json"),
-        ),
-    ];
-    let mut out: Vec<SimPreset> = SHIPPED
-        .iter()
-        .filter_map(|(id, title, json)| {
-            let mut spec: SimSpec = serde_json::from_str(json).ok()?;
-            spec.description = (*title).to_owned();
-            Some(SimPreset { id: (*id).to_owned(), title: (*title).to_owned(), spec })
-        })
-        .collect();
-    let mut example = SimSpec::example();
-    example.description = "256 kB by each protocol, three slaves".into();
-    out.push(SimPreset { id: "example".into(), title: example.description.clone(), spec: example });
-    out
-}
-
-async fn sim_presets() -> Json<Vec<SimPreset>> {
-    Json(presets())
+async fn sim_presets() -> Json<Vec<flowlab_sim::SimPreset>> {
+    Json(flowlab_sim::presets())
 }
 
 async fn sim_run(Json(mut spec): Json<SimSpec>) -> Result<Json<flowlab_sim::SimResult>, ApiError> {
@@ -868,7 +823,7 @@ mod tests {
 
     #[tokio::test]
     async fn presets_run_and_what_if() {
-        let ps = presets();
+        let ps = flowlab_sim::presets();
         assert_eq!(ps.len(), 4, "every shipped scenario parses");
         assert!(ps.iter().all(|p| p.spec.validate().is_ok()), "every preset is valid");
         let app = api(AppState::default());
