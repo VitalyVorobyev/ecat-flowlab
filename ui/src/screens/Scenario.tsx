@@ -170,7 +170,11 @@ export function Scenario({
           />
         </div>
         <DensityProvider value="compact">
-          <SetupEditor spec={spec} onChange={scenario.setSpec} />
+          <SetupEditor
+            spec={spec}
+            slaveTemplate={scenario.slaveTemplate}
+            onChange={scenario.setSpec}
+          />
         </DensityProvider>
       </aside>
 

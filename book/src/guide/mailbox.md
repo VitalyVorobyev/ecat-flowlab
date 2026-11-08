@@ -74,7 +74,7 @@ stream 0:
 | `in_cyclic_frames` | accesses that rode in a frame of a cyclic stream |
 | `turnaround` | time from a mailbox frame's return to the next mailbox frame's send in the same cycle |
 | `last_send_percent` | when the cycle's last mailbox frame was sent, as a share of the period |
-| `pattern` | the simulator policy that produces this pattern |
+| `pattern`, `policy` | the simulator policy that produces this pattern (`fixed_quota` or `opportunistic`, as in a `SimSpec`), and its name in words |
 
 The pattern is read like this: a median above 1.5 mailbox frames per cycle means back-to-back
 polling, `opportunistic` with the 95th percentile of `last_send_percent` as its budget and the

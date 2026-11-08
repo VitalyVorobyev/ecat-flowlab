@@ -9,7 +9,6 @@
 
 use std::collections::BTreeMap;
 
-use flowlab_analysis::ServicePattern;
 use flowlab_core::pdi_samples::{Direction, Sample};
 use flowlab_core::stats::quantile;
 use flowlab_core::{InputRef, Provenance, ReportMeta};
@@ -207,17 +206,6 @@ pub fn fit_pdi(samples: &[Sample], input_name: &str, input_bytes: &[u8]) -> Resu
     };
     let input = InputRef::of(input_name, input_bytes);
     Ok(PdiFit { meta: ReportMeta::new(source, input, assumptions), read, write, pdi })
-}
-
-/// The simulator policy for a service pattern read from a capture.
-pub fn mailbox_policy(pattern: &ServicePattern) -> MailboxPolicy {
-    match *pattern {
-        ServicePattern::FixedQuota { accesses_per_cycle } => MailboxPolicy::FixedQuota { accesses_per_cycle },
-        ServicePattern::Opportunistic { bus_budget_percent, turnaround_ns } => MailboxPolicy::Opportunistic {
-            bus_budget_percent,
-            turnaround_ns: turnaround_ns.clamp(0.0, u32::MAX as f64) as u32,
-        },
-    }
 }
 
 /// Measured values that replace the simulator's placeholders for one slave and the master.

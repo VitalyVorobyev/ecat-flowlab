@@ -37,19 +37,9 @@ questions that real captures should answer.
 - TCP over EoE (acknowledgements, windows, retransmission) and VoE.
 - Priority and weighted mailbox policies.
 - The bulk-transfer study's application session protocol.
-- Planner → simulator in one step.
+- A `SimSpec` of an existing segment in one step: from the planner, an ENI, a `master scan` or a
+  capture's stations and mailbox sizes.
 - Local optimisation beyond grid and Latin hypercube sampling for large sweeps.
-
-## Structure and duplication
-
-None of these changes a result; each makes drift likely.
-
-- **UI copies of Rust logic**: wire time (`+24` in `Timing.tsx`, `ecat_wire::wire_bytes`), the
-  mean mailbox rate, the `SimSpec` defaults in `scenario/spec.ts`, and the policy wording in
-  `scenario/SystemSummary.tsx` (`MailboxPolicy`'s `Display`).
-- **ENI or capture → `SimSpec`.** A model of an existing segment is written by hand; a skeleton
-  from an ENI, a `master scan` or a capture's stations and mailbox sizes would start it (with
-  "Planner → simulator in one step" below).
 
 ## UI
 

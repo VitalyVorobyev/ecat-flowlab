@@ -64,6 +64,8 @@ mod tests {
             x.spec.validate().unwrap_or_else(|e| panic!("{}: {e}", x.id));
             assert_eq!(x.spec.description, x.title);
         }
+        let parsed: crate::SimSlave = serde_json::from_str(r#"{ "name": "s" }"#).unwrap();
+        assert_eq!(parsed, crate::SimSlave::new("s"), "new() and the serde defaults agree");
         let mut ids: Vec<_> = p.iter().map(|x| x.id.as_str()).collect();
         ids.dedup();
         assert_eq!(ids.len(), p.len());

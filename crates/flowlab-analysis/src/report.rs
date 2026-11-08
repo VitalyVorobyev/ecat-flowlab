@@ -2,6 +2,7 @@
 
 use flowlab_capture::{CaptureFormat, DirectionMode};
 use flowlab_core::ReportMeta;
+use flowlab_mailbox::MailboxPolicy;
 use serde::Serialize;
 use ts_rs::TS;
 
@@ -128,6 +129,8 @@ pub struct CyclicStream {
     pub signature: String,
     /// Bytes in one frame (captured, no FCS).
     pub frame_bytes: u32,
+    /// Time one frame occupies the link (padding, preamble, FCS and gap included), ns.
+    pub frame_wire_ns: f64,
     /// TX frames in the stream.
     pub frames: u64,
     /// First frame time, ns.
@@ -367,28 +370,10 @@ pub struct MailboxService {
     pub turnaround: Option<Distribution>,
     /// Send time of the cycle's last mailbox frame, percent of the period after the cycle start.
     pub last_send_percent: Distribution,
-    /// The simulator mailbox policy that produces this pattern.
-    pub pattern: ServicePattern,
-}
-
-/// A master mailbox policy in the simulator's terms (`flowlab_sim::MailboxPolicy`), as read
-/// from a capture.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-#[ts(export)]
-pub enum ServicePattern {
-    /// A fixed number of mailbox datagrams per cycle, in one frame.
-    FixedQuota {
-        /// Mailbox datagrams per cycle.
-        accesses_per_cycle: u32,
-    },
-    /// Mailbox frames back to back while the cycle has spare time.
-    Opportunistic {
-        /// Share of the cycle within which mailbox frames are still sent, percent.
-        bus_budget_percent: f64,
-        /// Time from a mailbox frame's return to the next send, ns.
-        turnaround_ns: f64,
-    },
+    /// The simulator mailbox policy that produces this pattern (fixed quota or opportunistic).
+    pub pattern: MailboxPolicy,
+    /// The policy in words, as simulated and measured results name it.
+    pub policy: String,
 }
 
 /// Traffic per mailbox protocol.
@@ -409,6 +394,9 @@ pub struct ProtocolStats {
     pub first_ns: f64,
     /// Last message, ns.
     pub last_ns: f64,
+    /// Payload bytes both ways over the span from the first to the last message, bit/s; `null`
+    /// for a single message.
+    pub mean_rate_bps: Option<f64>,
 }
 
 /// How an SDO transfer ended.

@@ -624,6 +624,7 @@ dependencies = [
  "flowlab-capture",
  "flowlab-core",
  "flowlab-devices",
+ "flowlab-mailbox",
  "flowlab-synth",
  "serde",
  "serde_json",

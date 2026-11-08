@@ -148,23 +148,9 @@ export function slaveLine(s: SimSlave): string {
   return parts.join(" · ");
 }
 
-export function newSlave(index: number): SimSlave {
-  return {
-    name: `slave-${index}`,
-    outputs_bytes: 0,
-    inputs_bytes: 0,
-    forwarding_delay_ns: 700,
-    mailbox_out_bytes: 0,
-    mailbox_in_bytes: 0,
-    dpram_bytes: 4096,
-    pdi: {
-      read_bps: 20_000_000,
-      write_bps: 20_000_000,
-      access_overhead_ns: 5_000,
-      mailbox_access: "whole_buffer",
-    },
-    app_processing_ns: 20_000,
-  };
+/** Slave number `index` from the simulator's defaults (`template`, `GET /api/sim/slave`). */
+export function newSlave(template: SimSlave, index: number): SimSlave {
+  return { ...template, pdi: { ...template.pdi }, name: `slave-${index}` };
 }
 
 export function newTransfer(spec: SimSpec): TransferSpec {

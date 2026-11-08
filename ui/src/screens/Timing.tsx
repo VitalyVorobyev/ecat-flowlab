@@ -166,7 +166,7 @@ export function Timing({
         <Metric
           label="Frame size"
           value={`${s.frame_bytes} B`}
-          sub={`${ns(((Math.max(s.frame_bytes, 60) + 24) * 8 * 1e9) / report.utilization.link_bps)} on the wire`}
+          sub={`${ns(s.frame_wire_ns)} on the wire`}
         />
       </MetricGrid>
 

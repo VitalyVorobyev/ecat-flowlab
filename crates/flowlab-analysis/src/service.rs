@@ -14,7 +14,9 @@ use ecat_wire::DatagramAddress;
 use flowlab_capture::{Direction, FrameKind, Trace};
 
 use crate::mailbox::{Access, Channels};
-use crate::report::{MailboxService, ServicePattern};
+use flowlab_mailbox::MailboxPolicy;
+
+use crate::report::MailboxService;
 use crate::stats::Distribution;
 
 const NONE: u32 = u32::MAX;
@@ -110,12 +112,12 @@ pub(crate) fn analyze(
         };
         let turnaround = turnaround.get(&station).and_then(|v| Distribution::of(v, bins));
         let pattern = if frames.p50 > BACK_TO_BACK_FRAMES {
-            ServicePattern::Opportunistic {
+            MailboxPolicy::Opportunistic {
                 bus_budget_percent: last_send.p95.ceil().clamp(1.0, 100.0),
-                turnaround_ns: turnaround.as_ref().map_or(0.0, |d| d.p50.round()),
+                turnaround_ns: turnaround.as_ref().map_or(0.0, |d| d.p50.round()).clamp(0.0, u32::MAX as f64) as u32,
             }
         } else {
-            ServicePattern::FixedQuota { accesses_per_cycle: (accesses.p95.round() as u32).max(1) }
+            MailboxPolicy::FixedQuota { accesses_per_cycle: (accesses.p95.round() as u32).max(1) }
         };
         out.insert(
             station,
@@ -126,6 +128,7 @@ pub(crate) fn analyze(
                 in_cyclic_frames: in_cyclic.get(&station).copied().unwrap_or(0),
                 turnaround,
                 last_send_percent: last_send,
+                policy: pattern.to_string(),
                 pattern,
             },
         );

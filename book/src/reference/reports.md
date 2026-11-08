@@ -121,7 +121,7 @@ capture views read the same object.
 | Field | Meaning |
 |---|---|
 | `id`, `signature` | 0 = most frequent; the layout, e.g. `"FRMW 0x1001:0x0910 · LRW 0x00010000 · BRD 0x0130"` |
-| `frames`, `frame_bytes`, `first_ns`, `last_ns` | TX frames in the stream, bytes per frame, first and last send time |
+| `frames`, `frame_bytes`, `frame_wire_ns`, `first_ns`, `last_ns` | TX frames in the stream, bytes per frame, the time one frame occupies the link at the assumed rate (padding, preamble, FCS and gap included), first and last send time |
 | `period_ns` | least-squares slope of send time over cycle number |
 | `interval`, `phase_jitter`, `phase_jitter_abs_p99_ns` | cycle-to-cycle intervals (gaps excluded); deviation from the ideal grid `t0 + k·period`; p99 of its absolute value |
 | `gaps`, `missed_cycles` | intervals longer than `gap_factor` periods (1.5); cycles missing inside them |
@@ -145,8 +145,8 @@ capture views read the same object.
 
 | Field | Meaning |
 |---|---|
-| `channels[]` | per station: `source` (`"sm_config"`, `"eni"`, `"hint"`, `"heuristic"`), `out_start`/`out_len`, `in_start`/`in_len`, accepted and rejected writes, reads and empty reads, status polls, messages and payload bytes each way, `repeats`, `poll_interval`, `protocols`, `service` (`MailboxService` or `null`: how the master served this mailbox per cycle, and the simulator policy that produces the pattern; see [Mailbox traffic](../guide/mailbox.md#how-the-master-serves-the-mailbox)) |
-| `protocols[]` | per protocol (`"CoE"`, `"FoE"`, `"EoE"`, `"SoE"`, `"VoE"`, `"AoE"`, `"Error"`, `"Reserved"`): messages and bytes each way, `first_ns`, `last_ns` |
+| `channels[]` | per station: `source` (`"sm_config"`, `"eni"`, `"hint"`, `"heuristic"`), `out_start`/`out_len`, `in_start`/`in_len`, accepted and rejected writes, reads and empty reads, status polls, messages and payload bytes each way, `repeats`, `poll_interval`, `protocols`, `service` (`MailboxService` or `null`: how the master served this mailbox per cycle, and the simulator policy that produces the pattern, as `pattern` (a `MailboxPolicy`, as in `SimSpec`) and in words as `policy`; see [Mailbox traffic](../guide/mailbox.md#how-the-master-serves-the-mailbox)) |
+| `protocols[]` | per protocol (`"CoE"`, `"FoE"`, `"EoE"`, `"SoE"`, `"VoE"`, `"AoE"`, `"Error"`, `"Reserved"`): messages and bytes each way, `first_ns`, `last_ns`, `mean_rate_bps` (bytes both ways over that span, or `null` for one message) |
 | `coe` | `transactions[]` (`SdoTransaction`: station, `kind` upload/download, index, subindex, `transfer` expedited/normal/segmented, `bytes`, `start_ns`, `end_ns`, `outcome` `ok`/`aborted`/`superseded`/`incomplete`/`protocol_error`, abort code and text), counts (`transactions_total`, `ok`, `aborted`, `unfinished`, `protocol_errors`), `duration`, `emergencies[]`, `sdo_info_messages` |
 | `foe[]` | `FoeTransfer`: station, `kind` (`"write"`/`"read"`), `file_name`, `bytes`, `packets`, `busy`, `start_ns`, `end_ns`, `goodput_bps`, `outcome` (`"ok"`, `"error"`, `"incomplete"`, `"protocol_error"`), error code and text |
 | `eoe` | `frames[]` (station, direction `to_slave`/`from_slave`, `start_ns`, `end_ns`, fragments, `bytes`, MACs, EtherType), `frames_total`, `bytes_to_slaves`, `bytes_from_slaves`, `reassembly_errors`, `service_messages` |

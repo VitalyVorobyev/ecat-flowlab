@@ -30,6 +30,7 @@
 //! | GET | `/api/sim/example` | | `SimSpec` |
 //! | POST | `/api/simulate` | `SimSpec` | `CaptureInfo` (capture of the run; result via `/simulation`) |
 //! | GET | `/api/sim/presets` | | `SimPreset[]`: scenarios to start from |
+//! | GET | `/api/sim/slave` | | `SimSlave` with the defaults, for a new slave |
 //! | POST | `/api/sim/run` | `SimSpec` | `SimResult` (no capture is kept) |
 //! | POST | `/api/sim/what-if` | `SimSpec` | `WhatIfResult`: one-change variants, best first |
 //! | GET | `/api/live/interfaces` | | `LiveInterfaces`: capture tool and interfaces |
@@ -511,6 +512,10 @@ async fn sim_presets() -> Json<Vec<flowlab_sim::SimPreset>> {
     Json(flowlab_sim::presets())
 }
 
+async fn sim_slave() -> Json<flowlab_sim::SimSlave> {
+    Json(flowlab_sim::SimSlave::new("slave"))
+}
+
 async fn sim_run(Json(mut spec): Json<SimSpec>) -> Result<Json<flowlab_sim::SimResult>, ApiError> {
     spec.capture.enabled = false;
     let r = blocking(move || {
@@ -567,6 +572,7 @@ pub fn api(state: AppState) -> Router {
         .route("/api/sim/example", get(sim_example))
         .route("/api/simulate", post(simulate))
         .route("/api/sim/presets", get(sim_presets))
+        .route("/api/sim/slave", get(sim_slave))
         .route("/api/sim/run", post(sim_run))
         .route("/api/sim/what-if", post(sim_what_if))
         .route("/api/captures/{id}/eni", post(attach_eni).delete(detach_eni))

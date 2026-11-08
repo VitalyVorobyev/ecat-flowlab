@@ -399,6 +399,7 @@ fn build_stream(
         id,
         signature,
         frame_bytes: first.captured_len,
+        frame_wire_ns: ecat_wire::wire_bytes(first.captured_len) as f64 * 8e9 / opts.link_bps as f64,
         frames: tx.len() as u64,
         first_ns: ts[0],
         last_ns: ts[ts.len() - 1],

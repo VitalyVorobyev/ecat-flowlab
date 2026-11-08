@@ -84,7 +84,7 @@ export function Simulation({
         }
       />
       <Panel title="What was simulated">
-        <SystemSummary spec={r.spec} />
+        <SystemSummary spec={r.spec} policy={r.policy} />
         {r.capture_truncated ? (
           <p className="mt-2 text-xs text-fg-muted">
             The capture holds the first {count(r.capture_frames)} frames; the analysis views show

@@ -21,6 +21,10 @@ signature: string,
  */
 frame_bytes: number, 
 /**
+ * Time one frame occupies the link (padding, preamble, FCS and gap included), ns.
+ */
+frame_wire_ns: number, 
+/**
  * TX frames in the stream.
  */
 frames: number, 

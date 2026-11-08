@@ -208,7 +208,6 @@ fn shipped_study_is_the_example() {
 /// The simulator's master policy, captured and analysed, is read back as the same policy.
 #[test]
 fn analysis_reads_the_master_policy_back_from_a_simulated_capture() {
-    use flowlab_analysis::ServicePattern;
     use flowlab_sim::MailboxPolicy;
     let run = |policy: MailboxPolicy| {
         let mut spec = SimSpec::example();
@@ -231,17 +230,17 @@ fn analysis_reads_the_master_policy_back_from_a_simulated_capture() {
     };
 
     let s = run(MailboxPolicy::FixedQuota { accesses_per_cycle: 2 });
-    assert_eq!(s.pattern, ServicePattern::FixedQuota { accesses_per_cycle: 2 }, "{s:#?}");
+    assert_eq!(s.pattern, MailboxPolicy::FixedQuota { accesses_per_cycle: 2 }, "{s:#?}");
+    assert_eq!(s.policy, s.pattern.to_string());
     assert_eq!(s.frames_per_cycle.p50, 1.0);
-    assert_eq!(mailbox_policy(&s.pattern), MailboxPolicy::FixedQuota { accesses_per_cycle: 2 });
 
     let s = run(MailboxPolicy::Opportunistic { bus_budget_percent: 60.0, turnaround_ns: 10_000 });
-    let ServicePattern::Opportunistic { bus_budget_percent, turnaround_ns } = s.pattern else {
+    let MailboxPolicy::Opportunistic { bus_budget_percent, turnaround_ns } = s.pattern else {
         panic!("expected back-to-back polling: {s:#?}")
     };
     // The last frame of a cycle starts before the budget ends: the estimate is a little below it.
     assert!((50.0..=60.0).contains(&bus_budget_percent), "{bus_budget_percent}");
-    assert!((turnaround_ns - 10_000.0).abs() < 1.0, "{turnaround_ns}");
+    assert_eq!(turnaround_ns, 10_000);
 }
 
 fn edited(spec: &SimSpec, change: &WhatIf) -> SimSpec {
