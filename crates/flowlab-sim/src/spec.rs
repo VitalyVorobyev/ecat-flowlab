@@ -1,5 +1,6 @@
 //! The simulator's input (`SimSpec`) and its validation against what the modelled devices support.
 
+pub use flowlab_mailbox::{MailboxPolicy, TransferDirection};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -118,50 +119,6 @@ pub enum MailboxAccess {
     /// Only the message: reading takes three accesses (header, data, last byte), writing two
     /// (header and data, last byte).
     MessageOnly,
-}
-
-/// How the master decides which mailbox datagrams go on the wire. None of these is what every
-/// master does; compare them.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub enum MailboxPolicy {
-    /// Up to `accesses_per_cycle` mailbox datagrams (writes and reads together) per cycle,
-    /// shared round-robin across slaves, in one frame after the cyclic frame.
-    FixedQuota {
-        /// Mailbox datagrams per cycle.
-        accesses_per_cycle: u32,
-    },
-    /// Each cycle, `slaves_per_cycle` slaves with mailbox work get one write and one read.
-    RoundRobin {
-        /// Slaves served per cycle.
-        slaves_per_cycle: u32,
-    },
-    /// Mailbox frames back to back while the cycle has spare time: after each mailbox frame
-    /// returns, another is sent if it would start within `bus_budget_percent` of the cycle.
-    Opportunistic {
-        /// Share of the cycle the master may fill with mailbox frames, percent.
-        bus_budget_percent: f64,
-        /// Master turnaround between a frame's return and the next frame, ns.
-        turnaround_ns: u32,
-    },
-}
-
-impl Default for MailboxPolicy {
-    fn default() -> Self {
-        Self::FixedQuota { accesses_per_cycle: 2 }
-    }
-}
-
-/// Direction of a transfer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
-#[ts(export)]
-#[serde(rename_all = "snake_case")]
-pub enum TransferDirection {
-    /// Master → slave.
-    MasterToSlave,
-    /// Slave → master.
-    SlaveToMaster,
 }
 
 /// How the payload crosses the bus.
@@ -314,6 +271,38 @@ impl SimSlave {
 }
 
 impl SimSpec {
+    /// Transfer `index` as a lab run repeats it ([`TransferPlan`](flowlab_mailbox::TransferPlan)):
+    /// its protocol, the payload's size and seed, the cycle, the policy and the slave's mailbox
+    /// sizes. The PDO channel is not a mailbox protocol and is refused.
+    pub fn transfer_plan(&self, index: usize) -> Result<flowlab_mailbox::TransferPlan, String> {
+        use flowlab_mailbox::MailboxProtocol;
+        let t = self
+            .transfers
+            .get(index)
+            .ok_or_else(|| format!("the spec has {} transfers; there is no transfer {index}", self.transfers.len()))?;
+        let slave = self.slaves.get(t.slave).ok_or("the transfer's slave is not in the spec")?;
+        let protocol = match &t.protocol {
+            TransferProtocol::Eoe { mtu_bytes } => MailboxProtocol::Eoe { mtu_bytes: *mtu_bytes },
+            TransferProtocol::Foe => MailboxProtocol::Foe,
+            TransferProtocol::CoeSegmented => MailboxProtocol::CoeSegmented,
+            TransferProtocol::PdoChannel { .. } => {
+                return Err(format!("transfer {index} uses the PDO channel, which is not a mailbox protocol"));
+            }
+        };
+        Ok(flowlab_mailbox::TransferPlan {
+            index,
+            spec_seed: self.seed,
+            protocol,
+            direction: t.direction,
+            payload_bytes: t.payload_bytes,
+            payload_seed: flowlab_mailbox::transfer_seed(self.seed, index),
+            cycle_time_ns: self.cycle_time_us as u64 * 1000,
+            policy: self.mailbox_policy.clone(),
+            mailbox_out_bytes: slave.mailbox_out_bytes,
+            mailbox_in_bytes: slave.mailbox_in_bytes,
+        })
+    }
+
     /// Check ranges and what the modelled devices can support.
     pub fn validate(&self) -> Result<(), String> {
         if self.slaves.is_empty() {

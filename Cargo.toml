@@ -16,6 +16,7 @@ flowlab-core = { path = "crates/flowlab-core" }
 flowlab-capture = { path = "crates/flowlab-capture" }
 flowlab-analysis = { path = "crates/flowlab-analysis" }
 flowlab-synth = { path = "crates/flowlab-synth" }
+flowlab-mailbox = { path = "crates/flowlab-mailbox" }
 flowlab-sim = { path = "crates/flowlab-sim" }
 flowlab-devices = { path = "crates/flowlab-devices" }
 flowlab-study = { path = "crates/flowlab-study" }

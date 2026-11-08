@@ -6,7 +6,7 @@
 //!   read, CoE SDO download and upload with segments, and EoE (UDP/IPv4 frames in EoE
 //!   fragments), moved through a slave's mailbox SyncManagers one FPWR or FPRD at a time over
 //!   a small async trait, [`MailboxBus`]. The mailbox service per cycle follows the
-//!   simulator's [`MailboxPolicy`] (fixed quota, round robin,
+//!   simulator's [`MailboxPolicy`](flowlab_mailbox::MailboxPolicy) (fixed quota, round robin,
 //!   opportunistic), so a real run is set up like a simulated one. The result,
 //!   [`MeasuredTransfer`], has provenance `measured` and the simulator's field names wherever
 //!   a field means the same, plus per-cycle timing;
@@ -59,8 +59,6 @@ pub use protocol::{EOE_HEADERS, EoeAddresses, EoeReassembler, eoe_fragments, udp
 pub use result::{CycleRecord, CycleTiming, MeasuredTransfer, RunResult, ScanResult, ScannedSlave, ScannedSm, Summary};
 pub use virtual_slave::{VirtualSlave, VirtualSlaveConfig, VirtualSlaveLog};
 
-use flowlab_sim::MailboxPolicy;
-
 /// Why a transfer or a hardware command could not run.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
@@ -75,21 +73,6 @@ pub enum MasterError {
     /// check).
     #[error("{0}")]
     Refused(String),
-}
-
-/// The policy in the simulator's words (`SimResult::policy`), so results read alike.
-pub fn policy_text(p: &MailboxPolicy) -> String {
-    match p {
-        MailboxPolicy::FixedQuota { accesses_per_cycle } => {
-            format!("fixed quota: {accesses_per_cycle} mailbox datagrams per cycle")
-        }
-        MailboxPolicy::RoundRobin { slaves_per_cycle } => {
-            format!("round robin: {slaves_per_cycle} slave{} per cycle", if *slaves_per_cycle == 1 { "" } else { "s" })
-        }
-        MailboxPolicy::Opportunistic { bus_budget_percent, turnaround_ns } => format!(
-            "opportunistic: mailbox frames within {bus_budget_percent} % of the cycle, {turnaround_ns} ns turnaround"
-        ),
-    }
 }
 
 #[cfg(test)]

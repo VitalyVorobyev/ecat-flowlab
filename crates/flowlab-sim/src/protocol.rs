@@ -2,7 +2,7 @@
 //!
 //! An [`Endpoint`] produces mailbox messages (`next`) and consumes the peer's (`on`). The
 //! engine moves messages through the ESC's SyncManagers; it adds the mailbox header and pads
-//! to the SyncManager length. Payload bytes come from [`payload_bytes`], a deterministic
+//! to the SyncManager length. Payload bytes come from [`payload_bytes`](flowlab_mailbox::payload_bytes), a deterministic
 //! function of seed and offset, so the receiver can check every byte it gets.
 
 use std::collections::VecDeque;
@@ -11,35 +11,10 @@ use ecat_wire::{
     CoeHeader, CoeService, EoeHeader, EoeType, FoeHeader, FoeOpcode, MAILBOX_HEADER_LEN, MailboxType, SdoCommand,
     SdoHeader, segment_data_len,
 };
+use flowlab_mailbox::payload_bytes;
 use sha2::{Digest, Sha256};
 
 use crate::spec::{PDO_ACK_BYTES, PDO_CHUNK_HEADER};
-
-/// Fill `out` with the payload bytes at `offset`.
-pub fn payload_bytes(seed: u64, offset: u64, out: &mut [u8]) {
-    for (i, b) in out.iter_mut().enumerate() {
-        let pos = offset + i as u64;
-        let mut z = seed ^ (pos >> 3).wrapping_mul(0x9E37_79B9_7F4A_7C15);
-        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-        z ^= z >> 31;
-        *b = (z >> ((pos & 7) * 8)) as u8;
-    }
-}
-
-/// SHA-256 of the whole payload, hex.
-pub fn payload_sha256(seed: u64, len: u64) -> String {
-    let mut h = Sha256::new();
-    let mut buf = vec![0u8; 65536];
-    let mut at = 0;
-    while at < len {
-        let n = (len - at).min(buf.len() as u64) as usize;
-        payload_bytes(seed, at, &mut buf[..n]);
-        h.update(&buf[..n]);
-        at += n as u64;
-    }
-    h.finalize().iter().map(|b| format!("{b:02x}")).collect()
-}
 
 /// The sending application: hands out the payload in order.
 #[derive(Debug, Clone)]
@@ -809,6 +784,7 @@ impl ChannelReceiver {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use flowlab_mailbox::payload_sha256;
 
     type Case = (&'static str, Box<dyn Endpoint>, Box<dyn Endpoint>);
 

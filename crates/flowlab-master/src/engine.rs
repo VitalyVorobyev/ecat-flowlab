@@ -2,10 +2,11 @@
 
 use ecat_wire::{MAILBOX_HEADER_LEN, MailboxErrorReply, MailboxHeader, MailboxType};
 use flowlab_core::{InputRef, Provenance, ReportMeta, units};
-use flowlab_sim::MailboxPolicy;
+use flowlab_mailbox::{MailboxPolicy, MailboxProtocol, TransferDirection, TransferPlan};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::MasterError;
 use crate::bus::{
     BusError, MailboxBus, MailboxLayout, SM_MAILBOX_IN, SM_REPEAT_ACK, SM_REPEAT_REQUEST, read_mailbox, read_sm,
     read_sm_status, sm_register, write_mailbox,
@@ -14,7 +15,6 @@ use crate::protocol::{
     Endpoint, EoeAddresses, EoeReceive, EoeSend, FoeRead, FoeWrite, Outgoing, SdoDownload, SdoUpload,
 };
 use crate::result::{CycleRecord, CycleTiming, MeasuredTransfer, Summary};
-use crate::{MasterError, policy_text};
 
 /// The protocol a transfer uses, with its parameters.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -774,7 +774,7 @@ pub async fn run_transfer<B: MailboxBus>(
     let mut assumptions = vec![
         format!(
             "Mailbox policy: {}; one transfer to one slave, so the policy's limits apply to this slave alone.",
-            policy_text(&o.policy)
+            o.policy.to_string()
         ),
         match o.poll {
             PollMode::Read => "\"Mailbox in\" is read directly; WKC 0 means it was empty.".to_owned(),
@@ -815,7 +815,7 @@ pub async fn run_transfer<B: MailboxBus>(
         slave: job.slave,
         protocol: job.protocol.name().into(),
         direction: if to_slave { "master_to_slave" } else { "slave_to_master" }.into(),
-        policy: policy_text(&o.policy),
+        policy: o.policy.to_string(),
         poll: o.poll.as_str().into(),
         cycle_time_ns: cycle as f64,
         mailbox_out_bytes: job.mailbox.out_len,
@@ -886,50 +886,35 @@ pub struct SimulatedSetup {
     pub mailbox_bytes: (u16, u16),
 }
 
-/// Set up a transfer like transfer `index` of `spec`. The PDO channel is not a mailbox
-/// protocol and is refused.
-pub fn setup_like(spec: &flowlab_sim::SimSpec, index: usize) -> Result<SimulatedSetup, MasterError> {
-    use flowlab_sim::{TransferDirection, TransferProtocol as Sim};
-    let t = spec.transfers.get(index).ok_or_else(|| {
-        MasterError::Invalid(format!("the spec has {} transfers; there is no transfer {index}", spec.transfers.len()))
-    })?;
-    let slave = spec
-        .slaves
-        .get(t.slave)
-        .ok_or_else(|| MasterError::Invalid("the transfer's slave is not in the spec".into()))?;
-    let protocol = match &t.protocol {
-        Sim::Eoe { mtu_bytes } => TransferProtocol::Eoe { mtu_bytes: *mtu_bytes, addresses: EoeAddresses::default() },
-        Sim::Foe => TransferProtocol::foe(),
-        Sim::CoeSegmented => TransferProtocol::coe(),
-        Sim::PdoChannel { .. } => {
-            return Err(MasterError::Invalid(
-                "the lab master moves mailbox transfers only, not the PDO channel".into(),
-            ));
-        }
+/// Set up a transfer like a simulated one, from its [`TransferPlan`] (`SimSpec::transfer_plan`
+/// in `flowlab-sim`): the simulator's protocol parameters, payload bytes, cycle and policy.
+pub fn setup_like(plan: &TransferPlan) -> Result<SimulatedSetup, MasterError> {
+    let protocol = match plan.protocol {
+        MailboxProtocol::Eoe { mtu_bytes } => TransferProtocol::Eoe { mtu_bytes, addresses: EoeAddresses::default() },
+        MailboxProtocol::Foe => TransferProtocol::foe(),
+        MailboxProtocol::CoeSegmented => TransferProtocol::coe(),
     };
-    let seed = flowlab_sim::transfer_seed(spec.seed, index);
-    let sha256 = flowlab_sim::payload_sha256(seed, t.payload_bytes);
-    let payload = match t.direction {
+    let sha256 = flowlab_mailbox::payload_sha256(plan.payload_seed, plan.payload_bytes);
+    let payload = match plan.direction {
         TransferDirection::MasterToSlave => {
-            let n = usize::try_from(t.payload_bytes).map_err(|_| MasterError::Invalid("payload too large".into()))?;
-            let mut v = vec![0u8; n];
-            flowlab_sim::payload_bytes(seed, 0, &mut v);
-            Payload::Send(v)
+            let n =
+                usize::try_from(plan.payload_bytes).map_err(|_| MasterError::Invalid("payload too large".into()))?;
+            Payload::Send(flowlab_mailbox::payload(plan.payload_seed, n))
         }
         TransferDirection::SlaveToMaster => {
-            Payload::Receive { expected_bytes: Some(t.payload_bytes), expected_sha256: Some(sha256.clone()) }
+            Payload::Receive { expected_bytes: Some(plan.payload_bytes), expected_sha256: Some(sha256.clone()) }
         }
     };
     Ok(SimulatedSetup {
         protocol,
         payload,
         payload_name: format!(
-            "transfer {index} of sim spec seed {} ({} B, flowlab-sim payload)",
-            spec.seed, t.payload_bytes
+            "transfer {} of sim spec seed {} ({} B, flowlab-sim payload)",
+            plan.index, plan.spec_seed, plan.payload_bytes
         ),
-        cycle_time_ns: spec.cycle_time_us as u64 * 1000,
-        policy: spec.mailbox_policy.clone(),
+        cycle_time_ns: plan.cycle_time_ns,
+        policy: plan.policy.clone(),
         sha256,
-        mailbox_bytes: (slave.mailbox_out_bytes, slave.mailbox_in_bytes),
+        mailbox_bytes: (plan.mailbox_out_bytes, plan.mailbox_in_bytes),
     })
 }

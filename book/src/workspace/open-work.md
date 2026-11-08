@@ -42,19 +42,14 @@ questions that real captures should answer.
 
 ## Structure and duplication
 
-Found in a review of the workspace; none changes a result today, each makes drift likely.
+None of these changes a result; each makes drift likely.
 
 - **One mailbox message layer.** FoE and SDO message builders, the 7-byte SDO padding, counters
   1–7, EoE fragmentation (frame number `% 15 + 1`, 32-byte offsets) and reassembly, and the
   UDP/IPv4 frame exist four times: `flowlab-sim/src/protocol.rs`, `flowlab-master/src/protocol.rs`,
   `flowlab-master/src/virtual_slave.rs` and `flowlab-synth/src/mailbox.rs`. The master's copy
-  already handles FoE BUSY and repeated DATA packets, the simulator's does not. Candidate home: a
-  small crate below sim and master (`MailboxPolicy` with `Display`/`FromStr`, the payload
-  generator, the message builders), which also removes `flowlab-master`'s dependency on the whole
-  simulator; the analysis trackers stay separate as an independent reader.
-- **Policy text and parsing.** `policy_text` is copied in `flowlab-sim/src/engine.rs` and
-  `flowlab-master/src/lib.rs`, a third wording is in `ui/src/scenario/SystemSummary.tsx`; the
-  CLI's `parse_policy` belongs on `MailboxPolicy`.
+  handles FoE BUSY and repeated DATA packets, the simulator's does not. Their home is
+  `flowlab-mailbox`; the analysis trackers stay separate as an independent reader.
 - **Mirrored result types.** `TransferResult` (sim) and `MeasuredTransfer` (master) share about
   20 fields, with two `TransferProtocol` enums, `String` directions and two computations of
   `physical_bound_ns`; `flowlab_study::lab::PdiValues` mirrors `flowlab_sim::PdiSpec`; the PDI
@@ -69,7 +64,8 @@ Found in a review of the workspace; none changes a result today, each makes drif
 - **Server presets** embed the study configs with `include_str!` and skip one that fails to
   parse; the catalogue belongs in the simulator or the study crate, with a test.
 - **UI copies of Rust logic**: wire time (`+24` in `Timing.tsx`, `ecat_wire::wire_bytes`), the
-  mean mailbox rate, and the `SimSpec` defaults in `scenario/spec.ts`.
+  mean mailbox rate, the `SimSpec` defaults in `scenario/spec.ts`, and the policy wording in
+  `scenario/SystemSummary.tsx` (`MailboxPolicy`'s `Display`).
 - **ENI or capture → `SimSpec`.** A model of an existing segment is written by hand; a skeleton
   from an ENI, a `master scan` or a capture's stations and mailbox sizes would start it (with
   "Planner → simulator in one step" below).
