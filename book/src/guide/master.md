@@ -13,13 +13,13 @@ flowlab master transfer -i enp3s0 --isolated-lab-network --station 0x1000 --prot
 ```
 
 > **This sends EtherCAT frames.** Use it only on an isolated lab segment, on a network card
-> dedicated to it, with no other master and no production equipment. FlowLab never runs as a
-> second master on a segment where another one is active.
+> dedicated to it, with no other master and no production equipment. It refuses to start when it
+> hears another master ([Safety checks](#safety-checks)); never start it on a segment that is in
+> use.
 
-It has not yet been run against real hardware. The protocol engine is tested end to end against
-a simulated ESC ([flowlab-master](../workspace/flowlab-master.md#tests)); the EtherCrab glue that
-connects it to a network card is thin and compiles in CI, but nothing has measured a real slave
-with it yet.
+Its status on hardware is listed under [Limitations](../reference/limitations.md#lab-master): the
+protocol engine is tested end to end against a simulated ESC
+([flowlab-master](../workspace/flowlab-master.md#tests)), and the EtherCrab layer compiles in CI.
 
 ## Building
 

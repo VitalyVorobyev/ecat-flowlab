@@ -1,6 +1,7 @@
 # Overview
 
-FlowLab is a Cargo workspace of thirteen crates and a React UI. Every source of traffic produces
+FlowLab is a Cargo workspace of thirteen crates, a developer-tools crate (`xtask`) and a React
+UI. Every source of traffic produces
 real Ethernet frames, and one analysis reads them all.
 
 ```text
@@ -31,15 +32,15 @@ Only their provenance differs.
 | [`flowlab-core`](flowlab-core.md) | Provenance, report metadata, units | serde |
 | [`flowlab-capture`](flowlab-capture.md) | pcap/pcapng reader and writer, trace index, direction inference | ecat-wire, core |
 | [`flowlab-devices`](flowlab-devices.md) | ESI/ENI readers, ENI writer, bus-budget planner | ecat-wire |
-| [`flowlab-analysis`](flowlab-analysis.md) | Capture analysis and frame queries | capture, devices |
-| [`flowlab-synth`](flowlab-synth.md) | Deterministic synthetic captures with ground truth | capture, devices |
-| [`flowlab-sim`](flowlab-sim.md) | Discrete-event simulator emitting frames | capture |
-| [`flowlab-study`](flowlab-study.md) | Parameter studies, Pareto frontier, calibration | sim, analysis |
-| [`flowlab-live`](flowlab-live.md) | Live capture through dumpcap or tcpdump, analysed in a rolling window | capture, analysis |
+| [`flowlab-analysis`](flowlab-analysis.md) | Capture analysis and frame queries | ecat-wire, core, capture, devices |
+| [`flowlab-synth`](flowlab-synth.md) | Deterministic synthetic captures with ground truth | ecat-wire, core, capture, devices |
+| [`flowlab-sim`](flowlab-sim.md) | Discrete-event simulator emitting frames | ecat-wire, core, capture |
+| [`flowlab-study`](flowlab-study.md) | Parameter studies, Pareto frontier, calibration, what-if, lab inputs | core, sim, analysis |
+| [`flowlab-live`](flowlab-live.md) | Live capture through dumpcap or tcpdump, analysed in a rolling window | core, capture, analysis |
 | [`flowlab-pdi`](flowlab-pdi.md) | Timed ESC accesses over a LAN9252's SPI (Linux spidev, or a simulated LAN9252) for `pdi-fit` | core |
-| [`flowlab-master`](flowlab-master.md) | Lab master: mailbox transfer engine with the simulator's policies, a virtual slave; EtherCrab behind the `hardware` feature | ecat-wire, core, devices, sim |
-| [`flowlab-server`](server-cli.md) | Local HTTP API and static UI (axum) | all of the above |
-| [`flowlab-cli`](server-cli.md) | The `flowlab` binary | all of the above |
+| [`flowlab-master`](flowlab-master.md) | Lab master: mailbox transfer engine with the simulator's policies, a virtual slave; the safety checks and EtherCrab behind the `hardware` feature | ecat-wire, core, devices, sim; live with `hardware` |
+| [`flowlab-server`](server-cli.md) | Local HTTP API and static UI (axum) | the above except pdi and master: it never touches hardware |
+| [`flowlab-cli`](server-cli.md) | The `flowlab` binary | all of the above; master only with the feature `master` |
 | `xtask` (not published) | Developer commands behind the cargo aliases `cargo ui`, `ui-dev`, `ci`, `site` ([Contributing](contributing.md)) | std only |
 
 The [UI](ui.md) in `ui/` talks only to the server's API. Its TypeScript types are generated from
@@ -53,7 +54,7 @@ the Rust result types by ts-rs.
   self-describing. Times sent to the UI are relative to capture start and stay below 2⁵³ ns.
 - **Determinism.** Generator and simulator use their own PRNGs and a stable event order: the
   same spec gives byte-identical output.
-- **Specs are schemas.** Every input (`SynthSpec`, `SimSpec`, `PlanSpec`, `StudySpec`) derives a
+- **Specs are schemas.** Every input (`SynthSpec`, `SimSpec`, `PlanSpec`, `StudySpec`, `LabInputs`) derives a
   JSON Schema (schemars, field order preserved) that the UI renders as a form and that
   `flowlab schema` prints. Unknown fields are rejected.
 - **Analysis is pure.** `flowlab-analysis` functions take a `Trace` and options, and return

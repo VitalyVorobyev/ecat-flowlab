@@ -43,10 +43,10 @@ The development Mac only runs FlowLab; it is not a lab master.
 | Step | Goal | FlowLab's part |
 |---|---|---|
 | L0 | Plain Ethernet: PC ↔ Verdin TCP, 10 MB with checksum, throughput and CPU | the baseline every result is compared with |
-| L1 | ESC bring-up: PDI register access, EEPROM, identity, state machine, small PDOs | `flowlab master scan` (identity, SyncManagers, ENI), `flowlab master run`; capture → Stations (AL states), Timing (cycle, WKC) |
+| L1 | ESC bring-up: PDI register access and timing, EEPROM, identity, state machine, small PDOs | `flowlab pdi-bench` (link check, SPI timing, [below](#measuring-the-spi)); `flowlab master scan` (identity, SyncManagers, ENI), `flowlab master run`; capture → Stations (AL states), Timing (cycle, WKC) |
 | L2 | Basic transfer: 1 KB, 1 MB, 10 MB with integrity, timeouts and diagnostics | `flowlab master transfer`; Mailbox view: messages, rejected writes, empty reads |
-| L3 | One protocol at a time: FoE, EoE, CoE, VoE, PDO channel, each verified on both ends | per-protocol transfer tables, Compare |
-| L4 | Calibration: measured PDI timing and master policy as lab inputs; check against the captures and report residuals | `flowlab pdi-bench`, `flowlab pdi-fit`, `flowlab policy`, `flowlab study --capture` |
+| L3 | One protocol at a time: FoE, EoE, CoE, VoE, PDO channel, each verified on both ends | `flowlab master transfer` for FoE, CoE and EoE (it has no VoE or PDO channel: those need another master); per-protocol transfer tables, Compare |
+| L4 | Calibration: measured PDI timing (from L1) and master policy as lab inputs; check against the captures and report residuals | `flowlab pdi-fit`, `flowlab policy`, `flowlab study --capture` |
 | L5 | Optimisation: constrained sweeps; check the best candidates over several trials with control traffic present | `scripts/bulk-transfer-report.py --lab lab.json --out DIR` |
 | L6 | Other masters, only once L0–L5 work | Compare per master |
 
@@ -58,10 +58,9 @@ through the LAN9252's SPI protocol, the same paths a slave stack's hardware laye
 CSR interface for registers, the process RAM FIFOs for memory, and the AL Event read SOES does
 after every access), and times each one ([flowlab-pdi](../../workspace/flowlab-pdi.md)).
 
-1. **Build for the Verdin** (aarch64 Linux). Either `rustup target add aarch64-unknown-linux-gnu`
-   plus an aarch64 linker (`CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER`), or
-   `cargo zigbuild --release --target aarch64-unknown-linux-musl -p flowlab-cli` for a static
-   binary. Copy `flowlab` to the module.
+1. **Put `flowlab` on the Verdin**: the aarch64 Linux release binary runs on any of its images
+   ([installing](../../getting-started.md#install-a-release-binary)). To build one yourself, see
+   [cross-compiling](../../workspace/contributing.md#releases-and-cross-compiling).
 2. **Free the ESC.** Stop the slave application (the benchmark needs the SPI device to itself),
    disconnect or stop the master, and leave the ESC in INIT. The SPI device must be bound to
    spidev (`/dev/spidevB.C`, for example through a device-tree overlay).
@@ -147,7 +146,7 @@ every table with the lab inputs it used.
 | No suitable ESC or slave stack | no real slave | select and validate ESC and stack first |
 | SPI/PDI too slow | transfer far below link rate | measure early (L1); consider HBI or another ESC |
 | ESC RAM too small | mailbox/PDO configuration impossible | plan against 4 KiB; verify ESI and SII |
-| Master lacks EoE/FoE/VoE APIs | no transport adapter | verify versions and APIs before choosing |
+| Master lacks EoE/FoE/VoE APIs | no transport adapter | verify versions and APIs before choosing; `flowlab master` has FoE, CoE and EoE, not VoE |
 | Licence conflicts (e.g. GPL master) | cannot ship | review before embedding |
 | Mailbox scheduling modelled wrongly | misleading optimisation | capture each master's polling; calibrate |
 | Bulk traffic disturbs control | safety, determinism | isolated lab, cycle constraints in every study |

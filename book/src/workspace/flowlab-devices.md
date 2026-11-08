@@ -13,7 +13,7 @@ source: [crates/flowlab-devices](https://github.com/VitalyVorobyev/ecat-flowlab/
 | | |
 |---|---|
 | Depends on | `ecat-wire` (`wire_bytes`, command address modes), `roxmltree`, `serde`, `schemars`, `ts-rs` |
-| Used by | `flowlab-analysis` (`AnalysisOptions::network` holds a `NetworkConfig`), `flowlab-synth` (`network_config` builds the ENI of a synthetic network), `flowlab-server` (`/api/esi`, `/api/plan`, `/api/captures/{id}/eni`), `flowlab-cli` (`esi`, `plan`, `--eni`) |
+| Used by | `flowlab-analysis` (`AnalysisOptions::network` holds a `NetworkConfig`), `flowlab-synth` (`network_config` builds the ENI of a synthetic network), `flowlab-server` (`/api/esi`, `/api/plan`, `/api/captures/{id}/eni`), `flowlab-cli` (`esi`, `plan`, `--eni`), `flowlab-master` (`scan --eni` writes the scanned network as ENI) |
 
 It does not depend on capture or analysis code.
 

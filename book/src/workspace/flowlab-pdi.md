@@ -2,7 +2,7 @@
 
 Timed ESC accesses over the SPI PDI of a Microchip LAN9252: the samples
 [`flowlab pdi-fit`](../reference/specs.md#pdi-timing-samples) turns into the simulator's PDI
-model. Used by `flowlab pdi-bench` ([Measuring the SPI](../studies/bulk-transfer/lab.md#measuring-the-spi)).
+model. Used by `flowlab pdi-bench` ([Measuring the SPI](../studies/bulk-transfer/lab.md#measuring-the-spi)); `flowlab-study` reads the samples it writes (`parse_samples`, `fit_pdi`).
 
 ## Design
 

@@ -5,14 +5,14 @@ What FlowLab does not do, or does only partly. Each item is a property of the cu
 ## Captures and analysis
 
 - **No own capture.** Live capture runs Wireshark's dumpcap or tcpdump and reads what they write;
-  their timestamps are the capturing host's. It has been tested with replays and stand-in tools,
-  not yet on a real segment. On Windows, where FlowLab looks for `dumpcap.exe` and how it reads
+  their timestamps are the capturing host's. It has been tested with replays and stand-in tools;
+  it has not run on a real segment. On Windows, where FlowLab looks for `dumpcap.exe` and how it reads
   the interface list are tested; capturing through it has not been tried on a Windows machine.
 - **Live figures** come from one second of frames each (cycles slower than about 50 ms show no
   per-second period) and from a rolling window ([Live capture](../guide/live.md#how-the-live-figures-are-made)).
 - **Validated on generated traffic.** The analysis is tested against synthetic captures with
   known ground truth, against simulated captures, and against Wireshark's dissector. It has not
-  yet been checked against captures from real masters. The [design decisions](../workspace/decisions.md)
+  been checked against captures from real masters. The [design decisions](../workspace/decisions.md)
   list the questions such captures should answer.
 - **Capture probes.** Captures with probe-specific headers (for example ET2000-style hardware
   timestamps) are not decoded; frames must be plain Ethernet II or EtherCAT over UDP.
@@ -30,7 +30,7 @@ What FlowLab does not do, or does only partly. Each item is a property of the cu
 
 - **Opt-in and untested on hardware.** Only a build with `--features master` sends frames
   ([Lab master](../guide/master.md)). The transfer engine is tested against a virtual ESC; the
-  EtherCrab layer has not yet run against a real slave.
+  EtherCrab layer has not run against a real slave.
 - **Host timing.** Cycle starts and round trips are the host's clock around EtherCrab calls,
   including the operating system and the socket, not the wire's.
 - **One slave, one transfer** at a time; with one slave, the round-robin policy serves it every
@@ -64,8 +64,8 @@ What FlowLab does not do, or does only partly. Each item is a property of the cu
   LAN9252's host bus interface, dual/quad SPI and kernel drivers are not covered. On macOS and
   Windows only `--sim` runs.
 - **Untested on hardware.** The protocol follows the data sheet, Microchip's application notes
-  and the SOES hardware layer, and is tested against FlowLab's own simulated LAN9252, not yet
-  against a real one.
+  and the SOES hardware layer, and is tested against FlowLab's own simulated LAN9252, not against
+  a real one.
 - **Its own access pattern.** It times one access at a fixed address per size; a stack that
   splits or merges accesses differently can time differently.
 

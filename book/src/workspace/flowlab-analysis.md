@@ -14,7 +14,7 @@ user guide: [Analysing a capture](../guide/analysis.md), [Mailbox traffic](../gu
 | | |
 |---|---|
 | Depends on | `ecat-wire`, `flowlab-core`, `flowlab-capture`, `flowlab-devices` (ENI `NetworkConfig`); `flowlab-synth` for tests only |
-| Used by | `flowlab-cli` (`analyze`), `flowlab-server`, `flowlab-sim`, `flowlab-study` |
+| Used by | `flowlab-cli` (`analyze`, `policy`), `flowlab-server`, `flowlab-live` (each second and the window), `flowlab-study` (capture targets, the service pattern behind `policy`); the tests of `flowlab-sim` |
 
 ## Main items
 

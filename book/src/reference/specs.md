@@ -10,7 +10,7 @@ This page lists their fields, defaults and variants. What each tool does with th
 | Input | Read by | Schema | Example in the repo |
 |---|---|---|---|
 | `SynthSpec` | `flowlab synth`, `POST /api/synth` | `flowlab schema synth` | `configs/synth/*.json` |
-| `SimSpec` | `flowlab simulate`, `POST /api/simulate` | `flowlab schema sim` | `configs/sim/example.json`, `configs/studies/bulk-transfer/{smoke,large-payload,mixed-load}.json` |
+| `SimSpec` | `flowlab simulate`, `what-if`, `study` (the base spec), `master transfer --like`, `POST /api/simulate`, `/api/sim/run`, `/api/sim/what-if` | `flowlab schema sim` | `configs/sim/example.json`, `configs/studies/bulk-transfer/{smoke,large-payload,mixed-load}.json` |
 | `PlanSpec` | `flowlab plan`, `POST /api/plan` | `flowlab schema plan` | built in (`flowlab plan` without a file, `GET /api/plan/example`) |
 | `StudySpec` | `flowlab study`, `POST /api/study` | `flowlab schema study` | `configs/studies/bulk-transfer/foe-sweep.json` |
 | `LabInputs` | `scripts/bulk-transfer-report.py --lab`; written by `flowlab pdi-fit --lab`, `flowlab policy --lab` | `flowlab schema lab` | — |

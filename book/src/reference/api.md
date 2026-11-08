@@ -9,12 +9,14 @@ so it can also be scripted with `curl`. The server's internals are described in
 
 ```bash
 flowlab serve [CAPTURES]... [--port 7878] [--host 127.0.0.1] [--ui-dir ui/dist] [--open] \
-              [--mailbox STATION=OUT,IN]... [--eni XML]
+              [--mailbox STATION=OUT,IN]... [--eni XML] [--live] [--live-dir results/live]
 ```
 
 Captures named on the command line are loaded at start. `--mailbox` hints and `--eni` apply to
-every capture the server analyses (see [Input files](specs.md)). Without a built UI in
-`--ui-dir`, only the API is served. The base URL is `http://127.0.0.1:7878`.
+every capture the server analyses (see [Input files](specs.md)). `--live` allows live capture
+from interfaces, saved under `--live-dir` ([Live capture](../guide/live.md)). The UI comes from
+`--ui-dir` when it holds an `index.html`, else from the binary if it was built with it (the
+release binaries are); without either, only the API is served. The base URL is `http://127.0.0.1:7878`.
 
 ## Security
 
@@ -75,8 +77,8 @@ session runs at a time.
 The request and response types are described in [Input files](specs.md) and
 [Report and result files](reports.md); their TypeScript definitions are generated into
 `ui/src/api/gen/`. Ids count up from 1 and are not reused. Attaching or removing an ENI keeps the
-capture's id. When the UI is served, any other path, including an unknown `/api/…` path, returns
-the UI's `index.html`.
+capture's id. An unknown `/api/…` path is a JSON 404; when the UI is served, any other path
+returns the UI's `index.html`.
 
 ### CaptureInfo
 

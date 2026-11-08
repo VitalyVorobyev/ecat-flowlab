@@ -7,14 +7,16 @@ labels:
 
 | Label | Source | Written by |
 |---|---|---|
-| `measured` | a capture file from a real network | — (any file without a FlowLab marker) |
-| `simulated` | the discrete-event simulator | `flowlab simulate`, Simulate… |
+| `measured` | a capture file from a real network; the lab master's results; PDI timing samples from hardware and their fit | any capture file without a FlowLab marker; `flowlab capture`; `flowlab master`; `flowlab pdi-bench --device`, `pdi-fit` |
+| `simulated` | the discrete-event simulator, and everything run on it | `flowlab simulate`, `what-if`, `study`, Simulate; `pdi-bench --sim` |
 | `synthetic` | the capture generator, with ground truth | `flowlab synth`, Generate |
 
 FlowLab writes the label into the pcapng section comment of every capture it generates, and
-reads it back when the file is loaded. A file without the marker is taken as measured. The
-label appears in the report's `meta.source`, on every capture badge in the UI and in the CLI
-summary (`[SYNTHETIC]`, `[SIMULATED]`).
+reads it back when the file is loaded. A file without the marker is taken as measured. PDI
+timing samples carry it in a comment line (`# flowlab:provenance=simulated` from
+`pdi-bench --sim`). Lab inputs take only measured data. The label appears in the report's
+`meta.source`, on every capture badge in the UI and in the CLI summary (`[MEASURED]`,
+`[SYNTHETIC]`, `[SIMULATED]`).
 
 Results of different provenance are never combined into one number or one chart series.
 Compare shows two captures in separate, labelled columns, and a study fitted to a measurement
