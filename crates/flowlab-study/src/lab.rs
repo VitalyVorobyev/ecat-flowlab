@@ -10,6 +10,7 @@
 use std::collections::BTreeMap;
 
 use flowlab_analysis::ServicePattern;
+use flowlab_core::pdi_samples::{Direction, Sample};
 use flowlab_core::stats::quantile;
 use flowlab_core::{InputRef, Provenance, ReportMeta};
 use flowlab_sim::{MailboxAccess, MailboxPolicy, SimSpec};
@@ -21,14 +22,6 @@ use sha2::{Digest, Sha256};
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum LabError {
-    /// A line of the samples file is not `direction,bytes,duration_ns`.
-    #[error("line {line}: {message}")]
-    Sample {
-        /// 1-based line number.
-        line: usize,
-        /// What is wrong.
-        message: String,
-    },
     /// The samples cannot be fitted.
     #[error("cannot fit: {0}")]
     Fit(String),
@@ -50,76 +43,6 @@ fn measured(meta: &ReportMeta) -> Result<(), LabError> {
         Provenance::Measured => Ok(()),
         p => Err(LabError::NotMeasured { input: meta.input.name.clone(), provenance: p.as_str() }),
     }
-}
-
-/// Direction of a PDI access.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum PdiDirection {
-    /// ESC → application.
-    Read,
-    /// Application → ESC.
-    Write,
-}
-
-/// One timed ESC access by the slave application.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct PdiSample {
-    /// Read or write.
-    pub direction: PdiDirection,
-    /// Bytes moved by the access.
-    pub bytes: u32,
-    /// Wall time of the access, ns.
-    pub duration_ns: f64,
-}
-
-/// Parse a samples file: a header line `direction,bytes,duration_ns`, then one access per
-/// line (`read,128,7350`). Blank lines and lines starting with `#` are ignored; `r`/`w` are
-/// accepted for the direction.
-pub fn parse_samples(text: &str) -> Result<Vec<PdiSample>, LabError> {
-    let mut out = Vec::new();
-    let mut header = false;
-    for (n, raw) in text.lines().enumerate() {
-        let line = raw.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        let err = |message: String| LabError::Sample { line: n + 1, message };
-        let cols: Vec<&str> = line.split(',').map(str::trim).collect();
-        if !header {
-            if cols != ["direction", "bytes", "duration_ns"] {
-                return Err(err(format!("expected the header `direction,bytes,duration_ns`, found `{line}`")));
-            }
-            header = true;
-            continue;
-        }
-        let [d, b, t] = cols[..] else { return Err(err(format!("expected 3 columns, found {}", cols.len()))) };
-        let direction = match d.to_ascii_lowercase().as_str() {
-            "read" | "r" => PdiDirection::Read,
-            "write" | "w" => PdiDirection::Write,
-            _ => return Err(err(format!("direction `{d}` is neither read nor write"))),
-        };
-        let bytes: u32 = b.parse().map_err(|_| err(format!("bytes `{b}` is not a whole number")))?;
-        let duration_ns: f64 = t.parse().map_err(|_| err(format!("duration `{t}` is not a number")))?;
-        if bytes == 0 || !(duration_ns.is_finite() && duration_ns > 0.0) {
-            return Err(err("bytes and duration must be positive".into()));
-        }
-        out.push(PdiSample { direction, bytes, duration_ns });
-    }
-    if !header {
-        return Err(LabError::Sample { line: 1, message: "empty file".into() });
-    }
-    Ok(out)
-}
-
-/// Provenance of a samples file: the `flowlab:provenance=…` marker in a `#` comment line
-/// (`flowlab pdi-bench --sim` writes `simulated`), else `measured`.
-pub fn samples_provenance(text: &str) -> Provenance {
-    text.lines()
-        .map(str::trim)
-        .filter(|l| l.starts_with('#'))
-        .find_map(Provenance::from_comment)
-        .unwrap_or(Provenance::Measured)
 }
 
 /// Fit of one direction at one access size.
@@ -154,7 +77,9 @@ pub struct LineFit {
     pub max_relative_error: f64,
 }
 
-/// PDI parameters for the simulator, as in `flowlab_sim::PdiSpec`.
+/// PDI parameters for the simulator, as in `flowlab_sim::PdiSpec`, except that `mailbox_access`
+/// is optional: a fit measures rates and costs, not how the stack accesses its mailbox, so a lab
+/// file without it keeps the spec's choice.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PdiValues {
@@ -173,7 +98,7 @@ pub struct PdiValues {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PdiFit {
     /// Provenance (`measured` unless the samples file is marked otherwise, see
-    /// [`samples_provenance`]), the samples file and the assumptions of the fit.
+    /// [`flowlab_core::pdi_samples::provenance`]), the samples file and the assumptions of the fit.
     pub meta: ReportMeta,
     /// Fit of the reads, if there were any.
     pub read: Option<LineFit>,
@@ -183,7 +108,7 @@ pub struct PdiFit {
     pub pdi: PdiValues,
 }
 
-fn fit_line(samples: &[PdiSample]) -> Result<LineFit, LabError> {
+fn fit_line(samples: &[Sample]) -> Result<LineFit, LabError> {
     let mut by_size: BTreeMap<u32, Vec<f64>> = BTreeMap::new();
     for s in samples {
         by_size.entry(s.bytes).or_default().push(s.duration_ns);
@@ -191,7 +116,7 @@ fn fit_line(samples: &[PdiSample]) -> Result<LineFit, LabError> {
     if by_size.len() < 2 {
         return Err(LabError::Fit(format!(
             "{} needs accesses of at least two different sizes",
-            if samples[0].direction == PdiDirection::Read { "read" } else { "write" }
+            samples[0].direction.as_str()
         )));
     }
     let points: Vec<(u32, u64, f64, f64)> = by_size
@@ -236,11 +161,11 @@ fn fit_line(samples: &[PdiSample]) -> Result<LineFit, LabError> {
 
 /// Fit the simulator's PDI model to timed accesses. `input_name` and `input_bytes` identify the
 /// samples file; its provenance marker, if any, sets the result's provenance
-/// ([`samples_provenance`]). A direction without samples takes the other direction's values.
-pub fn fit_pdi(samples: &[PdiSample], input_name: &str, input_bytes: &[u8]) -> Result<PdiFit, LabError> {
-    let source = samples_provenance(&String::from_utf8_lossy(input_bytes));
-    let of = |d: PdiDirection| samples.iter().copied().filter(|s| s.direction == d).collect::<Vec<_>>();
-    let (reads, writes) = (of(PdiDirection::Read), of(PdiDirection::Write));
+/// ([`flowlab_core::pdi_samples::provenance`]). A direction without samples takes the other direction's values.
+pub fn fit_pdi(samples: &[Sample], input_name: &str, input_bytes: &[u8]) -> Result<PdiFit, LabError> {
+    let source = flowlab_core::pdi_samples::provenance(&String::from_utf8_lossy(input_bytes));
+    let of = |d: Direction| samples.iter().copied().filter(|s| s.direction == d).collect::<Vec<_>>();
+    let (reads, writes) = (of(Direction::Read), of(Direction::Write));
     let read = (!reads.is_empty()).then(|| fit_line(&reads)).transpose()?;
     let write = (!writes.is_empty()).then(|| fit_line(&writes)).transpose()?;
     let mut assumptions = vec![
@@ -417,7 +342,7 @@ mod tests {
             samples(12_000.0, 18e6, &[6, 64, 128, 512, 1024], "read"),
             samples(8_000.0, 24e6, &[6, 128, 1024], "w"),
         );
-        let s = parse_samples(&text).unwrap();
+        let s = flowlab_core::pdi_samples::parse(&text).unwrap();
         assert_eq!(s.len(), 88);
         let fit = fit_pdi(&s, "spi.csv", text.as_bytes()).unwrap();
         let r = fit.read.as_ref().unwrap();
@@ -434,12 +359,9 @@ mod tests {
     }
 
     #[test]
-    fn bad_samples_are_rejected_with_their_line() {
-        assert!(matches!(parse_samples("bytes,duration\n"), Err(LabError::Sample { line: 1, .. })));
-        let e = parse_samples("direction,bytes,duration_ns\nread,12\n").unwrap_err();
-        assert_eq!(e, LabError::Sample { line: 2, message: "expected 3 columns, found 2".into() });
-        assert!(parse_samples("direction,bytes,duration_ns\nsideways,1,2\n").is_err());
-        let one_size = parse_samples("direction,bytes,duration_ns\nread,64,1000\nread,64,1100\n").unwrap();
+    fn one_size_cannot_be_fitted() {
+        let one_size =
+            flowlab_core::pdi_samples::parse("direction,bytes,duration_ns\nread,64,1000\nread,64,1100\n").unwrap();
         assert!(matches!(fit_pdi(&one_size, "x", b""), Err(LabError::Fit(_))));
     }
 
@@ -447,9 +369,7 @@ mod tests {
     fn a_provenance_marker_labels_the_fit() {
         let body = "direction,bytes,duration_ns\nread,4,1000\nread,64,2000\n";
         let sim = format!("# simulated LAN9252\n# flowlab:provenance=simulated\n{body}");
-        assert_eq!(samples_provenance(&sim), Provenance::Simulated);
-        assert_eq!(samples_provenance(body), Provenance::Measured);
-        let fit = fit_pdi(&parse_samples(&sim).unwrap(), "sim.csv", sim.as_bytes()).unwrap();
+        let fit = fit_pdi(&flowlab_core::pdi_samples::parse(&sim).unwrap(), "sim.csv", sim.as_bytes()).unwrap();
         assert_eq!(fit.meta.source, Provenance::Simulated);
         assert!(fit.meta.assumptions.iter().any(|a| a.contains("marked simulated")));
     }
@@ -479,7 +399,7 @@ mod tests {
     #[test]
     fn only_measured_data_becomes_a_lab_input() {
         let text = "direction,bytes,duration_ns\nread,4,1000\nread,64,2000\n";
-        let mut fit = fit_pdi(&parse_samples(text).unwrap(), "spi.csv", text.as_bytes()).unwrap();
+        let mut fit = fit_pdi(&flowlab_core::pdi_samples::parse(text).unwrap(), "spi.csv", text.as_bytes()).unwrap();
         let mut lab = LabInputs {
             pdi: Some(PdiValues { mailbox_access: Some(MailboxAccess::MessageOnly), ..fit.pdi.clone() }),
             ..LabInputs::default()

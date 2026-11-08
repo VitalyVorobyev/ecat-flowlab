@@ -289,19 +289,6 @@ pub struct MailboxAnalysis {
 /// Bit in [`MailboxAnalysis::frame_flags`] for any mailbox access.
 pub const ANY_MAILBOX: u32 = 1 << 16;
 
-pub(crate) fn protocol_name(t: MailboxType) -> &'static str {
-    match t {
-        MailboxType::Error => "Error",
-        MailboxType::Aoe => "AoE",
-        MailboxType::Eoe => "EoE",
-        MailboxType::Coe => "CoE",
-        MailboxType::Foe => "FoE",
-        MailboxType::Soe => "SoE",
-        MailboxType::Voe => "VoE",
-        MailboxType::Reserved(_) => "Reserved",
-    }
-}
-
 #[derive(Default)]
 struct ChannelAcc {
     writes: u64,
@@ -395,7 +382,7 @@ pub(crate) fn analyze(
                     let slot = direction as usize;
                     let repeat = h.counter != 0 && a.last_counter[slot] == Some(h.counter);
                     a.last_counter[slot] = Some(h.counter);
-                    let name = protocol_name(h.mailbox_type);
+                    let name = h.mailbox_type.name();
                     let msg_idx = out.messages.len() as u32;
                     out.messages.push(MessageRecord {
                         frame: i,

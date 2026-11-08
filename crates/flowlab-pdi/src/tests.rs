@@ -199,7 +199,7 @@ fn samples_fit_back_to_the_simulated_bus() {
     };
     let r = run(&mut e, &clock, &o, 0x9252).unwrap();
     let csv = to_csv(&r.samples, &["simulated LAN9252".into()], Provenance::Simulated);
-    let parsed = flowlab_study::parse_samples(&csv).unwrap();
+    let parsed = flowlab_core::pdi_samples::parse(&csv).unwrap();
     assert_eq!(parsed.len(), r.samples.len());
     let fit = flowlab_study::fit_pdi(&parsed, "sim.csv", csv.as_bytes()).unwrap();
     assert_eq!(fit.meta.source, Provenance::Simulated);

@@ -40,6 +40,22 @@ pub enum TransferDirection {
     SlaveToMaster,
 }
 
+impl TransferDirection {
+    /// `master_to_slave` or `slave_to_master`, as results write it.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::MasterToSlave => "master_to_slave",
+            Self::SlaveToMaster => "slave_to_master",
+        }
+    }
+}
+
+/// The time `payload_bytes` alone need on a link of `link_bps`, ns: the bound no transfer of
+/// that payload can beat, as simulated and measured results report it.
+pub fn physical_bound_ns(payload_bytes: u64, link_bps: u64) -> f64 {
+    payload_bytes as f64 * 8.0 / link_bps as f64 * 1e9
+}
+
 /// A mailbox protocol that carries a bulk transfer, with the parameters both sides share.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MailboxProtocol {
@@ -55,13 +71,18 @@ pub enum MailboxProtocol {
 }
 
 impl MailboxProtocol {
+    /// The mailbox type its messages carry.
+    pub const fn mailbox_type(self) -> ecat_wire::MailboxType {
+        match self {
+            Self::Foe => ecat_wire::MailboxType::Foe,
+            Self::CoeSegmented => ecat_wire::MailboxType::Coe,
+            Self::Eoe { .. } => ecat_wire::MailboxType::Eoe,
+        }
+    }
+
     /// Short name: `FoE`, `CoE`, `EoE`.
     pub const fn name(self) -> &'static str {
-        match self {
-            Self::Foe => "FoE",
-            Self::CoeSegmented => "CoE",
-            Self::Eoe { .. } => "EoE",
-        }
+        self.mailbox_type().name()
     }
 }
 

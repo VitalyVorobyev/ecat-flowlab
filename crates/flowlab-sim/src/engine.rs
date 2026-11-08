@@ -17,6 +17,7 @@ use ecat_wire::{
     SyncManagerConfig, wire_bytes,
 };
 use flowlab_capture::PcapNgWriter;
+use flowlab_core::units::serialization_ns;
 use flowlab_core::{InputRef, Provenance, ReportMeta};
 use flowlab_mailbox::{msg, payload_sha256, transfer_seed};
 use sha2::{Digest, Sha256};
@@ -273,10 +274,6 @@ struct Sim<'a, W: Write> {
     stop: bool,
 }
 
-fn ns_for_bits(bits: u64, bps: u64) -> u64 {
-    (bits as u128 * 1_000_000_000).div_ceil(bps as u128) as u64
-}
-
 fn station(p: usize) -> u16 {
     FIRST_STATION + p as u16
 }
@@ -321,7 +318,7 @@ impl<'a, W: Write> Sim<'a, W> {
         let tx = Self::build(MASTER_MAC, &dgs, None, first_index)?;
         let wire = wire_bytes(tx.len() as u32) as u64;
         let start = at.max(self.link_free);
-        self.link_free = start + ns_for_bits(wire * 8, self.spec.link_bps);
+        self.link_free = start + serialization_ns(wire, self.spec.link_bps);
         self.frames += 1;
         self.wire_bytes += wire;
         let lost = self.rng.chance(self.spec.faults.frame_loss_probability);
@@ -333,7 +330,7 @@ impl<'a, W: Write> Sim<'a, W> {
             let mut offset = 8 + 14 + 2;
             for (i, d) in dgs.iter().enumerate() {
                 offset += 10 + d.tx.len() + 2;
-                let passed = start + ns_for_bits(8 * offset as u64, self.spec.link_bps);
+                let passed = start + serialization_ns(offset as u64, self.spec.link_bps);
                 match d.role {
                     Role::Lrw => {
                         for p in 0..self.spec.slaves.len() {
@@ -353,7 +350,7 @@ impl<'a, W: Write> Sim<'a, W> {
             }
         }
         // Back at the master once the last bit (incl. FCS) has gone round the ring.
-        let back = start + ns_for_bits(8 * (8 + tx.len().max(60) as u64 + 4), self.spec.link_bps) + self.ring_delay();
+        let back = start + serialization_ns(8 + tx.len().max(60) as u64 + 4, self.spec.link_bps) + self.ring_delay();
         self.flights.insert(id, Flight { dgs, first_index, lost, mailbox_cycle });
         self.schedule(back, Ev::Return { frame: id });
         Ok(())
@@ -643,7 +640,7 @@ impl<'a, W: Write> Sim<'a, W> {
     fn pdi_accesses(&mut self, p: usize, from: u64, bytes: usize, accesses: u64, write: bool) -> u64 {
         let s = &self.spec.slaves[p];
         let rate = if write { s.pdi.write_bps } else { s.pdi.read_bps };
-        let dur = accesses * s.pdi.access_overhead_ns as u64 + ns_for_bits(8 * bytes as u64, rate);
+        let dur = accesses * s.pdi.access_overhead_ns as u64 + serialization_ns(bytes as u64, rate);
         let e = &mut self.esc[p];
         let start = from.max(e.pdi_free_at);
         e.pdi_free_at = start + dur;
@@ -998,15 +995,6 @@ fn assumptions() -> Vec<String> {
     ]
 }
 
-fn protocol_name(p: &TransferProtocol) -> &'static str {
-    match p {
-        TransferProtocol::Eoe { .. } => "EoE",
-        TransferProtocol::Foe => "FoE",
-        TransferProtocol::CoeSegmented => "CoE",
-        TransferProtocol::PdoChannel { .. } => "PDO channel",
-    }
-}
-
 /// Run the simulation; frames go to `capture` as pcapng if given and enabled in the spec.
 pub fn simulate<W: Write>(spec: &SimSpec, capture: Option<W>) -> Result<SimResult, SimError> {
     spec.validate().map_err(SimError::Spec)?;
@@ -1124,11 +1112,8 @@ pub fn simulate<W: Write>(spec: &SimSpec, capture: Option<W>) -> Result<SimResul
                 index: k as u32,
                 station: station(t.slave),
                 slave: spec.slaves[t.slave].name.clone(),
-                protocol: protocol_name(&t.protocol).into(),
-                direction: match t.direction {
-                    TransferDirection::MasterToSlave => "master_to_slave".into(),
-                    TransferDirection::SlaveToMaster => "slave_to_master".into(),
-                },
+                protocol: t.protocol.name().into(),
+                direction: t.direction.as_str().into(),
                 payload_bytes: t.payload_bytes,
                 delivered_bytes: delivered,
                 verified,
@@ -1146,7 +1131,7 @@ pub fn simulate<W: Write>(spec: &SimSpec, capture: Option<W>) -> Result<SimResul
                 empty_reads: tr.counts.empty,
                 retransmitted_chunks: tr.retransmitted,
                 chunk_cycles: tr.chunk_cycles,
-                physical_bound_ns: bits / link_bps * 1e9,
+                physical_bound_ns: flowlab_mailbox::physical_bound_ns(t.payload_bytes, spec.link_bps),
                 ethernet_tcp_reference_ns: t.payload_bytes.div_ceil(1460) as f64 * 1538.0 * 8.0 / link_bps * 1e9,
             }
         })

@@ -59,12 +59,17 @@ impl TransferProtocol {
         Self::Eoe { mtu_bytes: 1500, addresses: EoeAddresses::default() }
     }
 
-    fn name(&self) -> &'static str {
+    /// The protocol without its parameters.
+    pub const fn kind(&self) -> MailboxProtocol {
         match self {
-            Self::Foe { .. } => "FoE",
-            Self::Coe { .. } => "CoE",
-            Self::Eoe { .. } => "EoE",
+            Self::Foe { .. } => MailboxProtocol::Foe,
+            Self::Coe { .. } => MailboxProtocol::CoeSegmented,
+            Self::Eoe { mtu_bytes, .. } => MailboxProtocol::Eoe { mtu_bytes: *mtu_bytes },
         }
+    }
+
+    fn name(&self) -> &'static str {
+        self.kind().name()
     }
 }
 
@@ -799,7 +804,9 @@ pub async fn run_transfer<B: MailboxBus>(
         station: job.mailbox.station,
         slave: job.slave,
         protocol: job.protocol.name().into(),
-        direction: if to_slave { "master_to_slave" } else { "slave_to_master" }.into(),
+        direction: if to_slave { TransferDirection::MasterToSlave } else { TransferDirection::SlaveToMaster }
+            .as_str()
+            .into(),
         policy: o.policy.to_string(),
         poll: o.poll.as_str().into(),
         cycle_time_ns: cycle as f64,
@@ -831,7 +838,7 @@ pub async fn run_transfer<B: MailboxBus>(
         duplicate_messages: e.c.duplicates,
         other_messages: e.c.other,
         drained_messages: e.c.drained,
-        physical_bound_ns: units::serialization_ns(payload_bytes, o.link_bps) as f64,
+        physical_bound_ns: flowlab_mailbox::physical_bound_ns(payload_bytes, o.link_bps),
         link_bps: o.link_bps as f64,
         timing: CycleTiming {
             cycles,

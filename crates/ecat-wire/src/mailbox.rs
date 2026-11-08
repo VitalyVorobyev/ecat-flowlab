@@ -56,6 +56,21 @@ impl MailboxType {
             Self::Reserved(c) => c,
         }
     }
+
+    /// Short name, as reports and the UI show it: `CoE`, `FoE`, `EoE`, `SoE`, `VoE`, `AoE`,
+    /// `Error`, `Reserved`.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Error => "Error",
+            Self::Aoe => "AoE",
+            Self::Eoe => "EoE",
+            Self::Coe => "CoE",
+            Self::Foe => "FoE",
+            Self::Soe => "SoE",
+            Self::Voe => "VoE",
+            Self::Reserved(_) => "Reserved",
+        }
+    }
 }
 
 /// The 6-byte mailbox header that starts every mailbox SyncManager buffer.

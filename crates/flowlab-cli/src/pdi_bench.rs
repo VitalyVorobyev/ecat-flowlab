@@ -195,7 +195,7 @@ pub(crate) fn fit_samples(
     lab: Option<PathBuf>,
 ) -> Result<()> {
     let text = String::from_utf8_lossy(bytes);
-    let parsed = flowlab_study::parse_samples(&text).map_err(|e| format!("{label}: {e}"))?;
+    let parsed = flowlab_core::pdi_samples::parse(&text).map_err(|e| format!("{label}: {e}"))?;
     let fit = flowlab_study::fit_pdi(&parsed, name, bytes)?;
     crate::print_pdi_fit(&fit);
     if let Some(p) = result {

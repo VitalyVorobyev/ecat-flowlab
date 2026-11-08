@@ -156,10 +156,11 @@ impl MailboxBus for EthercrabBus<'_> {
 
 /// Mailbox protocol names of the EEPROM's mailbox protocol word (`0x001C`).
 fn protocols(word: u16) -> Vec<String> {
-    [(0x01, "AoE"), (0x02, "EoE"), (0x04, "CoE"), (0x08, "FoE"), (0x10, "SoE"), (0x20, "VoE")]
+    use ecat_wire::MailboxType as T;
+    [(0x01, T::Aoe), (0x02, T::Eoe), (0x04, T::Coe), (0x08, T::Foe), (0x10, T::Soe), (0x20, T::Voe)]
         .iter()
         .filter(|(bit, _)| word & bit != 0)
-        .map(|(_, n)| (*n).to_owned())
+        .map(|(_, t)| t.name().to_owned())
         .collect()
 }
 

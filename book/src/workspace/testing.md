@@ -26,7 +26,7 @@ cargo test -p flowlab-analysis recovers_mailbox_ground_truth
 | Crate | Where | What |
 |---|---|---|
 | `ecat-wire` | `src/tests.rs` | Golden bytes (a BRD of AL status parsed, and rebuilt byte for byte by `FrameBuilder`, padded to 60 bytes); SyncManager, SDO command and mailbox protocol headers against golden bytes; UDP encapsulation; truncated input is an error, not a panic; property tests (below) |
-| `flowlab-core` | `src/lib.rs`, `src/units.rs` | Provenance marker in a capture comment round trip; serialization time |
+| `flowlab-core` | `src/lib.rs`, `src/units.rs`, `src/stats.rs`, `src/pdi_samples.rs` | Provenance marker in a capture comment round trip; serialization time; percentiles; the samples file written and read back, bad lines named |
 | `flowlab-capture` | `src/trace.rs`, `src/stream.rs` | pcapng write → read → index round trip; classic pcap with µs timestamps; WKC direction heuristic without a MAC split; garbage rejected; a stream fed in pieces of any size splits into the same blocks, and header blocks plus a run of packets parse as a file |
 | `flowlab-analysis` | `src/tests.rs`, `src/stats.rs`, `src/mailbox.rs` | Against synth ground truth (below); percentiles, histogram steps, decimation keeping spikes; SDO toggle violations, superseded and orphan transfers, FoE errors and EoE gaps |
 | `flowlab-synth` | `src/tests.rs` | Same spec ⇒ identical bytes and ground truth, another seed ⇒ different bytes; ground-truth counts equal what the capture contains; invalid specs rejected |

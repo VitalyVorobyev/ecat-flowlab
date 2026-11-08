@@ -2,7 +2,7 @@
 
 Timed ESC accesses over the SPI PDI of a Microchip LAN9252: the samples
 [`flowlab pdi-fit`](../reference/specs.md#pdi-timing-samples) turns into the simulator's PDI
-model. Used by `flowlab pdi-bench` ([Measuring the SPI](../studies/bulk-transfer/lab.md#measuring-the-spi)); `flowlab-study` reads the samples it writes (`parse_samples`, `fit_pdi`).
+model. Used by `flowlab pdi-bench` ([Measuring the SPI](../studies/bulk-transfer/lab.md#measuring-the-spi)); the samples file it writes is `flowlab_core::pdi_samples`, which `flowlab-study` reads for the fit.
 
 ## Design
 
@@ -58,7 +58,8 @@ After every access the AL Event Request (0x0220) is read, as the SOES hardware l
 | `Lan9252::new(bus)` | `with_read_instruction`, `with_al_event_read`, `check_link`, `read`, `write`, `read_register` |
 | `SimLan9252::new(SimTiming)` | a simulated LAN9252 and its `SimClock`; `accesses()`, `errors()`, `set_byte_test`, `set_id_rev`, `set_al_status` |
 | `BenchOptions`, `plan`, `run` | sizes, repetitions, warm-up, area, writes, seed → `BenchRun` (link, plan, samples) |
-| `to_csv`, `summarise` | the samples file with its provenance marker; median and p95 per direction and size |
+| `to_csv`, `Sample`, `Direction` | the samples file with its provenance marker (re-exported from `flowlab_core::pdi_samples`) |
+| `summarise` | median and p95 per direction and size |
 | `reg`, `PROTECTED`, `csr_chunk`, `check_range` | constants and rules |
 
 `SimTiming` (per-transaction cost, SPI clock, CSR busy time, delay until process RAM data) is

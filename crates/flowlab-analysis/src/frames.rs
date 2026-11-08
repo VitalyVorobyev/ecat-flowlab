@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::analyze::{Analysis, NONE};
-use crate::mailbox::{ANY_MAILBOX, Access, describe, protocol_name};
+use crate::mailbox::{ANY_MAILBOX, Access, describe};
 use crate::report::ChannelSource;
 
 /// Which frames to list. All conditions must hold.
@@ -442,7 +442,7 @@ fn mailbox_info(trace: &Trace, a: &Analysis, i: usize, p: u16) -> Option<Mailbox
             let (summary, fields) = describe(&h, &data[MAILBOX_HEADER_LEN..MAILBOX_HEADER_LEN + h.length as usize]);
             (
                 Some(MailboxHeaderInfo {
-                    protocol: protocol_name(h.mailbox_type).to_owned(),
+                    protocol: h.mailbox_type.name().to_owned(),
                     length: h.length,
                     address: h.address,
                     channel: h.channel,

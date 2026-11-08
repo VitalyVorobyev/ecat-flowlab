@@ -270,6 +270,18 @@ impl SimSlave {
     }
 }
 
+impl TransferProtocol {
+    /// Short name: `EoE`, `FoE`, `CoE` or `PDO channel`, as results write it.
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Eoe { .. } => ecat_wire::MailboxType::Eoe.name(),
+            Self::Foe => ecat_wire::MailboxType::Foe.name(),
+            Self::CoeSegmented => ecat_wire::MailboxType::Coe.name(),
+            Self::PdoChannel { .. } => "PDO channel",
+        }
+    }
+}
+
 impl SimSpec {
     /// Transfer `index` as a lab run repeats it ([`TransferPlan`](flowlab_mailbox::TransferPlan)):
     /// its protocol, the payload's size and seed, the cycle, the policy and the slave's mailbox
