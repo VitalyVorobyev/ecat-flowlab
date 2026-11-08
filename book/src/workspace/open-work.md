@@ -44,11 +44,6 @@ questions that real captures should answer.
 
 None of these changes a result; each makes drift likely.
 
-- **`flowlab-analysis/src/mailbox.rs`** (about 1,500 lines) holds channel discovery, the CoE, FoE
-  and EoE trackers, the description text, findings, assumptions and the EoE pcapng export: split
-  along those lines.
-- **Server presets** embed the study configs with `include_str!` and skip one that fails to
-  parse; the catalogue belongs in the simulator or the study crate, with a test.
 - **UI copies of Rust logic**: wire time (`+24` in `Timing.tsx`, `ecat_wire::wire_bytes`), the
   mean mailbox rate, the `SimSpec` defaults in `scenario/spec.ts`, and the policy wording in
   `scenario/SystemSummary.tsx` (`MailboxPolicy`'s `Display`).
