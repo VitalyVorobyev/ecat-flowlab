@@ -13,7 +13,7 @@ import type { AlEvent, CaptureReport, StationSummary } from "../api";
 import { StateTimeline } from "../components/StateTimeline";
 import { captureTime, count, hex } from "../lib/format";
 
-const STATION_COLUMNS: Column<StationSummary>[] = [
+export const STATION_COLUMNS: Column<StationSummary>[] = [
   {
     key: "st",
     header: "Station",

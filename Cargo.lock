@@ -320,6 +320,7 @@ dependencies = [
  "flowlab-capture",
  "flowlab-core",
  "flowlab-devices",
+ "flowlab-live",
  "flowlab-server",
  "flowlab-sim",
  "flowlab-study",
@@ -353,6 +354,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "flowlab-live"
+version = "0.1.0"
+dependencies = [
+ "flowlab-analysis",
+ "flowlab-capture",
+ "flowlab-core",
+ "flowlab-synth",
+ "serde",
+ "thiserror",
+ "ts-rs",
+]
+
+[[package]]
 name = "flowlab-server"
 version = "0.1.0"
 dependencies = [
@@ -361,6 +375,7 @@ dependencies = [
  "flowlab-capture",
  "flowlab-core",
  "flowlab-devices",
+ "flowlab-live",
  "flowlab-sim",
  "flowlab-study",
  "flowlab-synth",

@@ -15,6 +15,7 @@ flowlab-synth.workspace = true
 flowlab-sim.workspace = true
 flowlab-devices.workspace = true
 flowlab-study.workspace = true
+flowlab-live.workspace = true
 axum.workspace = true
 tokio.workspace = true
 tower-http.workspace = true

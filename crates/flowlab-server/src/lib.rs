@@ -32,6 +32,10 @@
 //! | GET | `/api/sim/presets` | | `SimPreset[]`: scenarios to start from |
 //! | POST | `/api/sim/run` | `SimSpec` | `SimResult` (no capture is kept) |
 //! | POST | `/api/sim/what-if` | `SimSpec` | `WhatIfResult`: one-change variants, best first |
+//! | GET | `/api/live/interfaces` | | `LiveInterfaces`: capture tool and interfaces |
+//! | POST | `/api/live/start` | `LiveStart` | `LiveSnapshot` (interfaces need `flowlab serve --live`) |
+//! | GET | `/api/live` | | `LiveSnapshot` of the running or last session, or `null` |
+//! | POST | `/api/live/stop` | | `LiveStopped`: final state and the saved capture, loaded |
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -52,6 +56,9 @@ use flowlab_synth::SynthSpec;
 use serde::{Deserialize, Serialize};
 use tower_http::services::{ServeDir, ServeFile};
 use ts_rs::TS;
+
+mod live;
+pub use live::{LiveConfig, LiveInterfaces, LiveSourceSpec, LiveStart, LiveStopped};
 
 /// Largest accepted upload.
 pub const MAX_UPLOAD_BYTES: usize = 2 << 30;
@@ -114,6 +121,8 @@ struct Entry {
 pub struct AppState {
     inner: Arc<RwLock<Store>>,
     options: Arc<AnalysisOptions>,
+    live: live::LiveSlot,
+    live_config: Arc<LiveConfig>,
 }
 
 #[derive(Default)]
@@ -125,7 +134,13 @@ struct Store {
 impl AppState {
     /// State with the given analysis options.
     pub fn new(options: AnalysisOptions) -> Self {
-        Self { inner: Arc::default(), options: Arc::new(options) }
+        Self { options: Arc::new(options), ..Self::default() }
+    }
+
+    /// The same state with these live capture settings.
+    pub fn with_live(mut self, config: LiveConfig) -> Self {
+        self.live_config = Arc::new(config);
+        self
     }
 
     fn get(&self, id: u32) -> Result<Arc<Entry>, ApiError> {
@@ -589,6 +604,10 @@ pub fn api(state: AppState) -> Router {
         .route("/api/study/schema", get(study_schema))
         .route("/api/study/example", get(study_example))
         .route("/api/study", post(study))
+        .route("/api/live", get(live::snapshot))
+        .route("/api/live/interfaces", get(live::interfaces))
+        .route("/api/live/start", post(live::start))
+        .route("/api/live/stop", post(live::stop))
         // Unknown API paths get a JSON 404, not the UI's index.html.
         .route("/api", any(api_not_found))
         .route("/api/{*rest}", any(api_not_found))
@@ -639,6 +658,48 @@ mod tests {
             .header("content-type", "application/json")
             .body(Body::from(serde_json::to_vec(v).unwrap()))
             .unwrap()
+    }
+
+    #[tokio::test]
+    async fn live_replay_runs_and_interfaces_need_opt_in() {
+        let app = api(AppState::default());
+        let mut spec = SynthSpec::example();
+        spec.cycles = 400;
+        let (_, info) = call(&app, json_post("/api/synth", &spec)).await;
+        let id = info["id"].as_u64().unwrap();
+
+        let (st, none) = call(&app, Request::get("/api/live").body(Body::empty()).unwrap()).await;
+        assert_eq!(st, StatusCode::OK);
+        assert!(none.is_null());
+        let iface = serde_json::json!({ "source": { "kind": "interface", "interface": "eth1" } });
+        let (st, e) = call(&app, json_post("/api/live/start", &iface)).await;
+        assert_eq!(st, StatusCode::FORBIDDEN, "{e}");
+        let (st, e) = call(&app, Request::get("/api/live/interfaces").body(Body::empty()).unwrap()).await;
+        assert_eq!(st, StatusCode::OK);
+        assert_eq!(e["enabled"], false);
+
+        let replay = serde_json::json!({ "source": { "kind": "replay", "capture": id, "speed": 0.5 } });
+        let (st, snap) = call(&app, json_post("/api/live/start", &replay)).await;
+        assert_eq!(st, StatusCode::OK, "{snap}");
+        assert_eq!(snap["state"], "running");
+        let (st, _) = call(&app, json_post("/api/live/start", &replay)).await;
+        assert_eq!(st, StatusCode::CONFLICT);
+        tokio::time::sleep(std::time::Duration::from_millis(1300)).await;
+        let (st, snap) = call(&app, Request::get("/api/live").body(Body::empty()).unwrap()).await;
+        assert_eq!(st, StatusCode::OK);
+        assert!(snap["packets"].as_u64().unwrap() > 0, "{snap}");
+        assert!(!snap["series"].as_array().unwrap().is_empty());
+
+        let (st, stopped) = call(&app, json_post("/api/live/stop", &())).await;
+        assert_eq!(st, StatusCode::OK, "{stopped}");
+        assert_eq!(stopped["snapshot"]["state"], "finished");
+        assert_eq!(stopped["snapshot"]["provenance"], "synthetic");
+        assert!(stopped["capture"].is_null(), "a replay saves nothing");
+        let (st, _) = call(&app, json_post("/api/live/stop", &())).await;
+        assert_eq!(st, StatusCode::CONFLICT);
+        let (st, snap) = call(&app, Request::get("/api/live").body(Body::empty()).unwrap()).await;
+        assert_eq!(st, StatusCode::OK, "the last session stays readable");
+        assert_eq!(snap["state"], "finished");
     }
 
     #[tokio::test]

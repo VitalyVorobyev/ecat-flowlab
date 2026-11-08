@@ -1,0 +1,22 @@
+[package]
+name = "flowlab-live"
+description = "Live EtherCAT capture through dumpcap or tcpdump, analysed in a rolling window."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+flowlab-core.workspace = true
+flowlab-capture.workspace = true
+flowlab-analysis.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+ts-rs = "12"
+
+[dev-dependencies]
+flowlab-synth.workspace = true
+
+[lints]
+workspace = true

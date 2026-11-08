@@ -1,14 +1,15 @@
 //! Developer commands for the workspace, run through the cargo aliases in `.cargo/config.toml`:
 //!
 //! ```text
-//! cargo ui [--no-open] [--demo] [CAPTURES…] [-- SERVE OPTIONS]   build the UI if needed, serve it
-//! cargo ui-dev [--no-open] [--demo] [CAPTURES…]      API server + Vite dev server with hot reload
+//! cargo ui [--no-open] [--demo] [--live] [CAPTURES…] [-- SERVE OPTIONS]   build the UI if needed, serve it
+//! cargo ui-dev [--no-open] [--demo] [--live] [CAPTURES…]      API server + Vite dev server with hot reload
 //! cargo ci                                  the checks CI runs (Rust, UI, docs)
 //! cargo site                                build the Pages site into _site/
 //! ```
 //!
 //! The UI opens on the Simulate view, or on the analysis of the captures given. `--demo`
-//! generates and loads the synthetic demo capture.
+//! generates and loads the synthetic demo capture; `--live` allows live capture from network
+//! interfaces in the Live view.
 //! Needs Bun for the UI; `ci` also uses mdBook when it is installed.
 
 use std::path::{Path, PathBuf};
@@ -18,9 +19,10 @@ use std::time::SystemTime;
 type Result<T = ()> = std::result::Result<T, String>;
 
 const HELP: &str = "\
-cargo ui [--no-open] [--demo] [CAPTURES…] [-- SERVE OPTIONS]   build the UI if needed, serve it, open it
-cargo ui-dev [--no-open] [--demo] [CAPTURES…]      API server + Vite dev server with hot reload
+cargo ui [--no-open] [--demo] [--live] [CAPTURES…] [-- SERVE OPTIONS]   build the UI if needed, serve it, open it
+cargo ui-dev [--no-open] [--demo] [--live] [CAPTURES…]      API server + Vite dev server with hot reload
   --demo   also load a synthetic demo capture (generated once into results/demo.pcapng)
+  --live   allow live capture from network interfaces (dumpcap or tcpdump; only listens)
 cargo ci                                  the checks CI runs (Rust, UI, docs)
 cargo site                                build the Pages site into _site/";
 
@@ -123,7 +125,8 @@ fn ensure_ui_built() -> Result {
     Ok(())
 }
 
-/// Flags `--no-open` and `--demo` taken out of `args`: (open, captures).
+/// Flags `--no-open` and `--demo` taken out of `args`: (open, arguments for `serve`).
+/// `--live` passes through to `serve`.
 fn flags(args: &[String]) -> Result<(bool, Vec<String>)> {
     let open = !args.iter().any(|a| a == "--no-open");
     let demo = args.iter().any(|a| a == "--demo");

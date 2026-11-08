@@ -11,8 +11,15 @@ questions that real captures should answer.
   [design decisions](decisions.md).
 - Run the lab inputs (`flowlab pdi-fit`, `flowlab policy`) on the Verdin/LAN9252 rig and a real
   master, then commit a calibrated bulk-transfer report next to the placeholder one.
-- Live capture and master adapters, only behind a feature with explicit opt-in, an interface
-  name and an isolated network (see the hardware rules in [Contributing](contributing.md)).
+- Run live capture (`flowlab capture`, the Live view) on a real segment, on Linux and Windows.
+- A lab master on EtherCrab: scan (identity, EEPROM, SyncManagers, an ENI for the analysis), a
+  cyclic run with per-cycle round trips, and mailbox transfer benchmarks (FoE, CoE, EoE) under
+  the simulator's policies. Only with explicit opt-in, an interface name and an isolated network
+  (see the hardware rules in [Contributing](contributing.md)); refuse to start when another
+  master's frames are seen.
+- PDI profiling on the slave: kernel SPI trace events (`trace-cmd`) → PDI timing samples for
+  `flowlab pdi-fit`, and a LAN9252 access benchmark over spidev.
+- Live capture: NIC hardware timestamps (`tcpdump -j`), ring files for long captures.
 
 ## Analysis
 

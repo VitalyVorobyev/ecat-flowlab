@@ -4,8 +4,11 @@ What FlowLab does not do, or does only partly. Each item is a property of the cu
 
 ## Captures and analysis
 
-- **Offline only.** FlowLab reads capture files; it does not capture live traffic and never
-  sends frames.
+- **No own capture or master.** FlowLab never sends frames. Live capture runs Wireshark's
+  dumpcap or tcpdump and reads what they write; their timestamps are the capturing host's. It has
+  been tested with replays and stand-in tools, not yet on a real segment, and not on Windows.
+- **Live figures** come from one second of frames each (cycles slower than about 50 ms show no
+  per-second period) and from a rolling window ([Live capture](../guide/live.md#how-the-live-figures-are-made)).
 - **Validated on generated traffic.** The analysis is tested against synthetic captures with
   known ground truth, against simulated captures, and against Wireshark's dissector. It has not
   yet been checked against captures from real masters. The [design decisions](../workspace/decisions.md)

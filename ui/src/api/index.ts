@@ -11,6 +11,10 @@ import type { SimResult } from "./gen/SimResult";
 import type { SimSpec } from "./gen/SimSpec";
 import type { WhatIfResult } from "./gen/WhatIfResult";
 import type { StudyResult } from "./gen/StudyResult";
+import type { LiveInterfaces } from "./gen/LiveInterfaces";
+import type { LiveSnapshot } from "./gen/LiveSnapshot";
+import type { LiveStart } from "./gen/LiveStart";
+import type { LiveStopped } from "./gen/LiveStopped";
 
 export type { CaptureInfo } from "./gen/CaptureInfo";
 export type { CaptureReport } from "./gen/CaptureReport";
@@ -71,6 +75,16 @@ export type { PlanSlave } from "./gen/PlanSlave";
 export type { Residual } from "./gen/Residual";
 export type { StudyResult } from "./gen/StudyResult";
 export type { StudyRun } from "./gen/StudyRun";
+export type { CaptureInterface } from "./gen/CaptureInterface";
+export type { LiveInterfaces } from "./gen/LiveInterfaces";
+export type { LivePoint } from "./gen/LivePoint";
+export type { LiveSnapshot } from "./gen/LiveSnapshot";
+export type { LiveSourceSpec } from "./gen/LiveSourceSpec";
+export type { LiveStart } from "./gen/LiveStart";
+export type { LiveState } from "./gen/LiveState";
+export type { LiveStopped } from "./gen/LiveStopped";
+export type { LiveTotals } from "./gen/LiveTotals";
+export type { Tool } from "./gen/Tool";
 
 /** An error the server answered with `{ "error": "..." }`, or a transport failure. */
 export class ApiError extends Error {
@@ -203,4 +217,9 @@ export const api = {
       captureId === null ? "/api/study" : `/api/study?capture=${captureId}`,
       json("POST", spec),
     ),
+  liveInterfaces: () => request<LiveInterfaces>("/api/live/interfaces"),
+  liveStart: (start: LiveStart) => request<LiveSnapshot>("/api/live/start", json("POST", start)),
+  /** The running or last live session; null when there has been none. */
+  live: () => request<LiveSnapshot | null>("/api/live"),
+  liveStop: () => request<LiveStopped>("/api/live/stop", { method: "POST" }),
 };
