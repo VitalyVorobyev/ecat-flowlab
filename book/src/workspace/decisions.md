@@ -28,7 +28,7 @@ experiment can answer them.
   the same code as real ones, so comparisons are like-for-like.
 - **ADR-011 Own pcap/pcapng reader and writer.** The formats are small and well specified;
   the maintained `pcap-file` line is a 3.0 release candidate. Avoids libpcap for offline
-  work. Live capture, if added, belongs behind a feature with libpcap/Npcap.
+  work. Live capture: see ADR-035.
 - **ADR-012 Delivery: local web server.** `flowlab serve` (axum) serves the React UI and a
   JSON API on loopback. Works on a headless lab PC over an SSH tunnel and needs no native
   toolchain. A desktop wrapper could reuse the same API.
@@ -110,6 +110,18 @@ experiment can answer them.
   broadcast datagrams, as real ESCs do, and TX/RX pairing ignores that field. An analysis that
   only ever saw its own generator's frames had paired on the raw address and would have failed
   on real captures.
+
+## Live capture and hardware
+
+- **ADR-035 Live capture through an external capture tool.** `flowlab capture` and the Live view
+  run Wireshark's `dumpcap` (or `tcpdump`) as a child process and read pcap/pcapng from its
+  standard output; FlowLab never opens an interface. The tools already handle capture
+  permissions (the `wireshark` group, ChmodBPF, Npcap), timestamp precision and filters on every
+  platform. FlowLab gains no native dependency, the offline build stays free of libpcap
+  (ADR-011), and the stream is read by the same parser and analysis as a file. Capturing only
+  listens, so it needs no cargo feature. The server still asks for `--live` before it starts a
+  capture from an HTTP request, and the interface is always named explicitly.
+  Consequence: the timestamps are the tool's. NIC hardware timestamps need the tool's own option.
 
 ## Open questions
 

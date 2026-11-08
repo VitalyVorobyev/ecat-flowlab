@@ -59,6 +59,14 @@ checked against its router:
 | GET | `/api/sim/presets` | | `SimPreset[]`: `{ id, title, spec }`, the scenarios the Simulate view starts from |
 | POST | `/api/sim/run` | `SimSpec` | `SimResult`, without a capture or a capture entry |
 | POST | `/api/sim/what-if` | `SimSpec` | `WhatIfResult`: the scenario with one change at a time, and pairs, best first |
+| GET | `/api/live/interfaces` | | `LiveInterfaces`: `{ enabled, tool, interfaces[], error }` |
+| POST | `/api/live/start` | `LiveStart`: `{ source, window_s }` | `LiveSnapshot`; 403 for an interface without `--live`, 409 while a session runs |
+| GET | `/api/live` | | `LiveSnapshot` of the running or last session, or `null` |
+| POST | `/api/live/stop` | | `LiveStopped`: `{ snapshot, capture }`, the saved capture loaded as a `CaptureInfo` |
+
+`LiveStart.source` is `{ "kind": "interface", "interface": "eth1", "tool": null, "all_traffic": false }`
+or `{ "kind": "replay", "capture": 3, "speed": 1 }` (a loaded capture, 0 < speed ≤ 1000). One live
+session runs at a time.
 
 The request and response types are described in [Input files](specs.md) and
 [Report and result files](reports.md); their TypeScript definitions are generated into

@@ -4,6 +4,7 @@
 flowlab <COMMAND>
 
   analyze   Analyze a pcap/pcapng capture
+  capture   Capture EtherCAT traffic live and analyse it as it arrives
   synth     Generate a synthetic pcapng with known ground truth from a JSON spec
   simulate  Run the discrete-event simulator
   what-if   Rank one-change variants of a scenario by how much they shorten its transfers
@@ -21,13 +22,14 @@ flowlab <COMMAND>
 | Command | Options |
 |---|---|
 | `analyze CAPTURE` | `-o/--out FILE` JSON report · `--json` to stdout · `--eni XML` · `--mailbox STATION=OUT,IN` (repeatable) · `--eoe-out PCAPNG` · `--link-mbps N` (100) · `--min-stream-frames N` (20) |
+| `capture [INTERFACE]` | `--list` · `--tool dumpcap\|tcpdump` · `-o/--out FILE` · `--duration S` · `--window S` (10) · `--all-traffic` · `--replay FILE` `--speed X` · `--report JSON` · `--eni XML` · `--mailbox …` · `--link-mbps N` ([Live capture](live.md)) |
 | `synth [SPEC]` | `-o/--out FILE` (required) · `--truth FILE` · `--eni FILE` |
 | `simulate [SPECS…]` | `-o/--out FILE` frames (one spec) · `--result FILE` JSON (an array for several specs) |
 | `what-if [SPEC]` | `--result FILE` JSON: the scenario, every single change and pair, best first |
 | `study [SPEC]` | `--capture FILE` to calibrate against · `--eni XML` and `--mailbox …` for that capture · `--result FILE` |
 | `plan [SPEC]` | `--json` |
 | `esi FILE` | `--json` |
-| `serve [CAPTURES…]` | `-p/--port` (7878) · `--host` (127.0.0.1) · `--ui-dir` (ui/dist) · `--open` · `--eni XML` · `--mailbox …` |
+| `serve [CAPTURES…]` | `-p/--port` (7878) · `--host` (127.0.0.1) · `--ui-dir` (ui/dist) · `--open` · `--eni XML` · `--mailbox …` · `--live` · `--live-dir DIR` (results/live) |
 | `schema WHICH` | `synth`, `sim`, `plan`, `study` or `lab` |
 | `pdi-fit SAMPLES.csv` | `--result FILE` the fit with residuals · `--lab JSON` store the values in a lab-inputs file |
 | `policy CAPTURE` | `--station N` · `--mailbox …` · `--eni XML` · `--lab JSON` store the policy in a lab-inputs file |

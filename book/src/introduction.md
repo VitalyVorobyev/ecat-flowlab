@@ -7,13 +7,15 @@ do not exist yet, and searches their parameter space. Simulated and measured tra
 the same decoder and the same analysis, so they can be compared view for view.
 
 It runs on a laptop: a command-line tool (`flowlab`) and a local web UI (`flowlab serve`). It
-needs no EtherCAT hardware, no network adapter, no root and no libpcap.
+needs no EtherCAT hardware, no network adapter, no root and no libpcap. To watch a running
+segment, it reads what Wireshark's dumpcap or tcpdump captures; it never sends frames.
 
 ## What it does
 
 | Task | Command | UI view |
 |---|---|---|
 | Analyse a pcap/pcapng capture | `flowlab analyze` | Overview, Timing, Frames, Stations, Mailbox |
+| Watch a running segment, analysed every second | `flowlab capture` | Live |
 | Judge working counters against the master's configuration | `flowlab analyze --eni` | Attach ENI… on the Overview |
 | Generate a capture with known faults, to test the analysis | `flowlab synth` | Generate |
 | Simulate a segment and bulk transfers through it, and find what limits them | `flowlab simulate`, `flowlab what-if` | Simulate, Sim run |

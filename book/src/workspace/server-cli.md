@@ -111,7 +111,8 @@ created. Spec arguments that are omitted fall back to the built-in example.
 | `plan [SPEC]` | `--json` print JSON instead of the summary |
 | `simulate [SPECS]...` | `-o, --out <OUT>` simulated frames (one spec only); `--result <RESULT>` result JSON (one spec) or a JSON array (several). Several specs print one table each, for comparison |
 | `study [SPEC]` | `--capture <CAPTURE>` capture to calibrate against (targets with `from_capture`); `--eni <XML>` network configuration for analysing that capture; `--result <RESULT>` result JSON |
-| `serve [CAPTURES]...` | `-p, --port <PORT>` (default 7878); `--host <HOST>` (default 127.0.0.1); `--ui-dir <UI_DIR>` built UI (default `ui/dist`); `--open` open the browser; `--mailbox <STATION=OUT,IN>` repeatable; `--eni <XML>` applied to every capture |
+| `serve [CAPTURES]...` | `-p, --port <PORT>` (default 7878); `--host <HOST>` (default 127.0.0.1); `--ui-dir <UI_DIR>` built UI (default `ui/dist`); `--open` open the browser; `--mailbox <STATION=OUT,IN>` repeatable; `--eni <XML>` applied to every capture; `--live` allow live capture from interfaces; `--live-dir <DIR>` where live captures are saved (default `results/live`) |
+| `capture [INTERFACE]` | live capture through dumpcap or tcpdump ([flowlab-live](flowlab-live.md)): `--list`; `--tool`; `-o, --out`; `--duration`; `--window`; `--all-traffic`; `--replay <FILE>` with `--speed`; `--report <JSON>` the last window's analysis; `--eni`, `--mailbox`, `--link-mbps` |
 | `schema <WHICH>` | One of `synth`, `sim`, `plan`, `study`; prints the JSON Schema |
 
 `analyze` prints the capture's provenance in brackets (`[MEASURED]`, `[SYNTHETIC]`, `[SIMULATED]`),

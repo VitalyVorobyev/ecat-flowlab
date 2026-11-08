@@ -9,6 +9,7 @@ import {
   Gauge,
   Mail,
   Network,
+  Radio,
   Rows3,
   Ruler,
   Sparkles,
@@ -25,6 +26,7 @@ import { useScenario } from "../scenario/useScenario";
 import { CAPTURE_ACCEPT, Captures } from "../screens/Captures";
 import { Compare } from "../screens/Compare";
 import { Frames, type FramesTarget } from "../screens/Frames";
+import { Live } from "../screens/Live";
 import { Mailbox } from "../screens/Mailbox";
 import { Overview } from "../screens/Overview";
 import { Planner } from "../screens/Planner";
@@ -37,6 +39,7 @@ import { Timing } from "../screens/Timing";
 export type View =
   | "simulate"
   | "captures"
+  | "live"
   | "overview"
   | "timing"
   | "frames"
@@ -50,6 +53,7 @@ export type View =
 const VIEWS: readonly View[] = [
   "simulate",
   "captures",
+  "live",
   "overview",
   "timing",
   "frames",
@@ -280,6 +284,7 @@ export function App() {
       <NavRailItem value="study" label="Study" icon={<ChartScatter />} />
       <NavRailItem value="planner" label="Planner" icon={<Ruler />} />
       <NavRailItem value="captures" label="Captures" icon={<FolderOpen />} />
+      <NavRailItem value="live" label="Live" icon={<Radio />} />
       <NavRailItem value="overview" label="Overview" icon={<Gauge />} disabled={!hasReport} />
       <NavRailItem value="timing" label="Timing" icon={<Activity />} disabled={!hasReport} />
       <NavRailItem value="frames" label="Frames" icon={<Rows3 />} disabled={!hasReport} />
@@ -307,6 +312,21 @@ export function App() {
     main = <Planner />;
   } else if (view === "study") {
     main = <Study captures={captures} onCreated={added} />;
+  } else if (view === "live") {
+    main = (
+      <Live
+        captures={captures}
+        onSaved={(info) => {
+          setCaptures((list) => [...list, info]);
+          toast({
+            tone: "success",
+            title: `Saved ${info.name}`,
+            description: `${count(info.frames)} frames, loaded for analysis`,
+          });
+        }}
+        onOpen={select}
+      />
+    );
   } else if (view === "compare") {
     main = <Compare key={captures.map((c) => c.id).join(",")} captures={captures} />;
   } else if (view === "captures" || selectedId === null) {

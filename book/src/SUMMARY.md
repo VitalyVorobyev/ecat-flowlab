@@ -7,6 +7,7 @@
 
 - [The workbench](guide/ui.md)
 - [Analysing a capture](guide/analysis.md)
+- [Live capture](guide/live.md)
 - [Mailbox traffic](guide/mailbox.md)
 - [Network configuration and planning](guide/devices.md)
 - [Synthetic captures](guide/synth.md)
@@ -35,6 +36,7 @@
 - [flowlab-sim](workspace/flowlab-sim.md)
 - [flowlab-devices](workspace/flowlab-devices.md)
 - [flowlab-study](workspace/flowlab-study.md)
+- [flowlab-live](workspace/flowlab-live.md)
 - [flowlab-server and flowlab-cli](workspace/server-cli.md)
 - [The UI](workspace/ui.md)
 - [Testing and validation](workspace/testing.md)

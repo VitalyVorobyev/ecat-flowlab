@@ -27,6 +27,7 @@ On the command line:
 
 ```bash
 flowlab analyze capture.pcapng --out report.json [--eni network.xml]
+flowlab capture eth1          # watch a running segment (through dumpcap or tcpdump)
 flowlab simulate configs/sim/example.json -o sim.pcapng --result sim.json
 flowlab what-if configs/studies/bulk-transfer/large-payload.json   # which change helps most
 flowlab study configs/studies/bulk-transfer/foe-sweep.json
@@ -43,14 +44,16 @@ is listed in the report's assumptions.
 
 ## Safety
 
-FlowLab reads files and never sends frames. `flowlab serve` has no authentication and can read
-any file you can, so keep it on loopback.
+FlowLab reads files and the output of capture tools, and never sends frames. Live capture
+(`flowlab capture`, or the Live view after `cargo ui -- --live`) runs Wireshark's dumpcap or
+tcpdump, which only listen. `flowlab serve` has no authentication and can read any file you can,
+so keep it on loopback.
 
 ## Repository
 
 | Path | Content |
 |---|---|
-| `crates/` | `ecat-wire` (codec), `flowlab-core`, `-capture`, `-analysis`, `-synth`, `-sim`, `-devices`, `-study`, `-server`, `-cli` |
+| `crates/` | `ecat-wire` (codec), `flowlab-core`, `-capture`, `-analysis`, `-synth`, `-sim`, `-devices`, `-study`, `-live`, `-server`, `-cli` |
 | `ui/` | React UI on the `@vitavision` lab-ui packages |
 | `configs/` | Example generator, simulator and study specs |
 | `book/` | The documentation (mdBook) |

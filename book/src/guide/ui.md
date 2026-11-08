@@ -19,6 +19,7 @@ on the left leads to the views:
 | **Study** | Parameter sweeps over the simulator: Pareto scatter, all runs, calibration residuals |
 | **Planner** | Frame layout and bus budget of a network; ESI import |
 | **Captures** | Loaded captures with provenance, size and duration; drop files here or open a local path |
+| **Live** | Traffic on an interface (with `--live`) or a replayed capture, analysed every second; Stop saves and loads it ([Live capture](live.md)) |
 | **Overview** | Headline numbers, findings, link load over time, datagrams by command; Attach ENI… |
 | **Timing** | Per cyclic stream: period, phase jitter against the cycle grid, interval distribution, round trip, gaps and missed cycles, working counters per datagram |
 | **Frames** | Every frame, filtered by direction, command, stream, station, mailbox protocol or problems; decoded datagrams next to a hex view |

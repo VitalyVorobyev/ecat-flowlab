@@ -1,6 +1,6 @@
 # Overview
 
-FlowLab is a Cargo workspace of ten crates and a React UI. Every source of traffic produces
+FlowLab is a Cargo workspace of eleven crates and a React UI. Every source of traffic produces
 real Ethernet frames, and one analysis reads them all.
 
 ```text
@@ -33,6 +33,7 @@ Only their provenance differs.
 | [`flowlab-synth`](flowlab-synth.md) | Deterministic synthetic captures with ground truth | capture, devices |
 | [`flowlab-sim`](flowlab-sim.md) | Discrete-event simulator emitting frames | capture |
 | [`flowlab-study`](flowlab-study.md) | Parameter studies, Pareto frontier, calibration | sim, analysis |
+| [`flowlab-live`](flowlab-live.md) | Live capture through dumpcap or tcpdump, analysed in a rolling window | capture, analysis |
 | [`flowlab-server`](server-cli.md) | Local HTTP API and static UI (axum) | all of the above |
 | [`flowlab-cli`](server-cli.md) | The `flowlab` binary | all of the above |
 | `xtask` (not published) | Developer commands behind the cargo aliases `cargo ui`, `ui-dev`, `ci`, `site` ([Contributing](contributing.md)) | std only |

@@ -291,6 +291,21 @@ changes), `run`.
 verified), `transfer_ns[]` (duration per transfer), `finish_ns` (when the last transfer
 finished), `link_utilization_percent`, `pdi_busy_percent_max`, `dpram_used_percent_max`.
 
+## LiveSnapshot
+
+The state of a live session ([Live capture](../guide/live.md)), from `GET /api/live`.
+
+| Field | Meaning |
+|---|---|
+| `state` | `running`, `finished` or `failed` |
+| `source`, `message` | where the packets come from (`dumpcap on eth1`); why it ended or failed, or the tool's error output |
+| `provenance` | `measured` for an interface; a replay keeps its file's |
+| `elapsed_s`, `packets`, `bytes`, `saved_to` | wall-clock seconds since the start; what arrived; the save file |
+| `window_ns`, `window` | the window's span and its full `CaptureReport` (times relative to the window's first frame) |
+| `series[]` | `LivePoint` per second: `t_s`, `frames`, `tx_percent`, `period_ns`, `jitter_p99_ns`, `round_trip_p99_ns` (main cyclic stream, or `null`), `wkc_mismatches`, `unanswered`, `missed_cycles`, `mailbox_messages`, `malformed` |
+| `totals` | sums of the points: `ethercat_frames`, `wkc_mismatches`, `unanswered`, `missed_cycles`, `mailbox_messages`, `malformed` |
+| `assumptions` | how the live figures are made |
+
 ## PlanResult
 
 The bus budget of a `PlanSpec` ([flowlab-devices § The planner](../workspace/flowlab-devices.md#the-planner)).

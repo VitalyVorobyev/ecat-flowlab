@@ -1,4 +1,4 @@
-//! `flowlab`: analyse captures, generate synthetic ones, simulate, run studies, plan networks,
+//! `flowlab`: analyse captures (or capture live), generate synthetic ones, simulate, run studies, plan networks,
 //! read ESI files, turn lab measurements into simulator inputs and serve the UI. `flowlab help`
 //! lists the subcommands.
 
@@ -7,6 +7,8 @@ use std::io::BufWriter;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+
+mod capture;
 
 use clap::{Parser, Subcommand};
 use flowlab_analysis::mailbox::{MailboxHint, write_eoe_pcapng};
@@ -145,6 +147,60 @@ enum Cmd {
         /// Network configuration (ENI XML) applied to every capture.
         #[arg(long, value_name = "XML")]
         eni: Option<PathBuf>,
+        /// Allow live capture from network interfaces in the UI (through dumpcap or tcpdump;
+        /// only listens). Replays of loaded captures work without it.
+        #[arg(long)]
+        live: bool,
+        /// Where live captures are saved.
+        #[arg(long, default_value = "results/live", value_name = "DIR")]
+        live_dir: PathBuf,
+    },
+    /// Capture EtherCAT traffic live and analyse it as it arrives.
+    ///
+    /// Runs Wireshark's dumpcap (or tcpdump) on the interface; only listens, never sends.
+    /// Prints one line per second: frames, cycle period, jitter and round trip of the main
+    /// cyclic stream, WKC mismatches, unanswered frames, missed cycles, mailbox messages.
+    /// Saves the capture for `flowlab analyze`. Ctrl-C stops.
+    Capture {
+        /// Interface to capture on (`--list` shows them).
+        interface: Option<String>,
+        /// List the interfaces the capture tool can open, then exit.
+        #[arg(long)]
+        list: bool,
+        /// Capture tool (default: dumpcap if installed, else tcpdump).
+        #[arg(long, value_parser = ["dumpcap", "tcpdump"])]
+        tool: Option<String>,
+        /// Save the capture here (default: results/live/live-UNIXTIME.pcapng).
+        #[arg(short, long)]
+        out: Option<PathBuf>,
+        /// Stop after this many seconds.
+        #[arg(long, value_name = "SECONDS")]
+        duration: Option<f64>,
+        /// Capture time analysed in full at the end (`--report`), seconds.
+        #[arg(long, default_value_t = 10.0, value_name = "SECONDS")]
+        window: f64,
+        /// Keep all traffic on the interface, not only EtherCAT.
+        #[arg(long)]
+        all_traffic: bool,
+        /// Play a capture file back at its recorded pace instead of capturing.
+        #[arg(long, value_name = "FILE", conflicts_with = "interface")]
+        replay: Option<PathBuf>,
+        /// Playback speed for --replay (1 = real time).
+        #[arg(long, default_value_t = 1.0)]
+        speed: f64,
+        /// Write the analysis of the last window as JSON at the end.
+        #[arg(long, value_name = "JSON")]
+        report: Option<PathBuf>,
+        /// Mailbox addresses for stations whose SyncManager configuration was not captured,
+        /// `STATION=OUT,IN`. Repeatable.
+        #[arg(long = "mailbox", value_name = "STATION=OUT,IN")]
+        mailbox_hints: Vec<MailboxHint>,
+        /// Network configuration (ENI XML): expected working counters, mailboxes, names.
+        #[arg(long, value_name = "XML")]
+        eni: Option<PathBuf>,
+        /// Link rate for utilization, Mbit/s.
+        #[arg(long, default_value_t = 100)]
+        link_mbps: u64,
     },
     /// Print a JSON Schema.
     Schema {
@@ -262,12 +318,13 @@ fn run(cli: Cli) -> Result<()> {
                 print_summary(&a.report);
             }
         }
-        Cmd::Serve { captures, port, host, ui_dir, open, mailbox_hints, eni } => {
+        Cmd::Serve { captures, port, host, ui_dir, open, mailbox_hints, eni, live, live_dir } => {
             if !host.is_loopback() {
                 tracing::warn!("binding to {host}: the API can read local files and has no authentication");
             }
             let network = eni.as_deref().map(read_eni).transpose()?;
-            let state = flowlab_server::AppState::new(AnalysisOptions { mailbox_hints, network, ..Default::default() });
+            let state = flowlab_server::AppState::new(AnalysisOptions { mailbox_hints, network, ..Default::default() })
+                .with_live(flowlab_server::LiveConfig { interfaces: live, dir: live_dir });
             for c in &captures {
                 let info = state.load_path(c).map_err(|e| format!("{}: {e}", c.display()))?;
                 tracing::info!("loaded {} ({} frames)", info.name, info.frames);
@@ -285,6 +342,38 @@ fn run(cli: Cli) -> Result<()> {
             }
             tokio::runtime::Runtime::new()?.block_on(flowlab_server::serve(state, addr, ui))?;
         }
+        Cmd::Capture {
+            interface,
+            list,
+            tool,
+            out,
+            duration,
+            window,
+            all_traffic,
+            replay,
+            speed,
+            report,
+            mailbox_hints,
+            eni,
+            link_mbps,
+        } => capture::run(capture::CaptureArgs {
+            interface,
+            list,
+            tool,
+            out,
+            duration,
+            window,
+            all_traffic,
+            replay,
+            speed,
+            report,
+            analysis: AnalysisOptions {
+                link_bps: link_mbps * 1_000_000,
+                mailbox_hints,
+                network: eni.as_deref().map(read_eni).transpose()?,
+                ..Default::default()
+            },
+        })?,
         Cmd::Schema { which } => {
             let schema = match which.as_str() {
                 "sim" => flowlab_sim::spec_schema(),
@@ -655,12 +744,13 @@ fn ensure_parent(p: &Path) -> Result<()> {
 }
 
 fn ns(v: f64) -> String {
+    // Thresholds just below the unit, so 999.996 µs prints as 1.000 ms, not 1000.00 µs.
     let a = v.abs();
-    if a >= 1e9 {
+    if a >= 999_999_500.0 {
         format!("{:.3} s", v / 1e9)
-    } else if a >= 1e6 {
+    } else if a >= 999_995.0 {
         format!("{:.3} ms", v / 1e6)
-    } else if a >= 1e3 {
+    } else if a >= 999.5 {
         format!("{:.2} µs", v / 1e3)
     } else {
         format!("{v:.0} ns")

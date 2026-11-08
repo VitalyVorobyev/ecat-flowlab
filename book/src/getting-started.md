@@ -79,11 +79,14 @@ flowlab analyze run.pcapng --out run.json
 flowlab serve run.pcapng --open
 ```
 
+To watch the segment instead, while it runs: `flowlab capture eth1`, or the **Live** view of
+`cargo ui -- --live` ([Live capture](guide/live.md)).
+
 If the capture starts after the master configured the mailboxes, give their addresses:
 `--mailbox 0x1001=0x1000,0x1080`. If you have the master's ENI file, add `--eni network.xml`, so
 working counters are judged against the configuration rather than the most frequent value.
 
-**Safety:** FlowLab only reads files. It never sends frames. Record on an isolated lab network, and
+**Safety:** FlowLab only reads files and the output of capture tools. It never sends frames. Record on an isolated lab network, and
 never run a second master on a segment that is in use.
 
 ## Next

@@ -27,13 +27,14 @@ cargo test -p flowlab-analysis recovers_mailbox_ground_truth
 |---|---|---|
 | `ecat-wire` | `src/tests.rs` | Golden bytes (a BRD of AL status parsed, and rebuilt byte for byte by `FrameBuilder`, padded to 60 bytes); SyncManager, SDO command and mailbox protocol headers against golden bytes; UDP encapsulation; truncated input is an error, not a panic; property tests (below) |
 | `flowlab-core` | `src/lib.rs`, `src/units.rs` | Provenance marker in a capture comment round trip; serialization time |
-| `flowlab-capture` | `src/trace.rs` | pcapng write → read → index round trip; classic pcap with µs timestamps; WKC direction heuristic without a MAC split; garbage rejected |
+| `flowlab-capture` | `src/trace.rs`, `src/stream.rs` | pcapng write → read → index round trip; classic pcap with µs timestamps; WKC direction heuristic without a MAC split; garbage rejected; a stream fed in pieces of any size splits into the same blocks, and header blocks plus a run of packets parse as a file |
 | `flowlab-analysis` | `src/tests.rs`, `src/stats.rs`, `src/mailbox.rs` | Against synth ground truth (below); percentiles, histogram steps, decimation keeping spikes; SDO toggle violations, superseded and orphan transfers, FoE errors and EoE gaps |
 | `flowlab-synth` | `src/tests.rs` | Same spec ⇒ identical bytes and ground truth, another seed ⇒ different bytes; ground-truth counts equal what the capture contains; invalid specs rejected |
 | `flowlab-devices` | `src/tests.rs` | Hand-written ESI/ENI fixtures, ENI writer round trip, malformed XML and DTDs rejected, planner against hand arithmetic |
 | `flowlab-sim` | `src/tests.rs`, `src/protocol.rs` | Simulator invariants (below) |
 | `flowlab-study` | `src/tests.rs` | Pareto consistency, constraints with reasons, sampling rules, calibration recovering hidden parameters |
-| `flowlab-server` | `src/lib.rs` | The router driven in-process: synth, simulate, ENI, ESI, plan, study, uploads, errors |
+| `flowlab-live` | `src/tests.rs`, `src/tool.rs` | Replays counted completely and saved byte for byte, the window's span, mailbox addresses kept beyond the window, `cat` as a stand-in capture tool, failing tools and non-capture output, interface lists |
+| `flowlab-server` | `src/lib.rs` | The router driven in-process: synth, simulate, ENI, ESI, plan, study, live replay and the `--live` opt-in, uploads, errors |
 
 Each crate page in this part of the book lists its tests in more detail.
 
