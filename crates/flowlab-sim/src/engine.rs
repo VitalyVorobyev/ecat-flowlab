@@ -18,12 +18,13 @@ use ecat_wire::{
 };
 use flowlab_capture::PcapNgWriter;
 use flowlab_core::{InputRef, Provenance, ReportMeta};
+use flowlab_mailbox::{payload_sha256, transfer_seed};
 use sha2::{Digest, Sha256};
 
 use crate::SimError;
 use crate::protocol::{
     ChannelReceiver, ChannelSender, Endpoint, EoeReceiver, EoeSender, FoeReceiver, FoeSender, SdoReceiver, SdoSender,
-    Sink, Source, payload_sha256,
+    Sink, Source,
 };
 use crate::result::{SimResult, SlaveResult, TransferResult};
 use crate::spec::{MailboxAccess, MailboxPolicy, SimSpec, TransferDirection, TransferProtocol};
@@ -996,20 +997,6 @@ impl<'a, W: Write> Sim<'a, W> {
     }
 }
 
-fn policy_text(p: &MailboxPolicy) -> String {
-    match p {
-        MailboxPolicy::FixedQuota { accesses_per_cycle } => {
-            format!("fixed quota: {accesses_per_cycle} mailbox datagrams per cycle")
-        }
-        MailboxPolicy::RoundRobin { slaves_per_cycle } => {
-            format!("round robin: {slaves_per_cycle} slave{} per cycle", if *slaves_per_cycle == 1 { "" } else { "s" })
-        }
-        MailboxPolicy::Opportunistic { bus_budget_percent, turnaround_ns } => format!(
-            "opportunistic: mailbox frames within {bus_budget_percent} % of the cycle, {turnaround_ns} ns turnaround"
-        ),
-    }
-}
-
 fn assumptions() -> Vec<String> {
     vec![
         "Model, not measurement: every number follows from the spec's parameters.".into(),
@@ -1030,13 +1017,6 @@ fn protocol_name(p: &TransferProtocol) -> &'static str {
         TransferProtocol::CoeSegmented => "CoE",
         TransferProtocol::PdoChannel { .. } => "PDO channel",
     }
-}
-
-/// Seed of the payload of transfer `index` in a spec with seed `spec_seed`: the transfer's
-/// bytes are [`payload_bytes`](crate::payload_bytes)`(transfer_seed(..), offset, ..)`, so
-/// another tool can send the very payload a simulation moved and compare SHA-256s.
-pub fn transfer_seed(spec_seed: u64, index: usize) -> u64 {
-    spec_seed ^ (index as u64 + 1).wrapping_mul(0xA24B_AED4_963E_E407)
 }
 
 /// Run the simulation; frames go to `capture` as pcapng if given and enabled in the spec.
@@ -1201,7 +1181,7 @@ pub fn simulate<W: Write>(spec: &SimSpec, capture: Option<W>) -> Result<SimResul
         meta: ReportMeta::new(Provenance::Simulated, input, assumptions()),
         description: spec.description.clone(),
         seed: spec.seed,
-        policy: policy_text(&spec.mailbox_policy),
+        policy: spec.mailbox_policy.to_string(),
         cycle_time_ns: sim.cycle_ns as f64,
         link_bps,
         virtual_time_ns: virtual_time as f64,

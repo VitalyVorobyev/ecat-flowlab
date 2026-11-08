@@ -35,6 +35,7 @@
 - [flowlab-capture](workspace/flowlab-capture.md)
 - [flowlab-analysis](workspace/flowlab-analysis.md)
 - [flowlab-synth](workspace/flowlab-synth.md)
+- [flowlab-mailbox](workspace/flowlab-mailbox.md)
 - [flowlab-sim](workspace/flowlab-sim.md)
 - [flowlab-devices](workspace/flowlab-devices.md)
 - [flowlab-study](workspace/flowlab-study.md)

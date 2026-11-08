@@ -63,7 +63,7 @@ authentication and can read any file you can, so keep it on loopback.
 
 | Path | Content |
 |---|---|
-| `crates/` | `ecat-wire` (codec), `flowlab-core`, `-capture`, `-analysis`, `-synth`, `-sim`, `-devices`, `-study`, `-live`, `-pdi` (LAN9252 SPI timing), `-master` (lab master, opt-in), `-server`, `-cli` |
+| `crates/` | `ecat-wire` (codec), `flowlab-core`, `-capture`, `-analysis`, `-synth`, `-mailbox` (policies, payload), `-sim`, `-devices`, `-study`, `-live`, `-pdi` (LAN9252 SPI timing), `-master` (lab master, opt-in), `-server`, `-cli` |
 | `ui/` | React UI on the `@vitavision` lab-ui packages |
 | `configs/` | Example generator, simulator and study specs |
 | `book/` | The documentation (mdBook) |

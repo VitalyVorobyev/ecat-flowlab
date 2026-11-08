@@ -29,13 +29,12 @@ mod imp {
     use std::time::Duration;
 
     use flowlab_live::Tool;
+    use flowlab_mailbox::MailboxPolicy;
     use flowlab_master::hardware::{Session, SessionOptions};
     use flowlab_master::safety::{SegmentCheck, check_segment};
     use flowlab_master::{
-        EoeAddresses, MeasuredTransfer, Payload, PollMode, TransferJob, TransferOptions, TransferProtocol, policy_text,
-        setup_like,
+        EoeAddresses, MeasuredTransfer, Payload, PollMode, TransferJob, TransferOptions, TransferProtocol, setup_like,
     };
-    use flowlab_sim::MailboxPolicy;
 
     use crate::{Result, ensure_parent, ns, parse_station};
 
@@ -153,7 +152,7 @@ mod imp {
         /// Mailbox policy: `fixed-quota:N` (N datagrams per cycle), `round-robin:N` (N slaves
         /// per cycle) or `opportunistic:PERCENT[,TURNAROUND_NS]` (default fixed-quota:2, or the
         /// `--like` spec's).
-        #[arg(long, value_parser = parse_policy)]
+        #[arg(long, value_parser = |s: &str| s.parse::<MailboxPolicy>())]
         policy: Option<MailboxPolicy>,
         /// How "mailbox in" is polled: `read` the buffer (WKC 0 when empty) or read the
         /// SyncManager `status` first.
@@ -208,23 +207,6 @@ mod imp {
         /// Write the result as JSON (default: results/master/transfer-UNIXTIME.json).
         #[arg(short, long)]
         out: Option<PathBuf>,
-    }
-
-    fn parse_policy(s: &str) -> std::result::Result<MailboxPolicy, String> {
-        let (kind, rest) = s.split_once(':').unwrap_or((s, ""));
-        let bad = || format!("`{s}`: expected fixed-quota:N, round-robin:N or opportunistic:PERCENT[,TURNAROUND_NS]");
-        Ok(match kind {
-            "fixed-quota" => MailboxPolicy::FixedQuota { accesses_per_cycle: rest.parse().map_err(|_| bad())? },
-            "round-robin" => MailboxPolicy::RoundRobin { slaves_per_cycle: rest.parse().map_err(|_| bad())? },
-            "opportunistic" => {
-                let (p, t) = rest.split_once(',').unwrap_or((rest, "10000"));
-                MailboxPolicy::Opportunistic {
-                    bus_budget_percent: p.parse().map_err(|_| bad())?,
-                    turnaround_ns: t.parse().map_err(|_| bad())?,
-                }
-            }
-            _ => return Err(bad()),
-        })
     }
 
     fn parse_object(s: &str) -> std::result::Result<(u16, u8), String> {
@@ -378,7 +360,7 @@ mod imp {
             Some(spec_path) => {
                 let file = std::fs::File::open(spec_path).map_err(|e| format!("{}: {e}", spec_path.display()))?;
                 let spec: flowlab_sim::SimSpec = serde_json::from_reader(file)?;
-                let s = setup_like(&spec, a.transfer)?;
+                let s = setup_like(&spec.transfer_plan(a.transfer)?)?;
                 eprintln!(
                     "set up like transfer {} of {}: {} B, SHA-256 {}",
                     a.transfer,
@@ -413,11 +395,7 @@ mod imp {
                     Some("coe") => TransferProtocol::Coe { index: a.sdo.0, subindex: a.sdo.1 },
                     _ => TransferProtocol::Eoe { mtu_bytes: a.eoe_mtu, addresses },
                 };
-                let generated = |n: u64, seed: u64| {
-                    let mut v = vec![0u8; n as usize];
-                    flowlab_sim::payload_bytes(seed, 0, &mut v);
-                    v
-                };
+                let generated = |n: u64, seed: u64| flowlab_mailbox::payload(seed, n as usize);
                 let (payload, name) = if to_slave {
                     match (&a.file, a.bytes) {
                         (Some(f), _) => (
@@ -434,11 +412,11 @@ mod imp {
                     let expected_sha256 = a
                         .expect_sha256
                         .clone()
-                        .or_else(|| a.seed.zip(a.bytes).map(|(seed, n)| flowlab_sim::payload_sha256(seed, n)));
+                        .or_else(|| a.seed.zip(a.bytes).map(|(seed, n)| flowlab_mailbox::payload_sha256(seed, n)));
                     let name = format!("received from {:#06x}", a.station);
                     (Payload::Receive { expected_bytes: a.bytes, expected_sha256 }, name)
                 };
-                let policy = MailboxPolicy::FixedQuota { accesses_per_cycle: 2 };
+                let policy = MailboxPolicy::default();
                 (protocol, payload, name, 1_000_000, policy)
             }
         };
@@ -475,12 +453,7 @@ mod imp {
             payload_name,
         };
         let session = open(&a.safety)?;
-        eprintln!(
-            "transfer to/from {:#06x}: {}, cycle {}",
-            a.station,
-            policy_text(&options.policy),
-            ns(cycle_ns as f64)
-        );
+        eprintln!("transfer to/from {:#06x}: {}, cycle {}", a.station, options.policy, ns(cycle_ns as f64));
         let r = session.transfer(a.station, job, &options, a.op)?;
         print_transfer(&r);
         if let (Some(p), Some(data)) = (&a.save_received, &r.received) {
@@ -549,14 +522,7 @@ mod imp {
         use super::*;
 
         #[test]
-        fn policies_parse_like_the_simulator_names_them() {
-            assert_eq!(parse_policy("fixed-quota:3"), Ok(MailboxPolicy::FixedQuota { accesses_per_cycle: 3 }));
-            assert_eq!(parse_policy("round-robin:1"), Ok(MailboxPolicy::RoundRobin { slaves_per_cycle: 1 }));
-            assert_eq!(
-                parse_policy("opportunistic:60"),
-                Ok(MailboxPolicy::Opportunistic { bus_budget_percent: 60.0, turnaround_ns: 10_000 })
-            );
-            assert!(parse_policy("greedy").is_err());
+        fn arguments_parse() {
             assert_eq!(parse_object("0x2000:1"), Ok((0x2000, 1)));
             assert_eq!(parse_mac("02:00:00:00:00:01"), Ok([2, 0, 0, 0, 0, 1]));
             assert_eq!(parse_ip("192.0.2.2"), Ok([192, 0, 2, 2]));

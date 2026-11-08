@@ -2,6 +2,8 @@
 
 use futures_lite::future::block_on;
 
+use flowlab_mailbox::MailboxPolicy;
+
 use super::*;
 
 fn pattern(n: usize, seed: u8) -> Vec<u8> {
@@ -307,19 +309,17 @@ fn stale_messages_are_drained_first() {
 }
 
 #[test]
-fn policy_text_matches_the_simulator() {
+fn results_name_the_policy_as_the_simulator_does() {
     let mut spec = flowlab_sim::SimSpec::example();
     spec.transfers.truncate(1);
     spec.capture.enabled = false;
-    for p in [
-        MailboxPolicy::FixedQuota { accesses_per_cycle: 3 },
-        MailboxPolicy::RoundRobin { slaves_per_cycle: 1 },
-        MailboxPolicy::Opportunistic { bus_budget_percent: 60.0, turnaround_ns: 10_000 },
-    ] {
-        spec.mailbox_policy = p.clone();
-        let sim = flowlab_sim::simulate(&spec, None::<Vec<u8>>).unwrap();
-        assert_eq!(sim.policy, policy_text(&p));
-    }
+    let p = MailboxPolicy::RoundRobin { slaves_per_cycle: 1 };
+    spec.mailbox_policy = p.clone();
+    let sim = flowlab_sim::simulate(&spec, None::<Vec<u8>>).unwrap();
+    let slave = VirtualSlave::new(VirtualSlaveConfig::default());
+    let o = TransferOptions { policy: p, ..TransferOptions::default() };
+    let r = run(&slave, job(&slave, TransferProtocol::foe(), Payload::Send(pattern(100, 0))), &o);
+    assert_eq!(r.policy, sim.policy);
 }
 
 #[test]
@@ -378,7 +378,7 @@ fn a_transfer_set_up_like_a_simulated_one_moves_the_same_bytes() {
     quiet.capture.enabled = false;
     let sim = flowlab_sim::simulate(&quiet, None::<Vec<u8>>).unwrap();
     for (k, t) in spec.transfers.iter().enumerate() {
-        let Ok(s) = setup_like(&spec, k) else {
+        let Ok(s) = spec.transfer_plan(k).map_err(MasterError::Invalid).and_then(|p| setup_like(&p)) else {
             assert!(matches!(t.protocol, flowlab_sim::TransferProtocol::PdoChannel { .. }));
             continue;
         };
@@ -390,8 +390,10 @@ fn a_transfer_set_up_like_a_simulated_one_moves_the_same_bytes() {
         let cfg = match &s.payload {
             Payload::Send(_) => cfg,
             Payload::Receive { expected_bytes, .. } => {
-                let mut v = vec![0u8; expected_bytes.unwrap() as usize];
-                flowlab_sim::payload_bytes(flowlab_sim::transfer_seed(spec.seed, k), 0, &mut v);
+                let v = flowlab_mailbox::payload(
+                    flowlab_mailbox::transfer_seed(spec.seed, k),
+                    expected_bytes.unwrap() as usize,
+                );
                 let eoe = matches!(s.protocol, TransferProtocol::Eoe { .. });
                 VirtualSlaveConfig { upload: v, eoe_send: eoe, ..cfg }
             }

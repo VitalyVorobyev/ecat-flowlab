@@ -1,6 +1,6 @@
 # Overview
 
-FlowLab is a Cargo workspace of thirteen crates, a developer-tools crate (`xtask`) and a React
+FlowLab is a Cargo workspace of fourteen crates, a developer-tools crate (`xtask`) and a React
 UI. Every source of traffic produces
 real Ethernet frames, and one analysis reads them all.
 
@@ -34,11 +34,12 @@ Only their provenance differs.
 | [`flowlab-devices`](flowlab-devices.md) | ESI/ENI readers, ENI writer, bus-budget planner | ecat-wire |
 | [`flowlab-analysis`](flowlab-analysis.md) | Capture analysis and frame queries | ecat-wire, core, capture, devices |
 | [`flowlab-synth`](flowlab-synth.md) | Deterministic synthetic captures with ground truth | ecat-wire, core, capture, devices |
-| [`flowlab-sim`](flowlab-sim.md) | Discrete-event simulator emitting frames | ecat-wire, core, capture |
+| [`flowlab-mailbox`](flowlab-mailbox.md) | Mailbox policies, transfer directions and protocols, the generated payload: shared by the simulator and the lab master | — |
+| [`flowlab-sim`](flowlab-sim.md) | Discrete-event simulator emitting frames | ecat-wire, core, capture, mailbox |
 | [`flowlab-study`](flowlab-study.md) | Parameter studies, Pareto frontier, calibration, what-if, lab inputs | core, sim, analysis |
 | [`flowlab-live`](flowlab-live.md) | Live capture through dumpcap or tcpdump, analysed in a rolling window | core, capture, analysis |
 | [`flowlab-pdi`](flowlab-pdi.md) | Timed ESC accesses over a LAN9252's SPI (Linux spidev, or a simulated LAN9252) for `pdi-fit` | core |
-| [`flowlab-master`](flowlab-master.md) | Lab master: mailbox transfer engine with the simulator's policies, a virtual slave; the safety checks and EtherCrab behind the `hardware` feature | ecat-wire, core, devices, sim; live with `hardware` |
+| [`flowlab-master`](flowlab-master.md) | Lab master: mailbox transfer engine with the simulator's policies, a virtual slave; the safety checks and EtherCrab behind the `hardware` feature | ecat-wire, core, devices, mailbox; live with `hardware` |
 | [`flowlab-server`](server-cli.md) | Local HTTP API and static UI (axum) | the above except pdi and master: it never touches hardware |
 | [`flowlab-cli`](server-cli.md) | The `flowlab` binary | all of the above; master only with the feature `master` |
 | `xtask` (not published) | Developer commands behind the cargo aliases `cargo ui`, `ui-dev`, `ci`, `site` ([Contributing](contributing.md)) | std only |

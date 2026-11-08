@@ -652,6 +652,7 @@ dependencies = [
  "flowlab-core",
  "flowlab-devices",
  "flowlab-live",
+ "flowlab-mailbox",
  "flowlab-master",
  "flowlab-pdi",
  "flowlab-server",
@@ -700,6 +701,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "flowlab-mailbox"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2",
+ "ts-rs",
+]
+
+[[package]]
 name = "flowlab-master"
 version = "0.1.0"
 dependencies = [
@@ -709,6 +721,7 @@ dependencies = [
  "flowlab-core",
  "flowlab-devices",
  "flowlab-live",
+ "flowlab-mailbox",
  "flowlab-sim",
  "futures-lite",
  "serde",
@@ -760,6 +773,7 @@ dependencies = [
  "flowlab-analysis",
  "flowlab-capture",
  "flowlab-core",
+ "flowlab-mailbox",
  "schemars",
  "serde",
  "serde_json",

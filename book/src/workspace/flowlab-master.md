@@ -33,14 +33,17 @@ engine without hardware dependencies, a virtual slave to test it, and, behind th
   with documentation addresses as defaults). The engine adds the mailbox header and counter and
   pads to the SyncManager length, so a write always reaches the buffer's last byte, and a read
   always reads the whole buffer, which is what hands a buffer over on an ESC.
-- **Policies** are the simulator's `MailboxPolicy`; `policy_text` words them as `SimResult::policy`
-  does (a test checks). With one slave, round robin serves it every cycle.
+- **Policies** are `flowlab_mailbox::MailboxPolicy`, the type `SimSpec` uses; results name them
+  with its `Display`, as `SimResult::policy` does. With one slave, round robin serves it every
+  cycle.
 - **Retries**: a rejected write is repeated, a lost write keeps its counter, a lost read of
   "mailbox in" triggers the repeat request, a silent slave gets the last message again with a
   new counter, and a repeated counter from the slave is dropped ([Lab
   master](../guide/master.md#retries-and-counters)).
-- **`setup_like(spec, k)`** builds transfer `k` of a `SimSpec` with the simulator's payload bytes
-  (`flowlab_sim::transfer_seed` and `payload_bytes`), so measured and simulated SHA-256s match.
+- **`setup_like(&TransferPlan)`** builds the job for a transfer of a simulator spec
+  (`SimSpec::transfer_plan(k)`, [flowlab-mailbox](flowlab-mailbox.md)) with the generated
+  payload bytes, so measured and simulated SHA-256s match. The crate does not depend on the
+  simulator; its tests use it to check the match.
 - **Safety** (`safety` module, feature `hardware`): `check_segment(&SegmentCheck, progress)`
   refuses without an interface name and the isolated-network acknowledgement. It then listens
   through `flowlab-live` (dumpcap or tcpdump, EtherCAT filter) and refuses if any EtherCAT frame
@@ -64,7 +67,7 @@ engine without hardware dependencies, a virtual slave to test it, and, behind th
 | `run_transfer(&bus, TransferJob, &TransferOptions)` | run and measure one transfer |
 | `TransferJob` | slave name, `MailboxLayout`, `TransferProtocol` (`Foe`, `Coe`, `Eoe`), `Payload` (`Send(bytes)` or `Receive { expected_bytes, expected_sha256 }`) |
 | `TransferOptions` | cycle time, policy, `PollMode` (`Read`, `Status`), reply timeout, resends, time limit, first counter, draining, record limit, link rate for the bound, extra assumptions |
-| `setup_like(&SimSpec, k)` → `SimulatedSetup` | a transfer set up like a simulated one |
+| `setup_like(&TransferPlan)` → `SimulatedSetup` | a transfer set up like a simulated one |
 | `MailboxBus`, `MailboxLayout`, `Reply`, `BusError`; `write_mailbox`, `read_mailbox`, `read_sm`, `read_sm_status` | the bus |
 | `VirtualSlave`, `VirtualSlaveConfig`, `VirtualSlaveLog` | the simulated slave and what it received |
 | `MeasuredTransfer`, `RunResult`, `ScanResult` (`network_config()` → ENI), `CycleTiming`, `CycleRecord`, `Summary` | results ([reports](../reference/reports.md#lab-master-results)) |
@@ -109,7 +112,7 @@ arrived and answers at that moment.
   silent slave fails after its resends, and the time limit stops a transfer.
 - Cycles start on plan in virtual time, record the cyclic exchange, and overrun and skip when
   the work does not fit; stale messages are drained first.
-- `policy_text` equals the simulator's wording; a scan becomes an ENI that `parse_eni` reads
+- A result names its policy as the simulator's does; a scan becomes an ENI that `parse_eni` reads
   back; every mailbox transfer of `SimSpec::example()` set up with `setup_like` moves the bytes
   with the simulated result's SHA-256.
 

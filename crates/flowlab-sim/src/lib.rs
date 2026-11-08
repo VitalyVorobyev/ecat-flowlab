@@ -25,8 +25,8 @@ mod protocol;
 mod result;
 mod spec;
 
-pub use engine::{FIRST_STATION, MASTER_MAC, MBX_BASE, simulate, transfer_seed};
-pub use protocol::{payload_bytes, payload_sha256};
+pub use engine::{FIRST_STATION, MASTER_MAC, MBX_BASE, simulate};
+pub use flowlab_mailbox::{payload, payload_bytes, payload_sha256, transfer_seed};
 pub use result::{SimResult, SlaveResult, TransferResult};
 pub use spec::{
     CaptureSpec, MAX_MAILBOX_BYTES, MailboxAccess, MailboxPolicy, PDO_ACK_BYTES, PDO_CHUNK_HEADER, PdiSpec, SimFaults,
