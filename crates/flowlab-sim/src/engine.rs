@@ -18,7 +18,7 @@ use ecat_wire::{
 };
 use flowlab_capture::PcapNgWriter;
 use flowlab_core::{InputRef, Provenance, ReportMeta};
-use flowlab_mailbox::{payload_sha256, transfer_seed};
+use flowlab_mailbox::{msg, payload_sha256, transfer_seed};
 use sha2::{Digest, Sha256};
 
 use crate::SimError;
@@ -381,20 +381,8 @@ impl<'a, W: Write> Sim<'a, W> {
     // -- master ------------------------------------------------------------------------------
 
     fn encode(counter: &mut u8, t: MailboxType, body: &[u8], len: usize) -> Vec<u8> {
-        *counter = *counter % 7 + 1;
-        let h = MailboxHeader {
-            length: body.len() as u16,
-            address: 0,
-            channel: 0,
-            priority: 0,
-            mailbox_type: t,
-            counter: *counter,
-        };
-        let mut v = Vec::with_capacity(len);
-        v.extend_from_slice(&h.encode());
-        v.extend_from_slice(body);
-        v.resize(len, 0);
-        v
+        *counter = msg::next_counter(*counter);
+        msg::mailbox_buffer(t, *counter, 0, body, len)
     }
 
     fn master_fill(&mut self, p: usize) {

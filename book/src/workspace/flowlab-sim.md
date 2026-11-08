@@ -13,7 +13,7 @@ source: [crates/flowlab-sim](https://github.com/VitalyVorobyev/ecat-flowlab/blob
 
 | | |
 |---|---|
-| Depends on | `ecat-wire` (frame building, mailbox/CoE/FoE/EoE headers), `flowlab-core` (`Provenance`, `ReportMeta`), `flowlab-capture` (`PcapNgWriter`) |
+| Depends on | `ecat-wire` (frame building, mailbox/CoE/FoE/EoE headers), `flowlab-core` (`Provenance`, `ReportMeta`), `flowlab-capture` (`PcapNgWriter`), `flowlab-mailbox` (policies, payload, messages) |
 | Dev-depends on | `flowlab-analysis` (to analyse its own captures in tests) |
 | Used by | `flowlab-study` (studies and what-if, without frames), `flowlab-master` (`MailboxPolicy`, the payload generator for `transfer --like`), `flowlab-server` (`POST /api/simulate`, `/api/sim/run`), `flowlab-cli` (`flowlab simulate`) |
 

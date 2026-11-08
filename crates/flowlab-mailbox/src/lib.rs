@@ -1,12 +1,14 @@
-//! The mailbox vocabulary the simulator (`flowlab-sim`) and the lab master (`flowlab-master`)
-//! share, so that a measured transfer is set up, and described, exactly like a simulated one:
+//! The mailbox vocabulary the simulator (`flowlab-sim`), the lab master (`flowlab-master`) and
+//! the capture generator (`flowlab-synth`) share, so that a measured transfer is set up, and described, exactly like a simulated one:
 //!
 //! * [`MailboxPolicy`]: how a master schedules mailbox datagrams per cycle, with its text form
 //!   (`Display`, as results print it) and its short command-line form (`FromStr`);
 //! * [`TransferDirection`] and [`MailboxProtocol`];
 //! * the generated payload ([`payload_bytes`], [`payload_sha256`], [`transfer_seed`]): the same
 //!   bytes on both sides, so the SHA-256s compare;
-//! * [`TransferPlan`]: one transfer of a simulator spec as the lab master needs it.
+//! * [`TransferPlan`]: one transfer of a simulator spec as the lab master needs it;
+//! * [`msg`]: the FoE, CoE SDO and EoE messages, mailbox buffers and counters, as the
+//!   simulator, the lab master, its virtual slave and the capture generator write them.
 //!
 //! ```
 //! use flowlab_mailbox::MailboxPolicy;
@@ -16,6 +18,7 @@
 //! assert_eq!("fixed-quota:2".parse::<MailboxPolicy>().unwrap(), MailboxPolicy::default());
 //! ```
 
+pub mod msg;
 mod payload;
 mod policy;
 

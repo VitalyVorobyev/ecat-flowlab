@@ -14,7 +14,7 @@ user guide: [Synthetic captures](../guide/synth.md)
 
 | | |
 |---|---|
-| Depends on | `ecat-wire` (`FrameBuilder`), `flowlab-core`, `flowlab-capture` (`PcapNgWriter`), `flowlab-devices` (`NetworkConfig`), `serde`, `schemars`, `thiserror` |
+| Depends on | `ecat-wire` (`FrameBuilder`), `flowlab-core`, `flowlab-capture` (`PcapNgWriter`), `flowlab-devices` (`NetworkConfig`), `flowlab-mailbox` (mailbox buffers, SDO and FoE messages, EoE fragments), `serde`, `schemars`, `thiserror` |
 | Used by | `flowlab-cli` (`synth`, `schema synth`), `flowlab-server`, and the tests of `flowlab-analysis` |
 
 It is not a simulator of slave behaviour or bus timing: the round trip is a fixed model

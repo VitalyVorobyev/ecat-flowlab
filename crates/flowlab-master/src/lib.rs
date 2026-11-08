@@ -55,7 +55,7 @@ pub use bus::{
 pub use engine::{
     Payload, PollMode, SimulatedSetup, TransferJob, TransferOptions, TransferProtocol, run_transfer, setup_like,
 };
-pub use protocol::{EOE_HEADERS, EoeAddresses, EoeReassembler, eoe_fragments, udp_frame, udp_payload};
+pub use flowlab_mailbox::msg::EoeAddresses;
 pub use result::{CycleRecord, CycleTiming, MeasuredTransfer, RunResult, ScanResult, ScannedSlave, ScannedSm, Summary};
 pub use virtual_slave::{VirtualSlave, VirtualSlaveConfig, VirtualSlaveLog};
 

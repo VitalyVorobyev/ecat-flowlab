@@ -14,13 +14,13 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 
 use ecat_wire::{
-    CoeHeader, CoeService, FoeHeader, FoeOpcode, MAILBOX_HEADER_LEN, MailboxHeader, MailboxType, SdoCommand, SdoHeader,
-    SyncManagerConfig, segment_data_len,
+    CoeHeader, CoeService, FoeHeader, FoeOpcode, MAILBOX_HEADER_LEN, MailboxErrorReply, MailboxHeader, MailboxType,
+    SdoCommand, SdoHeader, SyncManagerConfig, segment_data_len,
 };
 
 use crate::bus::{BusError, MailboxBus, Reply, SM_REPEAT_ACK, SM_REPEAT_REQUEST, sm_register};
-use crate::protocol::{EoeAddresses, EoeReassembler, eoe_fragments, udp_frame};
 use crate::{MailboxLayout, bus::SM_MAILBOX_IN};
+use flowlab_mailbox::msg::{self, EoeAddresses, EoeReassembler, eoe_fragments, foe, udp_frame};
 
 /// Settings of a [`VirtualSlave`].
 #[derive(Debug, Clone)]
@@ -68,7 +68,7 @@ impl Default for VirtualSlaveConfig {
             busy_every: None,
             drop_repeated_counter: true,
             previous_counter: 0,
-            sdo_index: 0x2000,
+            sdo_index: msg::SDO_INDEX,
             sdo_subindex: 0,
             upload: Vec::new(),
             eoe_send: false,
@@ -145,29 +145,6 @@ impl std::fmt::Debug for VirtualSlave {
     }
 }
 
-fn foe(op: FoeOpcode, value: u32, tail: &[u8]) -> Vec<u8> {
-    let mut v = FoeHeader { opcode: op, value }.encode().to_vec();
-    v.extend_from_slice(tail);
-    v
-}
-
-fn coe(cmd: SdoCommand, index: u16, subindex: u8, data: u32, tail: &[u8]) -> Vec<u8> {
-    let mut v = CoeHeader { number: 0, service: CoeService::SdoResponse }.encode().to_vec();
-    v.extend_from_slice(&SdoHeader { command: cmd.encode(), index, subindex, data }.encode());
-    v.extend_from_slice(tail);
-    v
-}
-
-fn coe_segment(cmd: SdoCommand, data: &[u8]) -> Vec<u8> {
-    let mut v = CoeHeader { number: 0, service: CoeService::SdoResponse }.encode().to_vec();
-    v.push(cmd.encode());
-    v.extend_from_slice(data);
-    if data.len() < 7 {
-        v.resize(CoeHeader::LEN + 1 + 7, 0);
-    }
-    v
-}
-
 impl VirtualSlave {
     /// A slave with these settings, at virtual time 0.
     pub fn new(cfg: VirtualSlaveConfig) -> Self {
@@ -230,18 +207,14 @@ impl VirtualSlave {
                 && *ready <= st.now
                 && let Some((_, kind, body)) = st.outbox.pop_front()
             {
-                st.out_counter = if st.out_counter >= 7 { 1 } else { st.out_counter + 1 };
-                let h = MailboxHeader {
-                    length: body.len() as u16,
-                    address: self.cfg.mailbox.station,
-                    channel: 0,
-                    priority: 0,
-                    mailbox_type: kind,
-                    counter: st.out_counter,
-                };
-                let mut buf = h.encode().to_vec();
-                buf.extend_from_slice(&body);
-                buf.resize(self.cfg.mailbox.in_len as usize, 0);
+                st.out_counter = msg::next_counter(st.out_counter);
+                let buf = msg::mailbox_buffer(
+                    kind,
+                    st.out_counter,
+                    self.cfg.mailbox.station,
+                    &body,
+                    self.cfg.mailbox.in_len as usize,
+                );
                 st.last_sent = Some(buf.clone());
                 st.sm1 = Some(buf);
                 st.log.messages_out += 1;
@@ -257,8 +230,8 @@ impl VirtualSlave {
         let end = (st.eoe_tx_offset + self.cfg.eoe_mtu - 28).min(self.cfg.upload.len());
         let frame = udp_frame(&self.cfg.upload[st.eoe_tx_offset..end], &self.cfg.eoe_addresses, false);
         st.eoe_tx_offset = end;
-        st.eoe_frame_no = st.eoe_frame_no % 15 + 1;
-        let cap = self.cfg.mailbox.in_len as usize - MAILBOX_HEADER_LEN - 4;
+        st.eoe_frame_no = msg::next_eoe_frame_no(st.eoe_frame_no);
+        let cap = msg::eoe_capacity(self.cfg.mailbox.in_len as usize);
         let now = st.now;
         for f in eoe_fragments(&frame, cap, st.eoe_frame_no) {
             st.outbox.push_back((now, MailboxType::Eoe, f));
@@ -285,9 +258,8 @@ impl VirtualSlave {
             }
             _ => {
                 // Mailbox error reply: protocol not supported.
-                let mut v = 1u16.to_le_bytes().to_vec();
-                v.extend_from_slice(&2u16.to_le_bytes());
-                self.reply(st, at, MailboxType::Error, v);
+                let e = MailboxErrorReply { service: 1, detail: 2 };
+                self.reply(st, at, MailboxType::Error, e.encode().to_vec());
             }
         }
     }
@@ -295,8 +267,8 @@ impl VirtualSlave {
     fn on_foe(&self, st: &mut State, body: &[u8], at: u64) {
         let Ok(h) = FoeHeader::parse(body) else { return };
         let data = &body[FoeHeader::LEN..];
-        let cap_out = self.cfg.mailbox.out_len as usize - MAILBOX_HEADER_LEN - FoeHeader::LEN;
-        let cap_in = self.cfg.mailbox.in_len as usize - MAILBOX_HEADER_LEN - FoeHeader::LEN;
+        let cap_out = msg::foe_capacity(self.cfg.mailbox.out_len as usize);
+        let cap_in = msg::foe_capacity(self.cfg.mailbox.in_len as usize);
         match (h.opcode, &mut st.foe) {
             (FoeOpcode::Write, _) => {
                 let name = String::from_utf8_lossy(data).into_owned();
@@ -362,10 +334,10 @@ impl VirtualSlave {
         let cmd = SdoCommand::decode(body[CoeHeader::LEN], true);
         let hdr = SdoHeader::parse(&body[CoeHeader::LEN..]).ok();
         let (ix, sub) = (self.cfg.sdo_index, self.cfg.sdo_subindex);
-        let abort = |code: u32| coe(SdoCommand::Abort, ix, sub, code, &[]);
+        let abort = |code: u32| msg::sdo(CoeService::SdoResponse, SdoCommand::Abort, ix, sub, code, &[]);
         let addressed = |h: Option<SdoHeader>| h.is_some_and(|h| h.index == ix && h.subindex == sub);
-        let cap_init = self.cfg.mailbox.in_len as usize - MAILBOX_HEADER_LEN - CoeHeader::LEN - SdoHeader::LEN;
-        let cap_seg = self.cfg.mailbox.in_len as usize - MAILBOX_HEADER_LEN - CoeHeader::LEN - 1;
+        let cap_init = msg::sdo_initiate_capacity(self.cfg.mailbox.in_len as usize);
+        let cap_seg = msg::sdo_segment_capacity(self.cfg.mailbox.in_len as usize);
         let msg = match (cmd, &mut st.sdo) {
             (SdoCommand::InitiateDownloadRequest { .. }, _) if !addressed(hdr) => abort(0x0602_0000),
             (SdoCommand::InitiateDownloadRequest { expedited: false, .. }, _) => {
@@ -378,7 +350,7 @@ impl VirtualSlave {
                 } else {
                     st.sdo = Sdo::Download { toggle: false, data };
                 }
-                coe(SdoCommand::InitiateDownloadResponse, ix, sub, 0, &[])
+                msg::sdo(CoeService::SdoResponse, SdoCommand::InitiateDownloadResponse, ix, sub, 0, &[])
             }
             (SdoCommand::DownloadSegmentRequest { toggle, unused, last }, Sdo::Download { toggle: t, data })
                 if toggle == *t =>
@@ -391,7 +363,7 @@ impl VirtualSlave {
                     st.log.objects.push(d);
                     st.sdo = Sdo::Idle;
                 }
-                coe_segment(SdoCommand::DownloadSegmentResponse { toggle }, &[])
+                msg::sdo_segment(CoeService::SdoResponse, SdoCommand::DownloadSegmentResponse { toggle }, &[])
             }
             (SdoCommand::DownloadSegmentRequest { .. }, _) => abort(0x0503_0000),
             (SdoCommand::InitiateUploadRequest { .. }, _) if !addressed(hdr) => abort(0x0602_0000),
@@ -407,7 +379,7 @@ impl VirtualSlave {
                         unused: (4 - obj.len()) as u8,
                     };
                     st.sdo = Sdo::Idle;
-                    coe(cmd, ix, sub, u32::from_le_bytes(d), &[])
+                    msg::sdo(CoeService::SdoResponse, cmd, ix, sub, u32::from_le_bytes(d), &[])
                 } else {
                     let n = cap_init.min(obj.len());
                     let cmd = SdoCommand::InitiateUploadResponse {
@@ -417,7 +389,7 @@ impl VirtualSlave {
                         unused: 0,
                     };
                     st.sdo = Sdo::Upload { offset: n, toggle: false };
-                    coe(cmd, ix, sub, obj.len() as u32, &obj[..n])
+                    msg::sdo(CoeService::SdoResponse, cmd, ix, sub, obj.len() as u32, &obj[..n])
                 }
             }
             (SdoCommand::UploadSegmentRequest { toggle }, Sdo::Upload { offset, toggle: t }) if toggle == *t => {
@@ -427,7 +399,7 @@ impl VirtualSlave {
                 let last = end == obj.len();
                 let cmd =
                     SdoCommand::UploadSegmentResponse { toggle, unused: if n < 7 { (7 - n) as u8 } else { 0 }, last };
-                let msg = coe_segment(cmd, &obj[*offset..end]);
+                let msg = msg::sdo_segment(CoeService::SdoResponse, cmd, &obj[*offset..end]);
                 *offset = end;
                 *t = !*t;
                 if last {

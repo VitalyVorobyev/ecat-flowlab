@@ -12,6 +12,7 @@ ecat-wire.workspace = true
 flowlab-core.workspace = true
 flowlab-capture.workspace = true
 flowlab-devices.workspace = true
+flowlab-mailbox.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 schemars.workspace = true

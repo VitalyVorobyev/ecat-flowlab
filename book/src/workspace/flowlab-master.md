@@ -28,9 +28,9 @@ engine without hardware dependencies, a virtual slave to test it, and, behind th
   Helpers on top write "mailbox out", read "mailbox in", and read a SyncManager's register block
   or status byte. Methods take `&self`, so a write and a read run concurrently
   (`futures_lite::future::zip`) as one policy frame.
-- **Endpoints** are the master's side of each protocol as message-level state machines, with the
-  simulator's message formats (FoE file name `flowlab.bin`, CoE object `0x2000:00`, EoE UDP frames
-  with documentation addresses as defaults). The engine adds the mailbox header and counter and
+- **Endpoints** are the master's side of each protocol as message-level state machines. Their
+  messages come from `flowlab_mailbox::msg`, as the simulator's do (FoE file name `flowlab.bin`,
+  CoE object `0x2000:00`, EoE UDP frames with documentation addresses as defaults). The engine adds the mailbox header and counter and
   pads to the SyncManager length, so a write always reaches the buffer's last byte, and a read
   always reads the whole buffer, which is what hands a buffer over on an ESC.
 - **Policies** are `flowlab_mailbox::MailboxPolicy`, the type `SimSpec` uses; results name them
@@ -71,7 +71,7 @@ engine without hardware dependencies, a virtual slave to test it, and, behind th
 | `MailboxBus`, `MailboxLayout`, `Reply`, `BusError`; `write_mailbox`, `read_mailbox`, `read_sm`, `read_sm_status` | the bus |
 | `VirtualSlave`, `VirtualSlaveConfig`, `VirtualSlaveLog` | the simulated slave and what it received |
 | `MeasuredTransfer`, `RunResult`, `ScanResult` (`network_config()` → ENI), `CycleTiming`, `CycleRecord`, `Summary` | results ([reports](../reference/reports.md#lab-master-results)) |
-| `udp_frame`, `udp_payload`, `eoe_fragments`, `EoeReassembler` | EoE helpers |
+| `EoeAddresses` | the addresses of the tunnelled UDP frames (re-exported from `flowlab_mailbox::msg`) |
 | `safety::{check_segment, SegmentCheck, QuietSegment}` | the checks before anything is sent (feature `hardware`) |
 | `hardware::Session::{open, scan, run, transfer}`, `SessionOptions` | EtherCrab (feature `hardware`); `open` needs a `QuietSegment` |
 
@@ -116,7 +116,7 @@ arrived and answers at that moment.
   back; every mailbox transfer of `SimSpec::example()` set up with `setup_like` moves the bytes
   with the simulated result's SHA-256.
 
-`src/protocol.rs` tests EoE fragmentation and reassembly; `src/hardware.rs` (feature
+`src/hardware.rs` (feature
 `hardware`) tests the EEPROM protocol word, the WKC mapping and the cycle wait. CI builds the
 `master` feature of the CLI with clippy and runs the `hardware` tests on Linux. The EtherCrab
 calls themselves need a slave and are not covered.
