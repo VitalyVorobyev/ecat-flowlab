@@ -28,7 +28,8 @@ fn a_replay_is_counted_completely_and_saved_byte_for_byte() {
     let whole = analyze(&Trace::build(CaptureFile::parse(bytes.clone()).unwrap(), "demo"), &AnalysisOptions::default());
     let path = scratch("replay.pcapng");
     let options = LiveOptions { save_to: Some(path.clone()), ..fast() };
-    let source = Source::Replay { bytes: bytes.clone(), name: "demo.pcapng".into(), speed: 20.0 };
+    // Slow enough for several ticks even where one tick's analysis takes a few hundred ms.
+    let source = Source::Replay { bytes: bytes.clone(), name: "demo.pcapng".into(), speed: 5.0 };
     let done = LiveSession::start(source, options).unwrap().wait();
 
     assert_eq!(done.state, LiveState::Finished);
@@ -37,7 +38,7 @@ fn a_replay_is_counted_completely_and_saved_byte_for_byte() {
     // Every frame lands in exactly one tick.
     assert_eq!(done.totals.ethercat_frames, whole.report.summary.ethercat_frames);
     assert_eq!(done.packets, whole.report.summary.frames);
-    assert!(done.series.len() >= 3, "a 0.25 s replay spans several 40 ms ticks");
+    assert!(done.series.len() >= 3, "a 1 s replay spans several 40 ms ticks");
     assert!(done.totals.mailbox_messages > 0);
     let period = done.series.iter().filter_map(|p| p.period_ns).next().unwrap();
     assert!((period - 1e6).abs() < 1e3, "1 ms cycle, got {period} ns");
@@ -47,8 +48,8 @@ fn a_replay_is_counted_completely_and_saved_byte_for_byte() {
 #[test]
 fn the_window_keeps_recent_traffic_and_mailbox_addresses_outlive_it() {
     let options = LiveOptions { window: Duration::from_millis(500), ..fast() };
-    // About 0.16 s of capture per tick.
-    let source = Source::Replay { bytes: demo(), name: "demo.pcapng".into(), speed: 4.0 };
+    // About 0.08 s of capture per tick, 2.5 s in all: several ticks even on a slow machine.
+    let source = Source::Replay { bytes: demo(), name: "demo.pcapng".into(), speed: 2.0 };
     let done = LiveSession::start(source, options).unwrap().wait();
     let report = done.window.unwrap();
     let span = report.summary.duration_ns as f64;

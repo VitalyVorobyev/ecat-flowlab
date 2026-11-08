@@ -251,6 +251,8 @@ struct Shared {
     state: LiveState,
     message: Option<String>,
     stderr: String,
+    /// The tool's error output has ended (or there is none to read).
+    stderr_done: bool,
     header: Vec<u8>,
     window: VecDeque<Vec<u8>>,
     window_bytes: usize,
@@ -306,6 +308,7 @@ impl LiveSession {
             state: LiveState::Running,
             message: None,
             stderr: String::new(),
+            stderr_done: true,
             header: Vec::new(),
             window: VecDeque::new(),
             window_bytes: 0,
@@ -335,6 +338,7 @@ impl LiveSession {
                 *child.lock().unwrap_or_else(|e| e.into_inner()) = Some(c);
                 if let Some(mut err) = stderr {
                     let sh = shared.clone();
+                    lock(&sh).stderr_done = false;
                     threads.push(std::thread::spawn(move || {
                         let mut buf = [0u8; 1024];
                         while let Ok(n @ 1..) = err.read(&mut buf) {
@@ -348,6 +352,7 @@ impl LiveSession {
                                 s.stderr.drain(..cut);
                             }
                         }
+                        lock(&sh).stderr_done = true;
                     }));
                 }
                 let (sh, st, ch) = (shared.clone(), stop.clone(), child.clone());
@@ -552,6 +557,11 @@ fn read_command(
         match status {
             Some(s) if s.success() => finish(shared, LiveState::Finished, Some("the capture tool exited".into())),
             Some(s) => {
+                // The tool has exited; give the error-output reader a moment to finish.
+                let deadline = Instant::now() + Duration::from_millis(500);
+                while !lock(shared).stderr_done && Instant::now() < deadline {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
                 let tail = lock(shared).stderr.trim().to_owned();
                 let msg = if tail.is_empty() { format!("the capture tool exited with {s}") } else { tail };
                 finish(shared, LiveState::Failed, Some(msg));
