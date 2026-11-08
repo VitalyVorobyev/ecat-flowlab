@@ -15,7 +15,7 @@
 //!   virtual time. The engine is tested end to end against it;
 //! * with the cargo feature **`hardware`**, the `hardware` module: EtherCrab on a network
 //!   interface for `scan`, a cyclic `run` and `transfer`. It sends frames, so it is
-//!   behind a feature, and opening a session needs the [`QuietSegment`](safety::QuietSegment)
+//!   behind a feature, and opening a session needs the `QuietSegment`
 //!   that only the `safety` module's checks hand out: a named interface, an explicit
 //!   acknowledgement that the segment is an isolated lab network, and no other master heard.
 //!
