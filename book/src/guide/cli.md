@@ -14,6 +14,7 @@ flowlab <COMMAND>
   serve     Serve the web UI and API on localhost
   schema    Print a JSON Schema (synth, sim, plan, study, lab)
   pdi-fit   Fit the simulator's PDI model (cost per access + effective rate) to timed ESC accesses
+  pdi-bench Time complete ESC reads and writes over a LAN9252's SPI (Linux spidev), as samples for `pdi-fit`
   policy    Read the master's mailbox service pattern from a capture, as a simulator policy
 ```
 
@@ -31,7 +32,8 @@ flowlab <COMMAND>
 | `esi FILE` | `--json` |
 | `serve [CAPTURES…]` | `-p/--port` (7878) · `--host` (127.0.0.1) · `--ui-dir` (ui/dist) · `--open` · `--eni XML` · `--mailbox …` · `--live` · `--live-dir DIR` (results/live) |
 | `schema WHICH` | `synth`, `sim`, `plan`, `study` or `lab` |
-| `pdi-fit SAMPLES.csv` | `--result FILE` the fit with residuals · `--lab JSON` store the values in a lab-inputs file |
+| `pdi-fit SAMPLES.csv` | `--result FILE` the fit with residuals · `--lab JSON` store the values in a lab-inputs file (measured samples only) |
+| `pdi-bench` | `--device /dev/spidevB.C` or `--sim` · `-o/--out CSV` (required) · `--clock-hz HZ` (10000000) · `--mode 0-3` (0) · `--read-instruction read\|fast-read` · `--sizes 1,2,…` (1–1024, powers of two) · `--reps N` (50) · `--warmup N` (3) · `--area START+LEN` · `--allow-writes` · `--no-al-event` · `--chip-id HEX` (0x9252) · `--seed N` · `--fit` · `--result FILE` · `--lab JSON` ([Measuring the SPI](../studies/bulk-transfer/lab.md#measuring-the-spi)) |
 | `policy CAPTURE` | `--station N` · `--mailbox …` · `--eni XML` · `--lab JSON` store the policy in a lab-inputs file |
 
 Commands that take a spec use a built-in example when it is omitted. Errors go to stderr with
@@ -55,6 +57,7 @@ flowlab what-if spec.json
 flowlab study fit.json --capture lab.pcapng --result fit-result.json
 
 # Turn lab measurements into simulator inputs, then re-run the bulk-transfer report with them
+flowlab pdi-bench --device /dev/spidev1.0 --clock-hz 20000000 -o spi-timing.csv   # on the slave, ESC in INIT
 flowlab pdi-fit spi-timing.csv --lab lab.json
 flowlab policy master-foe.pcapng --lab lab.json
 python3 scripts/bulk-transfer-report.py --lab lab.json --out results/report-lab

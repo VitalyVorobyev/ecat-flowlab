@@ -96,6 +96,16 @@ pub fn parse_samples(text: &str) -> Result<Vec<PdiSample>, LabError> {
     Ok(out)
 }
 
+/// Provenance of a samples file: the `flowlab:provenance=…` marker in a `#` comment line
+/// (`flowlab pdi-bench --sim` writes `simulated`), else `measured`.
+pub fn samples_provenance(text: &str) -> Provenance {
+    text.lines()
+        .map(str::trim)
+        .filter(|l| l.starts_with('#'))
+        .find_map(Provenance::from_comment)
+        .unwrap_or(Provenance::Measured)
+}
+
 /// Fit of one direction at one access size.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SizeResidual {
@@ -146,7 +156,8 @@ pub struct PdiValues {
 /// Result of [`fit_pdi`].
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PdiFit {
-    /// Provenance (`measured`), the samples file and the assumptions of the fit.
+    /// Provenance (`measured` unless the samples file is marked otherwise, see
+    /// [`samples_provenance`]), the samples file and the assumptions of the fit.
     pub meta: ReportMeta,
     /// Fit of the reads, if there were any.
     pub read: Option<LineFit>,
@@ -213,9 +224,11 @@ fn fit_line(samples: &[PdiSample]) -> Result<LineFit, LabError> {
     })
 }
 
-/// Fit the simulator's PDI model to timed accesses. `input` names the samples file (for the
-/// result's provenance). A direction without samples takes the other direction's values.
+/// Fit the simulator's PDI model to timed accesses. `input_name` and `input_bytes` identify the
+/// samples file; its provenance marker, if any, sets the result's provenance
+/// ([`samples_provenance`]). A direction without samples takes the other direction's values.
 pub fn fit_pdi(samples: &[PdiSample], input_name: &str, input_bytes: &[u8]) -> Result<PdiFit, LabError> {
+    let source = samples_provenance(&String::from_utf8_lossy(input_bytes));
     let of = |d: PdiDirection| samples.iter().copied().filter(|s| s.direction == d).collect::<Vec<_>>();
     let (reads, writes) = (of(PdiDirection::Read), of(PdiDirection::Write));
     let read = (!reads.is_empty()).then(|| fit_line(&reads)).transpose()?;
@@ -229,6 +242,12 @@ pub fn fit_pdi(samples: &[PdiSample], input_name: &str, input_bytes: &[u8]) -> R
          two intercepts."
             .into(),
     ];
+    if source != Provenance::Measured {
+        assumptions.push(format!(
+            "The samples file is marked {}: the durations come from a model, not from hardware, and are not lab inputs.",
+            source.as_str()
+        ));
+    }
     let (r, w) = match (&read, &write) {
         (Some(r), Some(w)) => (r, w),
         (Some(r), None) => {
@@ -257,7 +276,7 @@ pub fn fit_pdi(samples: &[PdiSample], input_name: &str, input_bytes: &[u8]) -> R
         bytes: input_bytes.len() as u64,
         sha256: Sha256::digest(input_bytes).iter().map(|b| format!("{b:02x}")).collect(),
     };
-    Ok(PdiFit { meta: ReportMeta::new(Provenance::Measured, input, assumptions), read, write, pdi })
+    Ok(PdiFit { meta: ReportMeta::new(source, input, assumptions), read, write, pdi })
 }
 
 /// The simulator policy for a service pattern read from a capture.
@@ -371,6 +390,17 @@ mod tests {
         assert!(parse_samples("direction,bytes,duration_ns\nsideways,1,2\n").is_err());
         let one_size = parse_samples("direction,bytes,duration_ns\nread,64,1000\nread,64,1100\n").unwrap();
         assert!(matches!(fit_pdi(&one_size, "x", b""), Err(LabError::Fit(_))));
+    }
+
+    #[test]
+    fn a_provenance_marker_labels_the_fit() {
+        let body = "direction,bytes,duration_ns\nread,4,1000\nread,64,2000\n";
+        let sim = format!("# simulated LAN9252\n# flowlab:provenance=simulated\n{body}");
+        assert_eq!(samples_provenance(&sim), Provenance::Simulated);
+        assert_eq!(samples_provenance(body), Provenance::Measured);
+        let fit = fit_pdi(&parse_samples(&sim).unwrap(), "sim.csv", sim.as_bytes()).unwrap();
+        assert_eq!(fit.meta.source, Provenance::Simulated);
+        assert!(fit.meta.assumptions.iter().any(|a| a.contains("marked simulated")));
     }
 
     #[test]

@@ -34,6 +34,7 @@ cargo test -p flowlab-analysis recovers_mailbox_ground_truth
 | `flowlab-sim` | `src/tests.rs`, `src/protocol.rs` | Simulator invariants (below) |
 | `flowlab-study` | `src/tests.rs` | Pareto consistency, constraints with reasons, sampling rules, calibration recovering hidden parameters |
 | `flowlab-live` | `src/tests.rs`, `src/tool.rs` | Replays counted completely and saved byte for byte, the window's span, mailbox addresses kept beyond the window, `cat` as a stand-in capture tool, failing tools and non-capture output, interface lists |
+| `flowlab-pdi` | `src/tests.rs` | Against a simulated LAN9252: SPI framing of READ and FAST READ; CSR reads at every alignment; process RAM round trips through the FIFOs (unaligned, not DWORD multiples, beyond the FIFO depth); refusals of a broken link, a wrong chip, an ESC outside INIT, writes without permission or outside process RAM, and the AL Control and SyncManager registers; a benchmark's CSV fitted back by `flowlab-study` to the simulated bus, labelled simulated |
 | `flowlab-server` | `src/lib.rs` | The router driven in-process: synth, simulate, ENI, ESI, plan, study, live replay and the `--live` opt-in, uploads, errors |
 
 Each crate page in this part of the book lists its tests in more detail.

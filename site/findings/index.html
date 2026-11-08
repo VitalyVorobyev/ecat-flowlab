@@ -171,8 +171,9 @@
             standard FoE with sensible mailbox sizes is enough.
           </li>
           <li>
-            <b>Measure the SPI on the target</b> with the driver that will ship: time every ESC read
-            and write, then fit the rate and the cost per access with <code>flowlab pdi-fit</code>.
+            <b>Measure the SPI on the target</b> with the driver that will ship: time ESC reads and
+            writes with <code>flowlab pdi-bench</code>, then fit the rate and the cost per access with
+            <code>flowlab pdi-fit</code>.
             See <a href="../book/studies/bulk-transfer/lab.html#measuring-the-spi">the lab plan</a>.
           </li>
           <li>

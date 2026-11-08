@@ -121,7 +121,10 @@ The PDI model charges every access a fixed cost plus its bytes at an effective r
 calls), then least squares through the medians. Intercept = cost per access, slope = 8 / rate;
 the simulator's single cost per access is the access-weighted mean of the read and write
 intercepts. Each direction needs two or more sizes; a slope ≤ 0 is an error. A direction without
-samples takes the other's values, and the assumptions say so.
+samples takes the other's values, and the assumptions say so. The fit's provenance is
+`measured` unless the samples file carries a `flowlab:provenance=` marker in a comment
+(`samples_provenance`); `flowlab pdi-bench --sim` ([flowlab-pdi](flowlab-pdi.md)) writes
+`simulated`, and the CLI stores only measured fits as lab inputs.
 
 `mailbox_policy` maps the analysis's `ServicePattern` (see
 [flowlab-analysis § Mailbox](flowlab-analysis.md#mailbox)) one to one onto `MailboxPolicy`.
@@ -178,6 +181,7 @@ finish time. The edits are what the UI applies, so applying them reproduces the 
 | `analysis_reads_the_master_policy_back_from_a_simulated_capture` | A simulated FoE transfer with `fixed_quota` 2, then with `opportunistic` 60 % / 10 µs, captured and analysed: the service pattern gives back fixed quota 2, and back-to-back polling with a budget of 50–60 % and a 10 µs turnaround |
 | `lab::tests::fit_recovers_rate_and_overhead_despite_outliers` | Samples on known lines with spread and one preempted and one early call per size: rates and costs recovered exactly; combined cost is the access-weighted mean |
 | `lab::tests::bad_samples_are_rejected_with_their_line`, `lab_inputs_replace_placeholders` | Header, column and direction errors name the line; one size cannot be fitted; `apply` sets the slave's PDI, application time and the policy |
+| `lab::tests::a_provenance_marker_labels_the_fit` | A `# flowlab:provenance=simulated` comment makes the fit simulated, with an assumption saying so; no marker means measured |
 
 ## Example
 

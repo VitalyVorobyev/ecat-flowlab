@@ -21,6 +21,7 @@ flowlab-devices.workspace = true
 flowlab-study.workspace = true
 flowlab-server.workspace = true
 flowlab-live.workspace = true
+flowlab-pdi.workspace = true
 clap.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

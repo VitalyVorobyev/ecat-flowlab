@@ -65,7 +65,10 @@ report regeneration below. See [Testing and validation](testing.md).
 - **Dependencies.** MIT/Apache-2.0-compatible only; check before adopting. SOEM, for example, is
   GPLv3 or commercial.
 - **Hardware safety.** Anything that sends frames needs explicit opt-in, an interface name and an
-  isolated network, and must never become a second master on a running segment. An ordinary
+  isolated network, and must never become a second master on a running segment. Anything that
+  accesses an ESC over its PDI (`flowlab-pdi`) checks the link first, needs the ESC in INIT, never
+  touches AL Control or SyncManager registers, and writes only with explicit opt-in into a named
+  area of process RAM. An ordinary
   Ethernet MAC is not an ESC: do not label non-ESC traffic "EtherCAT".
 - **Unknowns** become falsifiable questions in the [design decisions](decisions.md), not silent
   assumptions in code.

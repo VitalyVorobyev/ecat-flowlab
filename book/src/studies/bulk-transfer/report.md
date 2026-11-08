@@ -205,8 +205,9 @@ In order. Each step narrows the uncertainty that the next one depends on.
      spidev can differ widely);
    - the time from the ESC's mailbox interrupt to the application reading the message.
 
-   Time every ESC read and write of the application (see the [lab plan](lab.md#measuring-the-spi)),
-   fit the PDI model with `flowlab pdi-fit spi.csv --lab lab.json`, add the measured
+   Time ESC reads and writes on the target with `flowlab pdi-bench` (see the
+   [lab plan](lab.md#measuring-the-spi)), fit the PDI model with
+   `flowlab pdi-fit spi.csv --lab lab.json`, add the measured
    `app_processing_ns`, and re-run this report with
    `scripts/bulk-transfer-report.py --lab lab.json --out DIR`.
 3. **Capture the real master's mailbox behaviour.** Record a capture at the master while it

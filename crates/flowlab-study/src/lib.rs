@@ -25,7 +25,7 @@ mod run;
 mod spec;
 mod whatif;
 
-pub use lab::{LabInputs, PdiFit, fit_pdi, mailbox_policy, parse_samples};
+pub use lab::{LabInputs, PdiFit, fit_pdi, mailbox_policy, parse_samples, samples_provenance};
 pub use run::{Residual, StudyResult, StudyRun, capture_metric, run_study, sim_metric};
 pub use spec::{CaptureMetric, Constraint, Goal, Metric, Objective, Parameter, Sampling, StudySpec, Target};
 pub use whatif::{Lever, SpecEdit, WhatIf, WhatIfResult, WhatIfRun, what_if};

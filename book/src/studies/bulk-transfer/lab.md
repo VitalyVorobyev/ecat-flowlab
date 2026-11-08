@@ -14,8 +14,8 @@ ports connect to the master. Before any transfer work:
   support on the chosen revision, and its licence.
 - Program the ESC's EEPROM/SII identity, and make the ESI match it. Check that the SyncManager,
   mailbox and PDO sizes fit the 4 KiB of ESC RAM (`flowlab plan` checks this).
-- Measure the SPI's effective read and write rates and per-access latency on the Verdin, both
-  with a kernel driver and with user-space spidev (see [Measuring the SPI](#measuring-the-spi)).
+- Measure the SPI's effective read and write rates and per-access latency on the Verdin
+  (`flowlab pdi-bench`, see [Measuring the SPI](#measuring-the-spi)).
   The [report](report.md) shows why this comes first.
 - Keep the lab network isolated. Never connect production equipment. Never run two masters on
   one segment.
@@ -38,22 +38,49 @@ The development Mac only runs FlowLab; it is not a lab master.
 | L1 | ESC bring-up: PDI register access, EEPROM, identity, state machine, small PDOs | capture → Stations (AL states), Timing (cycle, WKC) |
 | L2 | Basic transfer: 1 KB, 1 MB, 10 MB with integrity, timeouts and diagnostics | Mailbox view: messages, rejected writes, empty reads |
 | L3 | One protocol at a time: FoE, EoE, CoE, VoE, PDO channel, each verified on both ends | per-protocol transfer tables, Compare |
-| L4 | Calibration: measured PDI timing and master policy as lab inputs; check against the captures and report residuals | `flowlab pdi-fit`, `flowlab policy`, `flowlab study --capture` |
+| L4 | Calibration: measured PDI timing and master policy as lab inputs; check against the captures and report residuals | `flowlab pdi-bench`, `flowlab pdi-fit`, `flowlab policy`, `flowlab study --capture` |
 | L5 | Optimisation: constrained sweeps; check the best candidates over several trials with control traffic present | `scripts/bulk-transfer-report.py --lab lab.json --out DIR` |
 | L6 | Other masters, only once L0–L5 work | Compare per master |
 
 ## Measuring the SPI
 
-The simulator charges every PDI access a fixed cost plus its bytes at an effective rate. Measure
-those on the target, with the driver and stack that will ship:
+The simulator charges every PDI access a fixed cost plus its bytes at an effective rate.
+`flowlab pdi-bench` measures those on the Verdin: it performs complete ESC reads and writes
+through the LAN9252's SPI protocol, the same paths a slave stack's hardware layer takes (the
+CSR interface for registers, the process RAM FIFOs for memory, and the AL Event read SOES does
+after every access), and times each one ([flowlab-pdi](../../workspace/flowlab-pdi.md)).
 
-1. Wrap the slave stack's ESC read and write functions (the hardware layer every access goes
-   through) with a monotonic clock, and log one line per call: direction, bytes, duration in ns.
-   Keep the logging out of the timed section, for example in a preallocated ring buffer written
-   out at the end.
-2. Run a representative workload: mailbox traffic with several message sizes (an FoE transfer,
-   some SDO uploads) and process data. Each direction needs at least two different access sizes.
-3. Save it as [PDI timing samples](../../reference/specs.md#pdi-timing-samples) and fit:
+1. **Build for the Verdin** (aarch64 Linux). Either `rustup target add aarch64-unknown-linux-gnu`
+   plus an aarch64 linker (`CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER`), or
+   `cargo zigbuild --release --target aarch64-unknown-linux-musl -p flowlab-cli` for a static
+   binary. Copy `flowlab` to the module.
+2. **Free the ESC.** Stop the slave application (the benchmark needs the SPI device to itself),
+   disconnect or stop the master, and leave the ESC in INIT. The SPI device must be bound to
+   spidev (`/dev/spidevB.C`, for example through a device-tree overlay).
+3. **Run** with the clock and mode the application uses:
+
+   ```bash
+   flowlab pdi-bench --device /dev/spidev1.0 --clock-hz 20000000 --mode 0 -o spi.csv
+   ```
+
+   The command first reads `BYTE_TEST` (must be 0x87654321), `HW_CFG` and `ID_REV` (chip
+   0x9252), and stops with a hint if they are wrong (wiring, SPI mode, clock, level shifting). It
+   refuses to run unless the ESC is in INIT, and discards the run if AL Status changes. It never
+   accesses the AL Control or SyncManager registers. By default it only reads, from process RAM
+   at 0x1000; writes need `--allow-writes` and an `--area START+LEN` of process RAM that nothing
+   uses (in INIT nothing does; the area is overwritten):
+
+   ```bash
+   flowlab pdi-bench --device /dev/spidev1.0 --clock-hz 20000000 \
+       --allow-writes --area 0x1800+1024 -o spi.csv --fit --lab lab.json
+   ```
+
+   Sizes default to 1 to 1024 bytes in powers of two (`--sizes`), 50 timed accesses each
+   (`--reps`) after 3 untimed ones (`--warmup`), in a shuffled order. Above 30 MHz use
+   `--read-instruction fast-read`. It prints the median and 95th percentile per size and writes
+   the [PDI timing samples](../../reference/specs.md#pdi-timing-samples), with the setup in
+   comment lines.
+4. **Fit** (or pass `--fit` above):
 
    ```bash
    flowlab pdi-fit spi.csv --result spi-fit.json --lab lab.json
@@ -61,9 +88,18 @@ those on the target, with the driver and stack that will ship:
 
    The output lists, per access size, the median, the 95th percentile and the fitted line. If
    some sizes are far off the line (long accesses split into chunks, a DMA threshold), the line
-   is the wrong model for those sizes. Time the sizes the application actually uses, and note it
-   in `lab.json`'s `description`.
-4. Repeat with each driver variant (kernel driver, spidev, SPI clock) as its own file.
+   is the wrong model for those sizes. Time the sizes the application actually uses
+   (`--sizes`), and note it in `lab.json`'s `description`.
+5. Repeat with each driver variant (SPI clock, read instruction, kernel driver) as its own file.
+
+`flowlab pdi-bench --sim -o sim.csv` runs the same benchmark against a simulated LAN9252 on any
+system, to try the command. Its samples are marked `simulated` (`# flowlab:provenance=simulated`);
+`pdi-fit` labels the fit accordingly and refuses to store it in `lab.json`.
+
+The benchmark times one access pattern of its own. A stack that reads in other pieces, or a
+kernel driver, can be timed instead by wrapping its ESC read and write functions with a
+monotonic clock and logging one line per call (direction, bytes, duration in ns) in the same
+samples format, outside the timed section.
 
 Whether the application reads the whole mailbox buffer or only the message is a property of the
 stack. Set `pdi.mailbox_access` in `lab.json` to `"whole_buffer"` or `"message_only"`

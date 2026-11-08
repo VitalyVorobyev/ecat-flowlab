@@ -37,6 +37,7 @@
 - [flowlab-devices](workspace/flowlab-devices.md)
 - [flowlab-study](workspace/flowlab-study.md)
 - [flowlab-live](workspace/flowlab-live.md)
+- [flowlab-pdi](workspace/flowlab-pdi.md)
 - [flowlab-server and flowlab-cli](workspace/server-cli.md)
 - [The UI](workspace/ui.md)
 - [Testing and validation](workspace/testing.md)

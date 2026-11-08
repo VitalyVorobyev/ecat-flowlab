@@ -1,0 +1,21 @@
+[package]
+name = "flowlab-pdi"
+description = "Times ESC accesses over a LAN9252's SPI PDI: samples for the simulator's PDI model, from hardware or a simulated LAN9252."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+flowlab-core.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+spidev = "0.7"
+
+[dev-dependencies]
+flowlab-study.workspace = true
+
+[lints]
+workspace = true
