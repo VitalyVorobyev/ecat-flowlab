@@ -36,7 +36,7 @@ mod imp {
         EoeAddresses, MeasuredTransfer, Payload, PollMode, TransferJob, TransferOptions, TransferProtocol, setup_like,
     };
 
-    use crate::{Result, ensure_parent, ns, parse_station};
+    use crate::{Result, ensure_parent, ns, parse_object, parse_station};
 
     /// Arguments of `flowlab master`.
     #[derive(clap::Args)]
@@ -198,27 +198,17 @@ mod imp {
         /// Give up after this long, seconds.
         #[arg(long, default_value_t = 600.0, value_name = "SECONDS")]
         max_duration: f64,
-        /// Counter of the first mailbox message (1–7).
-        #[arg(long, default_value_t = 1)]
-        first_counter: u8,
+        /// Counter of the first mailbox message, 0–7 (default: 1; with --op 0, the start
+        /// value: EtherCrab used the mailbox to map the process data, so the slave's last
+        /// counter is unknown).
+        #[arg(long, value_parser = clap::value_parser!(u8).range(0..=7))]
+        first_counter: Option<u8>,
         /// Keep at most this many per-cycle records in the JSON.
         #[arg(long, default_value_t = 100_000)]
         records: usize,
         /// Write the result as JSON (default: results/master/transfer-UNIXTIME.json).
         #[arg(short, long)]
         out: Option<PathBuf>,
-    }
-
-    fn parse_object(s: &str) -> std::result::Result<(u16, u8), String> {
-        let bad = || format!("`{s}`: expected INDEX:SUBINDEX, e.g. 0x2000:0");
-        let (i, sub) = s.split_once(':').ok_or_else(bad)?;
-        let num = |v: &str| match v.strip_prefix("0x").or_else(|| v.strip_prefix("0X")) {
-            Some(h) => u32::from_str_radix(h, 16).ok(),
-            None => v.parse().ok(),
-        };
-        let index = num(i).and_then(|v| u16::try_from(v).ok()).ok_or_else(bad)?;
-        let sub = num(sub).and_then(|v| u8::try_from(v).ok()).ok_or_else(bad)?;
-        Ok((index, sub))
     }
 
     fn parse_mac(s: &str) -> std::result::Result<[u8; 6], String> {
@@ -435,7 +425,7 @@ mod imp {
             reply_timeout_ns: a.reply_timeout_ms * 1_000_000,
             max_resends: a.max_resends,
             max_duration_ns: (a.max_duration * 1e9) as u64,
-            first_counter: a.first_counter,
+            first_counter: a.first_counter.unwrap_or(if a.op { 0 } else { 1 }),
             max_cycle_records: a.records,
             ..TransferOptions::default()
         };

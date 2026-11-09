@@ -11,9 +11,18 @@
 //! through [`ethercrab::Command`], so the engine controls counters, retries and the service
 //! policy, as the simulator does.
 //!
-//! The TX/RX side runs on its own thread: EtherCrab's raw socket on Linux and macOS
-//! (`CAP_NET_RAW` or root), Npcap on Windows. One [`Session`] per process (EtherCrab's frame
+//! The TX/RX side runs on its own thread: EtherCrab's raw socket on Linux (`CAP_NET_RAW` or
+//! root), Npcap on Windows; on macOS, a BPF socket of `pnet_datalink` (read/write access to
+//! `/dev/bpf*`) that hands EtherCrab only frames that passed an ESC. One [`Session`] per process (EtherCrab's frame
 //! storage is a static); its thread ends with the process.
+//!
+//! [`Session::in_process`] connects EtherCrab to a function instead of an interface, e.g. the
+//! emulated ESC of `flowlab-slave`: nothing is sent on any network, and the whole layer runs
+//! in a test.
+//!
+//! A slave whose EEPROM names it FlowLab's emulated ESC
+//! ([`EMULATED_ESC_NAME`](flowlab_core::EMULATED_ESC_NAME)) is software on an ordinary
+//! Ethernet port; every result that involves it says so in its assumptions.
 //!
 //! Timing is the host's: `std::time::Instant` around each call. It includes the operating
 //! system's scheduling and the socket, and is not the wire's; a capture taken meanwhile shows
@@ -27,7 +36,7 @@ use ethercrab::subdevice_group::Op;
 use ethercrab::{
     Command, DcSupport, DefaultLock, MainDevice, MainDeviceConfig, PduStorage, RetryBehaviour, SubDeviceGroup, Timeouts,
 };
-use flowlab_core::{InputRef, Provenance, ReportMeta};
+use flowlab_core::{EMULATED_ESC_ASSUMPTION, EMULATED_ESC_NAME, InputRef, Provenance, ReportMeta};
 
 use crate::MasterError;
 use crate::bus::{BusError, MailboxBus, MailboxLayout, Reply};
@@ -154,6 +163,11 @@ impl MailboxBus for EthercrabBus<'_> {
     }
 }
 
+/// Whether a slave of the group is FlowLab's emulated ESC.
+fn is_emulated(group: &SubDeviceGroup<MAX_SUBDEVICES, MAX_PDI>, md: &MainDevice<'_>) -> bool {
+    group.iter(md).any(|s| s.name() == EMULATED_ESC_NAME)
+}
+
 /// Mailbox protocol names of the EEPROM's mailbox protocol word (`0x001C`).
 fn protocols(word: u16) -> Vec<String> {
     use ecat_wire::MailboxType as T;
@@ -164,6 +178,117 @@ fn protocols(word: u16) -> Vec<String> {
         .collect()
 }
 
+/// EtherCrab's own TX/RX task on its own thread (Linux: raw socket; Windows: Npcap).
+#[cfg(not(target_os = "macos"))]
+fn start_ethercrab(
+    interface: &str,
+    tx: ethercrab::PduTx<'static>,
+    rx: ethercrab::PduRx<'static>,
+) -> Result<(), MasterError> {
+    let (started, ready) = std::sync::mpsc::channel::<Result<(), String>>();
+    let iface = interface.to_owned();
+    std::thread::Builder::new()
+        .name("ethercrab-tx-rx".into())
+        .spawn(move || {
+            #[cfg(unix)]
+            match ethercrab::std::tx_rx_task(&iface, tx, rx) {
+                Ok(task) => {
+                    let _ = started.send(Ok(()));
+                    if let Err(e) = async_io::block_on(task) {
+                        tracing::error!("EtherCrab TX/RX on {iface} stopped: {e}");
+                    }
+                }
+                Err(e) => {
+                    let _ = started.send(Err(format!("cannot open {iface}: {e}")));
+                }
+            }
+            #[cfg(windows)]
+            {
+                let _ = started.send(Ok(()));
+                let cfg = ethercrab::std::TxRxTaskConfig { spinloop: false };
+                if let Err(e) = ethercrab::std::tx_rx_task_blocking(&iface, tx, rx, cfg) {
+                    tracing::error!("EtherCrab TX/RX on {iface} stopped: {e}");
+                }
+            }
+        })
+        .map_err(|e| MasterError::Bus(format!("cannot start the TX/RX thread: {e}")))?;
+    ready
+        .recv_timeout(Duration::from_secs(5))
+        .map_err(|_| MasterError::Bus("the TX/RX thread did not start".into()))?
+        .map_err(MasterError::Bus)
+}
+
+/// macOS: EtherCrab's frames through a BPF socket of `pnet_datalink`.
+///
+/// EtherCrab's own macOS socket tells its frames from the slaves' by the interface's MAC
+/// address, which it reads through `getifaddrs`; for some adapters that read returns a wrong
+/// address, so EtherCrab takes its own frame, which BPF also delivers, for the answer. Here a
+/// frame goes to EtherCrab only if bit 1 of its source MAC is set: an ESC sets it, so the frame
+/// has passed a slave.
+#[cfg(target_os = "macos")]
+mod bpf {
+    use std::time::Duration;
+
+    use ethercrab::{PduRx, PduTx};
+    use pnet_datalink::{Channel, Config};
+
+    use crate::MasterError;
+
+    pub(super) fn start(interface: &str, mut tx: PduTx<'static>, mut rx: PduRx<'static>) -> Result<(), MasterError> {
+        let iface = pnet_datalink::interfaces()
+            .into_iter()
+            .find(|i| i.name == interface)
+            .ok_or_else(|| MasterError::Bus(format!("no interface `{interface}`")))?;
+        let cfg = Config { read_timeout: Some(Duration::from_millis(100)), ..Config::default() };
+        let (mut out, mut inp) = match pnet_datalink::channel(&iface, cfg) {
+            Ok(Channel::Ethernet(t, r)) => (t, r),
+            Ok(_) => return Err(MasterError::Bus(format!("{interface}: not an Ethernet channel"))),
+            Err(e) => return Err(MasterError::Bus(format!("cannot open {interface}: {e}"))),
+        };
+        let name = interface.to_owned();
+        std::thread::Builder::new()
+            .name("ethercrab-tx".into())
+            .spawn(move || {
+                futures_lite::future::block_on(futures_lite::future::poll_fn(|cx| {
+                    tx.replace_waker(cx.waker());
+                    while let Some(frame) = tx.next_sendable_frame() {
+                        let sent = frame.send_blocking(|data| match out.send_to(data, None) {
+                            Some(Ok(())) => Ok(data.len()),
+                            _ => Err(ethercrab::error::Error::SendFrame),
+                        });
+                        if let Err(e) = sent {
+                            tracing::error!("send on {name}: {e}");
+                        }
+                    }
+                    if tx.should_exit() { std::task::Poll::Ready(()) } else { std::task::Poll::Pending }
+                }));
+            })
+            .map_err(|e| MasterError::Bus(format!("cannot start the TX thread: {e}")))?;
+        let name = interface.to_owned();
+        std::thread::Builder::new()
+            .name("ethercrab-rx".into())
+            .spawn(move || {
+                loop {
+                    match inp.next() {
+                        Ok(f) => {
+                            if f.len() > 14 && f[12..14] == [0x88, 0xA4] && f[6] & 0x02 != 0 {
+                                let _ = rx.receive_frame(f);
+                            }
+                        }
+                        Err(e) if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock) => {
+                        }
+                        Err(e) => {
+                            tracing::error!("receive on {name}: {e}");
+                            return;
+                        }
+                    }
+                }
+            })
+            .map_err(|e| MasterError::Bus(format!("cannot start the RX thread: {e}")))?;
+        Ok(())
+    }
+}
+
 impl Session {
     /// Open the interface `segment` checked and start EtherCrab's TX/RX thread. Fails without
     /// the permission to open a raw socket (Linux: `CAP_NET_RAW`), or if a session was opened
@@ -172,47 +297,64 @@ impl Session {
         let interface = segment.interface();
         let (tx, rx, pdu_loop) =
             PDU_STORAGE.try_split().map_err(|_| MasterError::Invalid("one EtherCrab session per process".into()))?;
-        let (started, ready) = std::sync::mpsc::channel::<Result<(), String>>();
-        let iface = interface.to_owned();
-        std::thread::Builder::new()
-            .name("ethercrab-tx-rx".into())
-            .spawn(move || {
-                #[cfg(unix)]
-                match ethercrab::std::tx_rx_task(&iface, tx, rx) {
-                    Ok(task) => {
-                        let _ = started.send(Ok(()));
-                        if let Err(e) = async_io::block_on(task) {
-                            tracing::error!("EtherCrab TX/RX on {iface} stopped: {e}");
-                        }
-                    }
-                    Err(e) => {
-                        let _ = started.send(Err(format!("cannot open {iface}: {e}")));
-                    }
-                }
-                #[cfg(windows)]
-                {
-                    let _ = started.send(Ok(()));
-                    let cfg = ethercrab::std::TxRxTaskConfig { spinloop: false };
-                    if let Err(e) = ethercrab::std::tx_rx_task_blocking(&iface, tx, rx, cfg) {
-                        tracing::error!("EtherCrab TX/RX on {iface} stopped: {e}");
-                    }
-                }
-            })
-            .map_err(|e| MasterError::Bus(format!("cannot start the TX/RX thread: {e}")))?;
-        ready
-            .recv_timeout(Duration::from_secs(5))
-            .map_err(|_| MasterError::Bus("the TX/RX thread did not start".into()))?
-            .map_err(MasterError::Bus)?;
+        #[cfg(target_os = "macos")]
+        bpf::start(interface, tx, rx)?;
+        #[cfg(not(target_os = "macos"))]
+        start_ethercrab(interface, tx, rx)?;
+        Ok(Self::with_loop(pdu_loop, interface, o))
+    }
+
+    fn with_loop(pdu_loop: ethercrab::PduLoop<'static>, interface: &str, o: &SessionOptions) -> Self {
         let timeouts =
             Timeouts { pdu: o.pdu_timeout, state_transition: o.state_transition_timeout, ..Timeouts::default() };
         let config = MainDeviceConfig { dc_static_sync_iterations: 0, retry_behaviour: RetryBehaviour::None };
         let md = MainDevice::new(pdu_loop, timeouts, config);
-        Ok(Self { md, interface: interface.to_owned(), origin: Instant::now() })
+        Self { md, interface: interface.to_owned(), origin: Instant::now() }
     }
 
-    fn meta(&self, extra: Vec<String>) -> ReportMeta {
+    /// A session whose frames go to `answer` in this process instead of a network interface:
+    /// `answer` takes each Ethernet frame EtherCAT sends and returns the frame that comes back
+    /// (`None`: lost). Nothing is sent on any network, so no safety check applies. Results name
+    /// the interface `in-process`. Fails if a session was opened before in this process.
+    pub fn in_process(
+        mut answer: impl FnMut(&[u8]) -> Option<Vec<u8>> + Send + 'static,
+        o: &SessionOptions,
+    ) -> Result<Self, MasterError> {
+        let (mut tx, mut rx, pdu_loop) =
+            PDU_STORAGE.try_split().map_err(|_| MasterError::Invalid("one EtherCrab session per process".into()))?;
+        std::thread::Builder::new()
+            .name("ethercrab-in-process".into())
+            .spawn(move || {
+                futures_lite::future::block_on(futures_lite::future::poll_fn(|cx| {
+                    tx.replace_waker(cx.waker());
+                    while let Some(frame) = tx.next_sendable_frame() {
+                        let mut back = None;
+                        let sent = frame.send_blocking(|data| {
+                            back = answer(data);
+                            Ok(data.len())
+                        });
+                        if let Err(e) = sent {
+                            tracing::error!("in-process TX: {e}");
+                        }
+                        if let Some(b) = back
+                            && let Err(e) = rx.receive_frame(&b)
+                        {
+                            tracing::error!("in-process RX: {e}");
+                        }
+                    }
+                    if tx.should_exit() { std::task::Poll::Ready(()) } else { std::task::Poll::Pending }
+                }));
+            })
+            .map_err(|e| MasterError::Bus(format!("cannot start the in-process thread: {e}")))?;
+        Ok(Self::with_loop(pdu_loop, "in-process", o))
+    }
+
+    fn meta(&self, emulated: bool, extra: Vec<String>) -> ReportMeta {
         let input = InputRef { name: self.interface.clone(), bytes: 0, sha256: String::new() };
         let mut a = host_assumptions();
+        if emulated {
+            a.push(EMULATED_ESC_ASSUMPTION.into());
+        }
         a.extend(extra);
         ReportMeta::new(Provenance::Measured, input, a)
     }
@@ -308,8 +450,9 @@ impl Session {
                     propagation_delay_ns: sd.propagation_delay(),
                 });
             }
+            let emulated = slaves.iter().any(|s| s.name == EMULATED_ESC_NAME);
             Ok(ScanResult {
-                meta: self.meta(vec![
+                meta: self.meta(emulated, vec![
                     "Identity, name and mailbox protocols are read from each slave's EEPROM; SyncManagers from registers 0x0800 + 8·n after EtherCrab configured them.".into(),
                 ]),
                 interface: self.interface.clone(),
@@ -325,7 +468,9 @@ impl Session {
             return Err(MasterError::Invalid("cycle time must be positive".into()));
         }
         async_io::block_on(async {
-            let group = self.init().await?.into_op(&self.md).await.map_err(ec)?;
+            let group = self.init().await?;
+            let emulated = is_emulated(&group, &self.md);
+            let group = group.into_op(&self.md).await.map_err(ec)?;
             let mut expected = 0u16;
             let mut image = 0u32;
             for sd in group.iter(&self.md) {
@@ -402,7 +547,7 @@ impl Session {
                 final_states.push(self.al_status(sd.configured_address()).await.0);
             }
             Ok(RunResult {
-                meta: self.meta(vec![
+                meta: self.meta(emulated, vec![
                     "The expected working counter assumes one LRW per cycle over the process image: 2 per slave with outputs plus 1 per slave with inputs.".into(),
                     "The round trip is from before EtherCrab's tx_rx call to its return, so it includes EtherCrab's AL status reads in the same exchange.".into(),
                 ]),
@@ -472,6 +617,9 @@ impl Session {
             };
             let mut o = options.clone();
             o.assumptions.extend(host_assumptions());
+            if sd.name() == EMULATED_ESC_NAME {
+                o.assumptions.push(EMULATED_ESC_ASSUMPTION.into());
+            }
             o.assumptions.push(format!(
                 "Mailbox from the slave's SyncManager registers: SM0 {:#06x} ({} B), SM1 {:#06x} ({} B).",
                 out.start, out.length, inp.start, inp.length

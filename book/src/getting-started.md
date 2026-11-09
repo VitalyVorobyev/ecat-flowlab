@@ -18,11 +18,12 @@ specs in `configs/`.
 | macOS, Apple silicon | `flowlab-VERSION-aarch64-apple-darwin.tar.gz` | |
 
 The Linux binaries are linked statically against musl, so they need no shared library from the
-system. They also hold the [lab master](guide/master.md) (`flowlab master`, which sends EtherCAT
-frames only with `--isolated-lab-network` on a quiet segment, and needs `CAP_NET_RAW` or root).
-The Windows and macOS binaries do not: on Windows the master links against Npcap's `wpcap.dll`,
-which every user of the binary would then need. Build it there from source with the Npcap SDK
-([Lab master](guide/master.md#building)).
+system. The Linux and macOS binaries also hold the [lab master](guide/master.md) (`flowlab
+master`) and the [emulated slave](guide/slave.md) (`flowlab slave`), which send EtherCAT frames
+only with `--isolated-lab-network`, and need a raw socket (Linux: `CAP_NET_RAW` or root; macOS:
+access to `/dev/bpf*`). The Windows binary does not: there the master links against Npcap's
+`wpcap.dll`, which every user of the binary would then need. Build it there from source with the
+Npcap SDK ([Lab master](guide/master.md#building)).
 
 **Linux and macOS**
 
@@ -177,7 +178,8 @@ What each part of FlowLab does to a network:
 | `analyze`, `serve`, `synth`, `simulate`, `what-if`, `study`, `plan`, `esi`, `policy`, `pdi-fit` | no: files only | — |
 | `capture` and the Live view | listens through dumpcap or tcpdump; sends nothing | the Live view only after `serve --live` |
 | `pdi-bench` | the slave's SPI to its ESC, on the slave's host | refuses unless the ESC answers and is in INIT; never touches AL Control or SyncManager registers; writes only with `--allow-writes` into an `--area` of process RAM ([Measuring the SPI](studies/bulk-transfer/lab.md#measuring-the-spi)) |
-| `master scan\|run\|transfer` | **sends EtherCAT frames** | only in a build with the feature `master` (the Linux release binaries); an interface name, `--isolated-lab-network`, and no other master heard first ([Lab master](guide/master.md#safety-checks)) |
+| `master scan\|run\|transfer` | **sends EtherCAT frames** | only in a build with the feature `master` (the Linux and macOS release binaries); an interface name, `--isolated-lab-network`, and no other master heard first ([Lab master](guide/master.md#safety-checks)) |
+| `slave` | **answers EtherCAT frames** | only in a build with the feature `slave` (the Linux and macOS release binaries); an interface name and `--isolated-lab-network` ([Emulated slave](guide/slave.md)) |
 
 Capture on an isolated lab network where you can. Never connect production equipment to a lab
 master, and never start a second master on a segment that is in use. `flowlab serve` has no

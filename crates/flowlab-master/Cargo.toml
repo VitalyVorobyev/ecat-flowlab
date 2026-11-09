@@ -22,13 +22,18 @@ flowlab-live = { workspace = true, optional = true }
 ethercrab = { version = "0.7.1", default-features = false, features = ["std"], optional = true }
 async-io = { version = "2", optional = true }
 
+# macOS: FlowLab drives EtherCrab's frames through its own BPF socket (see `hardware`).
+[target.'cfg(target_os = "macos")'.dependencies]
+pnet_datalink = { workspace = true, optional = true }
+
 [dev-dependencies]
 flowlab-sim.workspace = true
+flowlab-slave.workspace = true
 
 [features]
 default = []
-# EtherCrab on a real network interface: raw socket on Linux and macOS, Npcap on Windows.
-hardware = ["dep:ethercrab", "dep:async-io", "dep:flowlab-live"]
+# EtherCrab on a real network interface: raw socket on Linux, BPF on macOS, Npcap on Windows.
+hardware = ["dep:ethercrab", "dep:async-io", "dep:flowlab-live", "dep:pnet_datalink"]
 
 [lints]
 workspace = true

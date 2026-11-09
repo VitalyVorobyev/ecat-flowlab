@@ -1,6 +1,6 @@
 # Overview
 
-FlowLab is a Cargo workspace of fourteen crates, a developer-tools crate (`xtask`) and a React
+FlowLab is a Cargo workspace of fifteen crates, a developer-tools crate (`xtask`) and a React
 UI. Every source of traffic produces
 real Ethernet frames, and one analysis reads them all.
 
@@ -18,6 +18,7 @@ real Ethernet frames, and one analysis reads them all.
   flowlab-study:   many flowlab-sim runs → Pareto frontier, calibration against a CaptureReport
   flowlab-pdi:     timed ESC accesses over a LAN9252's SPI → PDI timing samples (pdi-fit)
   flowlab-master:  transfers on the lab rig (EtherCrab, opt-in) → MeasuredTransfer, set up like a sim run
+  flowlab-slave:   an emulated ESC answering a master's frames (in-process tests, or a port, opt-in)
 ```
 
 Because the simulator and the generator write frames through the same codec the analysis
@@ -40,8 +41,9 @@ Only their provenance differs.
 | [`flowlab-live`](flowlab-live.md) | Live capture through dumpcap or tcpdump, analysed in a rolling window | core, capture, analysis |
 | [`flowlab-pdi`](flowlab-pdi.md) | Timed ESC accesses over a LAN9252's SPI (Linux spidev, or a simulated LAN9252) for `pdi-fit` | core |
 | [`flowlab-master`](flowlab-master.md) | Lab master: mailbox transfer engine with the simulator's policies, a virtual slave; the safety checks and EtherCrab behind the `hardware` feature | ecat-wire, core, devices, mailbox; live with `hardware` |
-| [`flowlab-server`](server-cli.md) | Local HTTP API and static UI (axum) | the above except pdi and master: it never touches hardware |
-| [`flowlab-cli`](server-cli.md) | The `flowlab` binary | all of the above; master only with the feature `master` |
+| [`flowlab-slave`](flowlab-slave.md) | Emulated ESC: registers, SII, AL states, SyncManagers, FMMUs, with the mailbox responder; a raw-socket server behind the `wire` feature | ecat-wire, core, mailbox |
+| [`flowlab-server`](server-cli.md) | Local HTTP API and static UI (axum) | the above except pdi, master and slave: it never touches hardware |
+| [`flowlab-cli`](server-cli.md) | The `flowlab` binary | all of the above; master only with the feature `master`, slave only with `slave` |
 | `xtask` (not published) | Developer commands behind the cargo aliases `cargo ui`, `ui-dev`, `ci`, `site` ([Contributing](contributing.md)) | std only |
 
 The [UI](ui.md) in `ui/` talks only to the server's API. Its TypeScript types are generated from

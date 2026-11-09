@@ -14,14 +14,14 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 
 use ecat_wire::{
-    CoeHeader, CoeService, FoeHeader, FoeOpcode, MAILBOX_HEADER_LEN, MailboxErrorReply, MailboxHeader, MailboxType,
-    SM_REPEAT_ACK, SM_REPEAT_REQUEST, SM_STATUS_MAILBOX_FULL, SdoCommand, SdoHeader, SyncManagerConfig,
-    segment_data_len, sm_activate_register, sm_register,
+    MailboxType, SM_REPEAT_ACK, SM_REPEAT_REQUEST, SM_STATUS_MAILBOX_FULL, SyncManagerConfig, sm_activate_register,
+    sm_register,
 };
 
 use crate::bus::{BusError, MailboxBus, Reply};
 use crate::{MailboxLayout, bus::SM_MAILBOX_IN};
-use flowlab_mailbox::msg::{self, EoeAddresses, EoeReassembler, eoe_fragments, foe, udp_frame};
+use flowlab_mailbox::msg::{self, EoeAddresses};
+use flowlab_mailbox::responder::{Responder, ResponderConfig};
 
 /// Settings of a [`VirtualSlave`].
 #[derive(Debug, Clone)]
@@ -102,18 +102,6 @@ pub struct VirtualSlaveLog {
     pub accesses: u64,
 }
 
-enum Foe {
-    Idle,
-    Writing { name: String, expected: u32, data: Vec<u8>, busy_sent: bool },
-    Reading { packet: u32, offset: usize, last: bool },
-}
-
-enum Sdo {
-    Idle,
-    Download { toggle: bool, data: Vec<u8> },
-    Upload { offset: usize, toggle: bool },
-}
-
 struct State {
     now: u64,
     datagrams: u64,
@@ -124,13 +112,7 @@ struct State {
     outbox: VecDeque<(u64, MailboxType, Vec<u8>)>,
     last_sent: Option<Vec<u8>>,
     out_counter: u8,
-    last_in_counter: u8,
-    foe: Foe,
-    data_packets: u32,
-    sdo: Sdo,
-    eoe_rx: EoeReassembler,
-    eoe_tx_offset: usize,
-    eoe_frame_no: u8,
+    app: Responder,
     log: VirtualSlaveLog,
 }
 
@@ -159,13 +141,22 @@ impl VirtualSlave {
             outbox: VecDeque::new(),
             last_sent: None,
             out_counter: 0,
-            last_in_counter: cfg.previous_counter,
-            foe: Foe::Idle,
-            data_packets: 0,
-            sdo: Sdo::Idle,
-            eoe_rx: EoeReassembler::default(),
-            eoe_tx_offset: 0,
-            eoe_frame_no: 0,
+            app: Responder::new(
+                ResponderConfig {
+                    busy_every: cfg.busy_every,
+                    drop_repeated_counter: cfg.drop_repeated_counter,
+                    previous_counter: cfg.previous_counter,
+                    sdo_index: cfg.sdo_index,
+                    sdo_subindex: cfg.sdo_subindex,
+                    upload: cfg.upload.clone(),
+                    eoe_send: cfg.eoe_send,
+                    eoe_mtu: cfg.eoe_mtu,
+                    eoe_addresses: cfg.eoe_addresses.clone(),
+                    ..ResponderConfig::default()
+                },
+                cfg.mailbox.out_len as usize,
+                cfg.mailbox.in_len as usize,
+            ),
             log: VirtualSlaveLog::default(),
         };
         Self { cfg, st: RefCell::new(st) }
@@ -179,11 +170,16 @@ impl VirtualSlave {
     /// What the slave received and did so far.
     pub fn log(&self) -> VirtualSlaveLog {
         let st = self.st.borrow();
-        VirtualSlaveLog { eoe_broken: st.eoe_rx.broken, ..st.log.clone() }
-    }
-
-    fn reply(&self, st: &mut State, at: u64, kind: MailboxType, body: Vec<u8>) {
-        st.outbox.push_back((at, kind, body));
+        let app = st.app.log();
+        VirtualSlaveLog {
+            files: app.files,
+            objects: app.objects,
+            eoe_frames: app.eoe_frames,
+            eoe_broken: app.eoe_broken,
+            messages_in: app.messages_in,
+            duplicates_dropped: app.duplicates_dropped,
+            ..st.log.clone()
+        }
     }
 
     /// Run the slave application up to `st.now`.
@@ -193,14 +189,19 @@ impl VirtualSlave {
             if let Some((buf, arrived)) = st.sm0.take() {
                 let at = arrived + self.cfg.processing_ns;
                 if at <= st.now {
-                    self.take_message(st, &buf, at);
+                    for m in st.app.take_message(&buf) {
+                        st.outbox.push_back((at, m.kind, m.body));
+                    }
                     changed = true;
                 } else {
                     st.sm0 = Some((buf, arrived));
                 }
             }
-            if self.cfg.eoe_send && st.outbox.is_empty() && st.eoe_tx_offset < self.cfg.upload.len() {
-                self.queue_eoe_frame(st);
+            if st.outbox.is_empty() && st.app.eoe_pending() {
+                let now = st.now;
+                for m in st.app.next_eoe_frame() {
+                    st.outbox.push_back((now, m.kind, m.body));
+                }
                 changed = true;
             }
             if st.sm1.is_none()
@@ -225,192 +226,6 @@ impl VirtualSlave {
                 break;
             }
         }
-    }
-
-    fn queue_eoe_frame(&self, st: &mut State) {
-        let end = (st.eoe_tx_offset + self.cfg.eoe_mtu - 28).min(self.cfg.upload.len());
-        let frame = udp_frame(&self.cfg.upload[st.eoe_tx_offset..end], &self.cfg.eoe_addresses, false);
-        st.eoe_tx_offset = end;
-        st.eoe_frame_no = msg::next_eoe_frame_no(st.eoe_frame_no);
-        let cap = msg::eoe_capacity(self.cfg.mailbox.in_len as usize);
-        let now = st.now;
-        for f in eoe_fragments(&frame, cap, st.eoe_frame_no) {
-            st.outbox.push_back((now, MailboxType::Eoe, f));
-        }
-    }
-
-    fn take_message(&self, st: &mut State, buf: &[u8], at: u64) {
-        let Ok(h) = MailboxHeader::parse(buf) else { return };
-        if self.cfg.drop_repeated_counter && h.counter != 0 && h.counter == st.last_in_counter {
-            st.log.duplicates_dropped += 1;
-            return;
-        }
-        st.last_in_counter = h.counter;
-        st.log.messages_in += 1;
-        let end = (MAILBOX_HEADER_LEN + h.length as usize).min(buf.len());
-        let body = &buf[MAILBOX_HEADER_LEN..end];
-        match h.mailbox_type {
-            MailboxType::Foe => self.on_foe(st, body, at),
-            MailboxType::Coe => self.on_coe(st, body, at),
-            MailboxType::Eoe => {
-                if let Some(frame) = st.eoe_rx.push(body) {
-                    st.log.eoe_frames.push(frame);
-                }
-            }
-            _ => {
-                // Mailbox error reply: protocol not supported.
-                let e = MailboxErrorReply { service: 1, detail: 2 };
-                self.reply(st, at, MailboxType::Error, e.encode().to_vec());
-            }
-        }
-    }
-
-    fn on_foe(&self, st: &mut State, body: &[u8], at: u64) {
-        let Ok(h) = FoeHeader::parse(body) else { return };
-        let data = &body[FoeHeader::LEN..];
-        let cap_out = msg::foe_capacity(self.cfg.mailbox.out_len as usize);
-        let cap_in = msg::foe_capacity(self.cfg.mailbox.in_len as usize);
-        match (h.opcode, &mut st.foe) {
-            (FoeOpcode::Write, _) => {
-                let name = String::from_utf8_lossy(data).into_owned();
-                st.foe = Foe::Writing { name, expected: 1, data: Vec::new(), busy_sent: false };
-                self.reply(st, at, MailboxType::Foe, foe(FoeOpcode::Ack, 0, &[]));
-            }
-            (FoeOpcode::Data, Foe::Writing { name, expected, data: file, busy_sent }) if h.value == *expected => {
-                st.data_packets += 1;
-                if let Some(n) = self.cfg.busy_every
-                    && n > 0
-                    && st.data_packets.is_multiple_of(n)
-                    && !*busy_sent
-                {
-                    *busy_sent = true;
-                    let busy = foe(FoeOpcode::Busy, 0, &[]);
-                    self.reply(st, at, MailboxType::Foe, busy);
-                    return;
-                }
-                *busy_sent = false;
-                file.extend_from_slice(data);
-                *expected += 1;
-                let ack = foe(FoeOpcode::Ack, h.value, &[]);
-                if data.len() < cap_out {
-                    let done = (std::mem::take(name), std::mem::take(file));
-                    st.log.files.push(done);
-                    st.foe = Foe::Idle;
-                }
-                self.reply(st, at, MailboxType::Foe, ack);
-            }
-            (FoeOpcode::Data, Foe::Writing { expected, .. }) if h.value + 1 == *expected => {
-                self.reply(st, at, MailboxType::Foe, foe(FoeOpcode::Ack, h.value, &[]));
-            }
-            (FoeOpcode::Read, _) => {
-                let n = cap_in.min(self.cfg.upload.len());
-                st.foe = Foe::Reading { packet: 1, offset: n, last: n < cap_in };
-                let pkt = foe(FoeOpcode::Data, 1, &self.cfg.upload[..n]);
-                self.reply(st, at, MailboxType::Foe, pkt);
-            }
-            (FoeOpcode::Ack, Foe::Reading { packet, offset, last }) if h.value == *packet => {
-                if *last {
-                    st.foe = Foe::Idle;
-                    return;
-                }
-                let end = (*offset + cap_in).min(self.cfg.upload.len());
-                *packet += 1;
-                *last = end - *offset < cap_in;
-                let pkt = foe(FoeOpcode::Data, *packet, &self.cfg.upload[*offset..end]);
-                *offset = end;
-                self.reply(st, at, MailboxType::Foe, pkt);
-            }
-            _ => {
-                let err = foe(FoeOpcode::Error, 0x8004, b"illegal");
-                self.reply(st, at, MailboxType::Foe, err);
-            }
-        }
-    }
-
-    fn on_coe(&self, st: &mut State, body: &[u8], at: u64) {
-        let Ok(c) = CoeHeader::parse(body) else { return };
-        if c.service != CoeService::SdoRequest || body.len() < CoeHeader::LEN + 1 {
-            return;
-        }
-        let cmd = SdoCommand::decode(body[CoeHeader::LEN], true);
-        let hdr = SdoHeader::parse(&body[CoeHeader::LEN..]).ok();
-        let (ix, sub) = (self.cfg.sdo_index, self.cfg.sdo_subindex);
-        let abort = |code: u32| msg::sdo(CoeService::SdoResponse, SdoCommand::Abort, ix, sub, code, &[]);
-        let addressed = |h: Option<SdoHeader>| h.is_some_and(|h| h.index == ix && h.subindex == sub);
-        let cap_init = msg::sdo_initiate_capacity(self.cfg.mailbox.in_len as usize);
-        let cap_seg = msg::sdo_segment_capacity(self.cfg.mailbox.in_len as usize);
-        let msg = match (cmd, &mut st.sdo) {
-            (SdoCommand::InitiateDownloadRequest { .. }, _) if !addressed(hdr) => abort(0x0602_0000),
-            (SdoCommand::InitiateDownloadRequest { expedited: false, .. }, _) => {
-                let size = hdr.map_or(0, |h| h.data) as usize;
-                let tail = &body[CoeHeader::LEN + SdoHeader::LEN..];
-                let data = tail[..tail.len().min(size)].to_vec();
-                if data.len() >= size {
-                    st.log.objects.push(data);
-                    st.sdo = Sdo::Idle;
-                } else {
-                    st.sdo = Sdo::Download { toggle: false, data };
-                }
-                msg::sdo(CoeService::SdoResponse, SdoCommand::InitiateDownloadResponse, ix, sub, 0, &[])
-            }
-            (SdoCommand::DownloadSegmentRequest { toggle, unused, last }, Sdo::Download { toggle: t, data })
-                if toggle == *t =>
-            {
-                let n = segment_data_len(body.len() as u16, unused);
-                data.extend_from_slice(&body[CoeHeader::LEN + 1..][..n]);
-                *t = !*t;
-                if last {
-                    let d = std::mem::take(data);
-                    st.log.objects.push(d);
-                    st.sdo = Sdo::Idle;
-                }
-                msg::sdo_segment(CoeService::SdoResponse, SdoCommand::DownloadSegmentResponse { toggle }, &[])
-            }
-            (SdoCommand::DownloadSegmentRequest { .. }, _) => abort(0x0503_0000),
-            (SdoCommand::InitiateUploadRequest { .. }, _) if !addressed(hdr) => abort(0x0602_0000),
-            (SdoCommand::InitiateUploadRequest { .. }, _) => {
-                let obj = &self.cfg.upload;
-                if !obj.is_empty() && obj.len() <= 4 {
-                    let mut d = [0u8; 4];
-                    d[..obj.len()].copy_from_slice(obj);
-                    let cmd = SdoCommand::InitiateUploadResponse {
-                        complete_access: false,
-                        expedited: true,
-                        size_indicated: true,
-                        unused: (4 - obj.len()) as u8,
-                    };
-                    st.sdo = Sdo::Idle;
-                    msg::sdo(CoeService::SdoResponse, cmd, ix, sub, u32::from_le_bytes(d), &[])
-                } else {
-                    let n = cap_init.min(obj.len());
-                    let cmd = SdoCommand::InitiateUploadResponse {
-                        complete_access: false,
-                        expedited: false,
-                        size_indicated: true,
-                        unused: 0,
-                    };
-                    st.sdo = Sdo::Upload { offset: n, toggle: false };
-                    msg::sdo(CoeService::SdoResponse, cmd, ix, sub, obj.len() as u32, &obj[..n])
-                }
-            }
-            (SdoCommand::UploadSegmentRequest { toggle }, Sdo::Upload { offset, toggle: t }) if toggle == *t => {
-                let obj = &self.cfg.upload;
-                let end = (*offset + cap_seg).min(obj.len());
-                let n = end - *offset;
-                let last = end == obj.len();
-                let cmd =
-                    SdoCommand::UploadSegmentResponse { toggle, unused: if n < 7 { (7 - n) as u8 } else { 0 }, last };
-                let msg = msg::sdo_segment(CoeService::SdoResponse, cmd, &obj[*offset..end]);
-                *offset = end;
-                *t = !*t;
-                if last {
-                    st.sdo = Sdo::Idle;
-                }
-                msg
-            }
-            _ => abort(0x0504_0001),
-        };
-        self.reply(st, at, MailboxType::Coe, msg);
     }
 
     fn sm_block(&self, st: &State, sm: u8) -> [u8; 8] {

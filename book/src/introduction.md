@@ -9,8 +9,9 @@ the same decoder and the same analysis, so they can be compared view for view.
 It runs on a laptop: a command-line tool (`flowlab`) and a local web UI (`flowlab serve`). Reading
 captures, simulating and planning need no EtherCAT hardware, no network adapter, no root and no
 libpcap. To watch a running segment, it reads what Wireshark's dumpcap or tcpdump captures, which
-only listen. Two opt-in tools reach hardware on a lab rig: a benchmark of a slave's SPI to its
-ESC, and a lab master that sends frames on an isolated segment
+only listen. Three opt-in tools reach hardware on a lab rig: a benchmark of a slave's SPI to its
+ESC, a lab master that sends frames on an isolated segment, and an emulated slave that answers
+them on an ordinary Ethernet port, for a rig without EtherCAT hardware
 ([Safety](getting-started.md#safety)).
 
 ## What it does
@@ -29,6 +30,7 @@ ESC, and a lab master that sends frames on an isolated segment
 | Put measured values (PDI timing, policy) into a simulator spec | `flowlab apply-lab` | — |
 | Time a slave's SPI accesses to its ESC (LAN9252) and fit the simulator's PDI model | `flowlab pdi-bench`, `flowlab pdi-fit` | — |
 | Scan a lab network and measure transfers on it with FlowLab's own master (opt-in build) | `flowlab master scan\|run\|transfer` | — |
+| Answer a master's frames as an emulated ESC on an ordinary Ethernet port (opt-in build) | `flowlab slave` | — |
 | Print the JSON Schema of an input file | `flowlab schema` | the spec forms |
 
 ## Three kinds of data, never mixed

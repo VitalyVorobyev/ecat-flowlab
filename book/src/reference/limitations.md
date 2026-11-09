@@ -28,9 +28,11 @@ What FlowLab does not do, or does only partly. Each item is a property of the cu
 
 ## Lab master
 
-- **Opt-in and untested on hardware.** Only a build with `--features master` sends frames
-  ([Lab master](../guide/master.md)). The transfer engine is tested against a virtual ESC; the
-  EtherCrab layer has not run against a real slave.
+- **Opt-in; not yet run against an ESC.** Only a build with `--features master` sends frames
+  ([Lab master](../guide/master.md)). The transfer engine is tested against a virtual ESC, and
+  the EtherCrab layer (scan, cyclic run, FoE, CoE and EoE both ways) against the
+  [emulated slave](../guide/slave.md), in one process and over a cable between two computers;
+  it has not run against a real ESC.
 - **Host timing.** Cycle starts and round trips are the host's clock around EtherCrab calls,
   including the operating system and the socket, not the wire's.
 - **One slave, one transfer** at a time; with one slave, the round-robin policy serves it every
@@ -41,6 +43,14 @@ What FlowLab does not do, or does only partly. Each item is a property of the cu
   distributed clocks are not configured.
 - **Master check** listens only for `--listen` seconds before starting; a master that is silent
   then is not seen.
+
+## Emulated slave
+
+- **Software, not an ESC.** `flowlab slave` answers frames once the host has received them, so
+  every time measured against it is the rig's. Results that involve it say so in their
+  assumptions; they are not lab inputs for the simulator.
+- **One port, no distributed clocks**, process data SyncManagers as plain memory (no
+  three-buffer mode), no watchdogs or events, three FMMUs ([Emulated slave](../guide/slave.md#the-esc-model)).
 
 ## ESI and ENI
 

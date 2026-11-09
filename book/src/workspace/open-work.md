@@ -11,10 +11,16 @@ questions that real captures should answer.
   [design decisions](decisions.md).
 - Run the lab inputs (`flowlab pdi-fit`, `flowlab policy`) on the Verdin/LAN9252 rig and a real
   master, then commit a calibrated bulk-transfer report next to the placeholder one.
-- Run live capture (`flowlab capture`, the Live view) on a real segment, on Linux and Windows.
-- Run the lab master (`flowlab master scan`, `run`, `transfer`) on the Verdin/LAN9252 rig, on
-  Linux and then Windows, and answer its open questions in the [design decisions](decisions.md).
-  Until then the EtherCrab glue in `flowlab-master` has only been compiled.
+- Run live capture (`flowlab capture`, the Live view) on a segment with real ESCs, on Linux and
+  Windows; on macOS it has captured the emulated-slave rig.
+- Run the lab master (`flowlab master scan`, `run`, `transfer`) on the Verdin/LAN9252 rig with
+  a real ESC, on Linux and then Windows, and answer its open questions in the
+  [design decisions](decisions.md). On a cable to the [emulated slave](../guide/slave.md) it has
+  run from macOS (scan, a cyclic run, FoE, CoE and EoE both ways); EtherCrab's Linux socket and
+  Npcap have not run yet.
+- Emulated slave: several slaves on one port (a line of ESC models, each incrementing ADP and
+  adding to the working counter), distributed clocks, the three-buffer mode, a configurable
+  processing delay, and a Windows build (Npcap).
 - Lab master: load a `MeasuredTransfer` into the UI's Compare view next to a simulated run;
   several slaves and transfers at once (the policies' multi-slave behaviour); TCP over EoE and
   VoE; distributed clocks in `run`.
@@ -27,6 +33,9 @@ questions that real captures should answer.
 
 ## Analysis
 
+- Tell a master's start-up register polling from cyclic streams. On a capture of `flowlab
+  master run`, EtherCrab's EEPROM reads (FPRD/FPWR of the SII registers `0x0502` and `0x0508`)
+  form three short "streams" with missed-cycle and jitter warnings.
 - SDO Information and SoE transactions; AoE beyond the header.
 - Mailbox status polled through a logically mapped SyncManager status bit.
 - Distributed clocks: propagation delay, drift, sync error.

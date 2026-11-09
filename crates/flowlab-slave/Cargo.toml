@@ -1,0 +1,25 @@
+[package]
+name = "flowlab-slave"
+description = "An emulated EtherCAT slave controller (ESC) with FoE, CoE and EoE behind its mailbox, for testing a master without EtherCAT hardware; a raw-socket server behind the `wire` feature."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ecat-wire.workspace = true
+flowlab-core.workspace = true
+flowlab-mailbox.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+pnet_datalink = { workspace = true, optional = true }
+
+[features]
+default = []
+# Answer EtherCAT frames on a network interface (raw socket: Linux, macOS). It sends frames,
+# so it is opt-in.
+wire = ["dep:pnet_datalink"]
+
+[lints]
+workspace = true

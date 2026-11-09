@@ -12,7 +12,7 @@ source: [`crates/flowlab-mailbox`](https://github.com/VitalyVorobyev/ecat-flowla
 | | |
 |---|---|
 | Depends on | `ecat-wire` (the headers), `serde`, `schemars`, `ts-rs`, `sha2` |
-| Used by | `flowlab-sim` (re-exports its types as part of `SimSpec`), `flowlab-master` (engine and virtual slave), `flowlab-synth`, `flowlab-cli` |
+| Used by | `flowlab-sim` (re-exports its types as part of `SimSpec`), `flowlab-master` (engine and virtual slave), `flowlab-slave` (the responder), `flowlab-synth`, `flowlab-cli` |
 
 ## Items
 
@@ -42,6 +42,21 @@ its virtual slave, and the capture generator's conversations build every message
 
 The analysis does not use `msg`: its trackers read messages on their own, so that a misreading
 here cannot hide behind the same misreading there.
+
+## The slave application (`responder`)
+
+`Responder` is a slave's side of the mailbox at message level: it takes each "mailbox out"
+buffer and returns the messages the slave answers with, knowing nothing of time or
+SyncManagers. The lab master's virtual slave runs it in virtual time; the emulated ESC
+(`flowlab-slave`) runs it as soon as a message arrives.
+
+| Item | What it is |
+|---|---|
+| `Responder::new(ResponderConfig, out_len, in_len)`, `take_message(buf)` → `Vec<Message>` | FoE write and read, CoE SDO download (normal, segmented) into the transfer object and upload (expedited, normal, segmented) from it, EoE reassembly; mailbox error reply for other protocols; a repeated counter (not 0) is dropped |
+| `eoe_pending()`, `next_eoe_frame()` | an EoE send of `upload` in UDP frames, one frame's fragments at a time |
+| `restart()` | back to INIT: open transfers abandoned, the counter forgotten, the EoE send from its start |
+| `ResponderConfig` | BUSY every n-th FoE packet, counter handling, the transfer object, read-only `objects`, `upload`, EoE send, MTU and addresses |
+| `ResponderLog` | files, downloaded objects, EoE frames, broken fragments, messages taken and dropped |
 
 The JSON forms of `MailboxPolicy` and `TransferDirection` are those of `SimSpec`, and their
 TypeScript types are exported to the UI like the simulator's.
