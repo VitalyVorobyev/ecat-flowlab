@@ -31,12 +31,13 @@ cargo test -p flowlab-analysis recovers_mailbox_ground_truth
 | `flowlab-analysis` | `src/tests.rs`, `src/stats.rs`, `src/mailbox/tests.rs` | Against synth ground truth (below); percentiles, histogram steps, decimation keeping spikes; SDO toggle violations, superseded and orphan transfers, FoE errors and EoE gaps |
 | `flowlab-synth` | `src/tests.rs` | Same spec ⇒ identical bytes and ground truth, another seed ⇒ different bytes; ground-truth counts equal what the capture contains; invalid specs rejected |
 | `flowlab-devices` | `src/tests.rs` | Hand-written ESI/ENI fixtures, ENI writer round trip, malformed XML and DTDs rejected, planner against hand arithmetic |
-| `flowlab-mailbox` | `src/policy.rs`, `src/payload.rs`, `src/msg.rs` | Policy forms (JSON, text, command line); payload slices against the whole and its SHA-256; counters, padding, capacities; EoE fragments of every size reassemble, a missing fragment drops the frame |
+| `flowlab-mailbox` | `src/policy.rs`, `src/payload.rs`, `src/msg.rs`, `src/responder.rs` | Policy forms (JSON, text, command line); payload slices against the whole and its SHA-256; counters, padding, capacities; EoE fragments of every size reassemble, a missing fragment drops the frame; read-only objects upload and refuse downloads with the right abort codes, repeated counters are dropped |
 | `flowlab-sim` | `src/tests.rs`, `src/protocol.rs` | Simulator invariants (below) |
 | `flowlab-study` | `src/tests.rs` | Pareto consistency, constraints with reasons, sampling rules, calibration recovering hidden parameters |
 | `flowlab-live` | `src/tests.rs`, `src/tool.rs` | Replays counted completely and saved byte for byte, the window's span, mailbox addresses kept beyond the window, `cat` as a stand-in capture tool, failing tools and non-capture output, interface lists |
 | `flowlab-pdi` | `src/tests.rs` | Against a simulated LAN9252: SPI framing of READ and FAST READ; CSR reads at every alignment; process RAM round trips through the FIFOs (unaligned, not DWORD multiples, beyond the FIFO depth); refusals of a broken link, a wrong chip, an ESC outside INIT, writes without permission or outside process RAM, and the AL Control and SyncManager registers; a benchmark's CSV fitted back by `flowlab-study` to the simulated bus, labelled simulated |
-| `flowlab-master` | `src/tests.rs`, `src/hardware.rs` | The transfer engine end to end against the virtual slave: FoE, CoE and EoE byte-identical at both ends, policies changing accesses per cycle, status polling, lost frames recovered with counters and repeat requests, resends, time limits, a transfer set up like a simulated one hashing to the simulated SHA-256; EtherCrab glue helpers with `--features hardware` ([flowlab-master](flowlab-master.md#tests)) |
+| `flowlab-master` | `src/tests.rs`, `src/hardware.rs` | The transfer engine end to end against the virtual slave: FoE, CoE and EoE byte-identical at both ends, policies changing accesses per cycle, status polling, lost frames recovered with counters and repeat requests, resends, time limits, a transfer set up like a simulated one hashing to the simulated SHA-256; EtherCrab glue helpers with `--features hardware`; `tests/emulated_slave.rs` (`--features hardware`): EtherCrab's scan, a cyclic run in OP and FoE, CoE and EoE both ways against the emulated ESC in one process ([flowlab-master](flowlab-master.md#tests)) |
+| `flowlab-slave` | `src/tests.rs`, `src/sii.rs` | The ESC model frame by frame: addressing and working counters, read-only registers, the EEPROM through the SII interface, AL transitions and status codes, the mailbox one-buffer rules and repeat request, the CoE mapping objects, logical exchange through FMMUs, the EoE send's start; the EEPROM checksum and PDO entries ([flowlab-slave](flowlab-slave.md#tests)) |
 | `flowlab-server` | `src/lib.rs` | The router driven in-process: synth, simulate, ENI, ESI, plan, study, live replay and the `--live` opt-in, uploads, errors |
 
 Each crate page in this part of the book lists its tests in more detail.
@@ -82,6 +83,29 @@ missed cycles, round trip from frame size and slave delays), `recovers_faults` (
 
 `flowlab-study`'s calibration test closes the loop: a capture simulated with hidden PDI parameters
 is analysed like a measurement, and the study recovers the parameters with residuals below 10⁻⁹.
+
+## On a cable: the emulated-slave rig
+
+The frames, sockets and capture tools that tests cannot reach run on a rig of two computers
+([Emulated slave](../guide/slave.md#a-rig-with-two-computers)): `flowlab slave` on one,
+`flowlab master` and `flowlab capture` on the other. A run covers:
+
+```bash
+flowlab slave -i IF_S --isolated-lab-network --upload-bytes 20000 --seed 7        # slave's host
+flowlab master scan -i IF_M --isolated-lab-network                                 # master's host
+flowlab capture IF_M --duration 12 -o run.pcapng &                                  # while the run goes
+flowlab master run -i IF_M --isolated-lab-network --cycle-us 1000 --duration 5
+flowlab master transfer -i IF_M --isolated-lab-network --station 0x1000 --protocol foe --bytes 20000 --seed 3
+flowlab master transfer … --protocol foe --direction from-slave --bytes 20000 --seed 7   # verified
+flowlab master transfer … --protocol coe --bytes 20000 --seed 4 --op
+flowlab master transfer … --protocol coe --direction from-slave --bytes 20000 --seed 7
+flowlab master transfer … --protocol eoe --bytes 20000 --seed 5
+flowlab analyze run.pcapng
+```
+
+and, with the slave restarted with `--eoe-send`, an EoE transfer from the slave. The slave
+prints the size and SHA-256 of what it received, to compare with the master's. Results carry
+the emulated ESC's assumption: they check that the wire path works, not EtherCAT timing.
 
 ## UI tests
 
@@ -150,8 +174,8 @@ New mailbox encodings in synth must keep this check passing.
 
 | Job | Runs on | Steps |
 |---|---|---|
-| `rust` | ubuntu-latest, macos-latest, windows-latest (bash) | `cargo fmt --check`; `cargo clippy --all-targets -- -D warnings`; `cargo test`; on Linux also `cargo clippy -p flowlab-cli --features master` and `cargo test -p flowlab-master --features hardware`; `git diff --exit-code -- ui/src/api/gen` (generated types committed); synth → analyze round trip; synth with `--eni` → analyze with `--eni`, `esi` on the fixture, `plan`; `simulate` of `configs/sim/example.json` and the three bulk-transfer specs, `study` of `foe-sweep.json` (release) |
-| `musl` | ubuntu-latest, per target `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl` | stand-in `ui/dist`; `cargo zigbuild --release -p flowlab-cli --features embed-ui,master`; `file` must say statically linked; the x86-64 binary, started outside the repository, must serve the embedded UI |
+| `rust` | ubuntu-latest, macos-latest, windows-latest (bash) | `cargo fmt --check`; `cargo clippy --all-targets -- -D warnings`; `cargo test`; on Linux and macOS also `cargo clippy -p flowlab-cli --features master,slave` and `cargo test -p flowlab-master --features hardware`; `git diff --exit-code -- ui/src/api/gen` (generated types committed); synth → analyze round trip; synth with `--eni` → analyze with `--eni`, `esi` on the fixture, `plan`; `simulate` of `configs/sim/example.json` and the three bulk-transfer specs, `study` of `foe-sweep.json` (release) |
+| `musl` | ubuntu-latest, per target `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl` | stand-in `ui/dist`; `cargo zigbuild --release -p flowlab-cli --features embed-ui,master,slave`; `file` must say statically linked; the x86-64 binary, started outside the repository, must serve the embedded UI |
 | `wireshark` | ubuntu-latest | Install tshark; synth → analyze → `crosscheck-tshark.py`; simulate the example with `-o` → analyze → `crosscheck-tshark.py` |
 | `ui` | ubuntu-latest | `bun install --frozen-lockfile`; `fmt:check`, `lint`, `typecheck`, `test:run`, `build` |
 

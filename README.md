@@ -56,14 +56,17 @@ host: it refuses unless the ESC is in INIT, never touches AL Control or SyncMana
 and writes only with `--allow-writes` into a named area of process RAM. The lab master
 (`flowlab master`, EtherCrab) sends frames: it is only in a build with `--features master`, and
 each command needs an interface name, `--isolated-lab-network` and a segment where no other
-master is heard ([Lab master](book/src/guide/master.md)). `flowlab serve` has no
+master is heard ([Lab master](book/src/guide/master.md)). The emulated slave (`flowlab slave`)
+answers EtherCAT frames on an ordinary Ethernet port: it is only in a build with
+`--features slave` and needs an interface name and `--isolated-lab-network`
+([Emulated slave](book/src/guide/slave.md)). `flowlab serve` has no
 authentication and can read any file you can, so keep it on loopback.
 
 ## Repository
 
 | Path | Content |
 |---|---|
-| `crates/` | `ecat-wire` (codec), `flowlab-core`, `-capture`, `-analysis`, `-synth`, `-mailbox` (policies, payload), `-sim`, `-devices`, `-study`, `-live`, `-pdi` (LAN9252 SPI timing), `-master` (lab master, opt-in), `-server`, `-cli` |
+| `crates/` | `ecat-wire` (codec), `flowlab-core`, `-capture`, `-analysis`, `-synth`, `-mailbox` (policies, payload), `-sim`, `-devices`, `-study`, `-live`, `-pdi` (LAN9252 SPI timing), `-master` (lab master, opt-in), `-slave` (emulated ESC, opt-in), `-server`, `-cli` |
 | `ui/` | React UI on the `@vitavision` lab-ui packages |
 | `configs/` | Example generator, simulator and study specs |
 | `book/` | The documentation (mdBook) |

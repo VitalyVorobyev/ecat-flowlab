@@ -16,8 +16,9 @@ aliases live in `.cargo/config.toml` and run the `xtask` crate (`publish = false
 ```bash
 cargo ci                                       # all of the below except the site
 cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
-cargo clippy -p flowlab-cli --features master -- -D warnings      # the lab master (CI: Linux; on
-cargo test -p flowlab-master --features hardware                  #   Windows it needs the Npcap SDK)
+cargo clippy -p flowlab-cli --features master,slave -- -D warnings  # lab master and emulated slave
+cargo test -p flowlab-master --features hardware                    #   (CI: Linux and macOS; on Windows
+                                                                    #   the master needs the Npcap SDK)
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace
 cd ui && bun run fmt:check && bun run lint && bun run typecheck && bun run test:run && bun run build
 mdbook build book                              # if you changed the book
@@ -50,10 +51,10 @@ generated files and fixtures compare equal on Windows too.
    targets support is added to those entries alone. The job fails if a Linux binary is not
    statically linked. `flowlab-pdi` links spidev on Linux only, so `flowlab pdi-bench` reaches
    hardware in the Linux binaries and runs `--sim` only in the Windows and macOS ones. The Linux
-   entries add `master` (the lab master, EtherCrab on a raw socket, which builds under
-   zigbuild/musl; the CI `musl` job builds it too). The Windows entry leaves it out: there it
-   links against Npcap's `wpcap.dll`, so every user of the binary would need Npcap installed
-   just to start it. Windows lab masters are built from source with the Npcap SDK
+   and macOS entries add `master` (the lab master, EtherCrab on a raw socket or BPF, which builds
+   under zigbuild/musl; the CI `musl` job builds it too) and `slave` (the emulated ESC,
+   `pnet_datalink`). The Windows entry leaves both out: there they link
+   against Npcap, so every user of the binary would need Npcap installed just to start it. Windows lab masters are built from source with the Npcap SDK
    (`cargo build --release -p flowlab-cli --features master`, [Lab master](../guide/master.md#building)).
 3. Every run uploads the archives as workflow artifacts. On a tag, a last job attaches them,
    with `SHA256SUMS.txt`, to a GitHub release of that name.
@@ -69,7 +70,7 @@ needs no Docker:
 rustup target add aarch64-unknown-linux-musl
 cargo install --locked cargo-zigbuild         # and Zig: https://ziglang.org/download/
 (cd ui && bun install && bun run build)       # the UI to build in
-cargo zigbuild --release -p flowlab-cli --features embed-ui,master --target aarch64-unknown-linux-musl
+cargo zigbuild --release -p flowlab-cli --features embed-ui,master,slave --target aarch64-unknown-linux-musl
 file target/aarch64-unknown-linux-musl/release/flowlab   # ELF 64-bit, ARM aarch64, statically linked
 ```
 
@@ -122,7 +123,8 @@ current UI build and `cargo ui-dev` the Vite dev server.
 - **Dependencies.** MIT/Apache-2.0-compatible only; check before adopting. SOEM, for example, is
   GPLv3 or commercial.
 - **Hardware safety.** Anything that sends frames needs explicit opt-in, an interface name and an
-  isolated network, and must never become a second master on a running segment. Anything that
+  isolated network, and must never become a second master on a running segment, nor a second
+  answer to a real master's frames (the emulated slave). Anything that
   accesses an ESC over its PDI (`flowlab-pdi`) checks the link first, needs the ESC in INIT, never
   touches AL Control or SyncManager registers, and writes only with explicit opt-in into a named
   area of process RAM. An ordinary

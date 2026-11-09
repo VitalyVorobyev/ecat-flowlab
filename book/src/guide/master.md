@@ -18,8 +18,11 @@ flowlab master transfer -i enp3s0 --isolated-lab-network --station 0x1000 --prot
 > use.
 
 Its status on hardware is listed under [Limitations](../reference/limitations.md#lab-master): the
-protocol engine is tested end to end against a simulated ESC
-([flowlab-master](../workspace/flowlab-master.md#tests)), and the EtherCrab layer compiles in CI.
+protocol engine is tested end to end against a simulated ESC, and the EtherCrab layer against
+the [emulated slave](slave.md), in one process in CI and over a cable between two computers
+([flowlab-master](../workspace/flowlab-master.md#tests)). Without EtherCAT hardware, the emulated
+slave on a second computer is a complete rig; a slave that names itself `FlowLab emulated ESC`
+in its EEPROM puts an assumption into every result saying that its timing is the host's.
 
 ## Building
 
@@ -30,15 +33,16 @@ code that sends frames, and only the master needs the Npcap SDK on Windows.
 cargo build --release -p flowlab-cli --features master
 ```
 
-The Linux [release binaries](../getting-started.md#install-a-release-binary) (x86-64 and aarch64,
-static musl) are built with it; the Windows and macOS ones are not. A build without the feature
+The Linux (x86-64 and aarch64, static musl) and macOS
+[release binaries](../getting-started.md#install-a-release-binary) are built with it; the Windows
+one is not. A build without the feature
 answers `flowlab master` with these instructions.
 
 | System | Setup |
 |---|---|
 | **Linux** (the lab PC) | EtherCrab opens a raw socket, which needs `CAP_NET_RAW`: run as root, or `sudo setcap cap_net_raw,cap_net_admin=eip target/release/flowlab` once per build. Take the card out of NetworkManager's hands (`nmcli device set enp3s0 managed no`) and bring the link up (`ip link set enp3s0 up`), so the host sends nothing of its own on the segment. |
 | **Windows** | Install [Npcap](https://npcap.com/#download), download the Npcap SDK and add its `Lib\x64` folder to the `LIB` environment variable before building (the `pcap` crate links against `wpcap.lib`). Interfaces are named `\Device\NPF_{…}`; `flowlab capture --list` shows them. Windows networking is not deterministic; expect wider timing distributions than on Linux. |
-| **macOS** | Builds (EtherCrab uses BPF), but the development Mac is not a lab master ([lab plan](../studies/bulk-transfer/lab.md#master)). |
+| **macOS** | BPF: read and write access to `/dev/bpf*` (Wireshark's ChmodBPF, or `sudo chgrp admin /dev/bpf* && sudo chmod g+rw /dev/bpf*` until the next reboot). FlowLab passes EtherCrab's frames through its own BPF socket and hands EtherCrab only frames that passed an ESC (bit 1 of the source MAC set): EtherCrab's own macOS socket reads the adapter's MAC through `getifaddrs`, which for some USB adapters returns a wrong address, and then takes its own outgoing frame for the answer. A Mac is a good master for an [emulated-slave](slave.md) rig; for measurements that feed the simulator, the lab plan uses a Linux PC ([lab plan](../studies/bulk-transfer/lab.md#master)). |
 
 The listening check below runs Wireshark's `dumpcap` or `tcpdump`, as [live capture](live.md)
 does; install one of them and give it capture permissions.
@@ -134,7 +138,7 @@ flowlab master transfer -i enp3s0 --isolated-lab-network --station 0x1000 \
 | `--foe-file NAME`, `--foe-password N` | FoE request (default `flowlab.bin`, 0) |
 | `--sdo INDEX:SUB` | CoE object (default `0x2000:0`) |
 | `--eoe-mtu`, `--eoe-slave-mac`, `--eoe-slave-ip`, `--eoe-master-mac`, `--eoe-master-ip`, `--eoe-port` | the UDP/IPv4 frames EoE carries |
-| `--reply-timeout-ms` (1000), `--max-resends` (3), `--max-duration` (600 s), `--first-counter` (1) | retries and limits |
+| `--reply-timeout-ms` (1000), `--max-resends` (3), `--max-duration` (600 s), `--first-counter` (1; 0 with `--op`) | retries and limits |
 | `-o FILE` | result JSON (default `results/master/transfer-UNIXTIME.json`) |
 
 ### How a cycle runs
@@ -168,10 +172,12 @@ them into one).
 
 Mailbox counters run 1–7. Before a transfer, messages waiting in "mailbox in" are read and
 discarded (`drained_messages`), except for an EoE receive, whose stream may already have started.
-EtherCrab may have used the mailbox while it initialised the network (it reads the PDO mapping
-over CoE), so the slave's last counter is unknown: if it equals `--first-counter`, a slave that
-drops repeated counters ignores the first message, and the reply timeout resends it with the next
-counter.
+On the way to OP, EtherCrab reads the PDO mapping over CoE, so with `--op` the slave's last
+counter is unknown. If it equalled the first message's counter, a slave that drops repeated
+counters (SOES does) would ignore that message until the reply timeout resent it. With `--op`
+the first message therefore carries 0, the counter's start value (ETG.1000.6), which a slave does
+not compare with the previous one; without `--op`, EtherCrab has not used the mailbox and the
+first counter is 1.
 
 ### Protocols
 

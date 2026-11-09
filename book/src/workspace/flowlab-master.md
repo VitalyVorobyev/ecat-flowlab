@@ -51,14 +51,22 @@ engine without hardware dependencies, a virtual slave to test it, and, behind th
   `QuietSegment`, the only way to obtain one, and `Session::open` requires it. The CLI only maps
   its flags onto `SegmentCheck`.
 - **Hardware** (`hardware` module): `Session::open(&QuietSegment, &SessionOptions)` splits EtherCrab's static PDU storage (one
-  session per process), starts the TX/RX thread (`tx_rx_task` on a raw socket under Linux and
-  macOS, `tx_rx_task_blocking` with Npcap on Windows) and creates the `MainDevice` with
+  session per process), starts the TX/RX thread (`tx_rx_task` on a raw socket under Linux,
+  `tx_rx_task_blocking` with Npcap on Windows; on macOS FlowLab's own pair of threads on a
+  `pnet_datalink` BPF socket, which hand EtherCrab only frames with bit 1 of the source MAC set,
+  because EtherCrab's macOS socket can misread the adapter's MAC and then takes its own frames
+  for answers) and creates the `MainDevice` with
   `RetryBehaviour::None` (a lost frame must reach the engine, not be resent behind its back) and
   no DC static sync. `scan`, `run` and `transfer` initialise the network with
   `init_single_group`; mailbox accesses are `Command::fprd/fpwr` with EtherCrab's WKC check
   mapped back to a working counter. Cycles are paced with a sleep-then-yield wait on the host
   clock. The crate has `unsafe_code = forbid`, so EtherCrab's `release_all` (unsafe) is not
-  called: the TX/RX thread ends with the process.
+  called: the TX/RX thread ends with the process. `Session::in_process(answer, &SessionOptions)`
+  drives EtherCrab's frames through a function instead (`Fn(&[u8]) -> Option<Vec<u8>>`, e.g.
+  `flowlab_slave::EmulatedSlave::handle`); nothing reaches a network, so it needs no
+  `QuietSegment`, and results name the interface `in-process`. A slave whose EEPROM name is
+  `flowlab_core::EMULATED_ESC_NAME` adds `EMULATED_ESC_ASSUMPTION` to the assumptions of `scan`,
+  `run` and `transfer` results.
 
 ## API
 
@@ -73,7 +81,7 @@ engine without hardware dependencies, a virtual slave to test it, and, behind th
 | `MeasuredTransfer`, `RunResult`, `ScanResult` (`network_config()` → ENI), `CycleTiming`, `CycleRecord`, `Summary` | results ([reports](../reference/reports.md#lab-master-results)) |
 | `EoeAddresses` | the addresses of the tunnelled UDP frames (re-exported from `flowlab_mailbox::msg`) |
 | `safety::{check_segment, SegmentCheck, QuietSegment}` | the checks before anything is sent (feature `hardware`) |
-| `hardware::Session::{open, scan, run, transfer}`, `SessionOptions` | EtherCrab (feature `hardware`); `open` needs a `QuietSegment` |
+| `hardware::Session::{open, in_process, scan, run, transfer}`, `SessionOptions` | EtherCrab (feature `hardware`); `open` needs a `QuietSegment`, `in_process` takes a function that answers frames |
 
 ## The virtual slave
 
@@ -86,9 +94,10 @@ arrived and answers at that moment.
   released when the read reaches its last byte.
 - SyncManager 0 and 1 register blocks read back with the status bit "mailbox full"; toggling the
   repeat request bit makes the slave put its last message back and toggle its acknowledge bit.
-- Responders: FoE write and read (with BUSY on every n-th packet if asked), an SDO server for
-  one object (segmented download and upload, expedited for up to 4 bytes, aborts for other
-  objects), EoE reassembly and an EoE sender.
+- Responders: `flowlab_mailbox::responder`, shared with the emulated ESC: FoE write and read
+  (with BUSY on every n-th packet if asked), an SDO server for one object (segmented download
+  and upload, expedited for up to 4 bytes, aborts for other objects), EoE reassembly and an EoE
+  sender.
 - Faults: every n-th datagram lost on its way back (after the slave processed it), BUSY answers,
   and the counter of a message seen before the transfer, which the slave drops a repeat of, as
   SOES does.
@@ -117,6 +126,13 @@ arrived and answers at that moment.
   with the simulated result's SHA-256.
 
 `src/hardware.rs` (feature
-`hardware`) tests the EEPROM protocol word, the WKC mapping and the cycle wait. CI builds the
-`master` feature of the CLI with clippy and runs the `hardware` tests on Linux. The EtherCrab
-calls themselves need a slave and are not covered.
+`hardware`) tests the EEPROM protocol word, the WKC mapping and the cycle wait.
+`tests/emulated_slave.rs` (feature `hardware`) runs the whole layer against
+`flowlab-slave`'s emulated ESC through `Session::in_process`: a scan (identity, name, mailbox
+SyncManagers, protocols, no DC, PRE-OP, the emulator's assumption), a 200 ms cyclic run in OP
+(WKC 3 every cycle, no loss, back to PRE-OP), FoE write and read, SDO download in OP and upload,
+EoE both ways, each byte-identical or verified by SHA-256; in OP, the first counter 0 needs no
+resend, while counter 1 collides with EtherCrab's last mapping request and is resent once. CI
+builds the `master` and `slave` features of the CLI with clippy and runs the `hardware` tests on
+Linux and macOS. The macOS BPF transport and EtherCrab's Linux socket run only on a real
+interface ([Emulated slave](../guide/slave.md#a-rig-with-two-computers)).

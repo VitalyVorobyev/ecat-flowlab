@@ -139,7 +139,8 @@ pub struct TransferOptions {
     pub max_resends: u32,
     /// Stop after this long even if the transfer is unfinished, ns.
     pub max_duration_ns: u64,
-    /// Counter of the first message (1–7; later ones cycle 1–7).
+    /// Counter of the first message: 1–7, or 0, the start value (ETG.1000.6), which a slave
+    /// does not compare with the previous message's. Later ones cycle 1–7.
     pub first_counter: u8,
     /// Read and discard messages waiting in "mailbox in" before starting (not for an EoE
     /// receive, whose stream may already have started).
@@ -597,8 +598,8 @@ pub async fn run_transfer<B: MailboxBus>(
     if o.cycle_time_ns == 0 {
         return Err(MasterError::Invalid("cycle time must be positive".into()));
     }
-    if !(1..=7).contains(&o.first_counter) {
-        return Err(MasterError::Invalid("the first mailbox counter must be 1–7".into()));
+    if o.first_counter > 7 {
+        return Err(MasterError::Invalid("the first mailbox counter must be 0–7".into()));
     }
     if let MailboxPolicy::Opportunistic { bus_budget_percent, .. } = o.policy
         && !(bus_budget_percent > 0.0 && bus_budget_percent <= 100.0)
@@ -771,7 +772,7 @@ pub async fn run_transfer<B: MailboxBus>(
             }
         },
         format!(
-            "Mailbox counters start at {} and cycle 1–7; a message from the slave with the previous message's counter is dropped as a duplicate.",
+            "Mailbox counters start at {} and cycle 1–7 (0 is the start value, which a slave does not compare with its previous message's); a message from the slave with the previous message's counter is dropped as a duplicate.",
             o.first_counter
         ),
         format!(

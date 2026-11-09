@@ -153,6 +153,31 @@ experiment can answer them.
   read for protocol facts only; no code was copied.
   Consequence: the samples time user-space spidev, one driver variant; a kernel driver or
   another stack's access pattern needs its own measurement.
+- **ADR-038 An emulated ESC for a rig without EtherCAT hardware.** `flowlab slave` (crate
+  `flowlab-slave`) answers EtherCAT frames on an ordinary Ethernet port with a register model of
+  an ESC (SII, AL states, SyncManagers, FMMUs, working counters) and the mailbox responder the
+  virtual slave uses, moved to `flowlab-mailbox` so both run the same FoE, CoE and EoE code. The
+  model is pure (frame in, frame out), so `flowlab-master` runs EtherCrab against it in one
+  process (`Session::in_process`) and the hardware layer is tested in CI; on a port, it makes two
+  computers and a cable a rig for the master, live capture and the analysis. It identifies
+  itself in its EEPROM (`EMULATED_ESC_NAME`, vendor ID 0, no assigned vendor), and the master
+  adds `EMULATED_ESC_ASSUMPTION` to every result that involves it: provenance stays `measured`
+  (the frames are), the assumption says what answered them. Answering frames is sending them, so
+  the port server is behind the feature `slave` and needs an interface name and
+  `--isolated-lab-network`. The raw socket is `pnet_datalink` (MIT OR Apache-2.0) with a safe
+  API, so `unsafe_code = forbid` holds. Not modelled: distributed clocks, three-buffer process
+  data, watchdogs, events, more than one port. Consequences: its timing is the host's, so its
+  results are never lab inputs; it answers whole frames after receiving them, where an ESC
+  processes them on the fly; an EoE send starts a fixed time after PRE-OP, after the master's
+  CoE configuration, so a receive's duration includes that wait.
+- **ADR-039 On macOS, FlowLab moves EtherCrab's frames.** EtherCrab's macOS socket tells its own
+  frames (which BPF also delivers) from answers by the interface's MAC, read through
+  `getifaddrs`; for a USB adapter (AX88179B) that read returns `02:00:00:00:00:00`, so EtherCrab
+  took its own frame for the answer with WKC 0 and found no slaves. `Session::open` on macOS
+  therefore drives EtherCrab's `PduTx`/`PduRx` itself on a `pnet_datalink` BPF socket and passes
+  on only EtherCAT frames with bit 1 of the source MAC set, the bit an ESC sets (SOEM filters
+  the same way). Linux and Windows keep EtherCrab's own tasks. Consequence: on macOS a master
+  needs at least one slave between its frames and their return, as on any EtherCAT segment.
 
 ## Open questions
 
@@ -183,10 +208,13 @@ experiment can answer them.
   PRAM command register before each FIFO burst) time the same as the real stack's accesses?
   *Test:* compare its fit with timing logged inside SOES on the same board.
 - Does the SOES slave on the LAN9252 drop a mailbox message whose counter repeats the previous
-  one, and does it serve the mailbox repeat request? `flowlab master transfer` relies on both
-  after a lost frame, and starts its counters at 1 after EtherCrab's own CoE traffic.
-  *Test:* `transfer` right after `scan`, and with frames dropped on the link (unplug briefly);
-  check `resent_messages`, `repeat_requests` and the file on the slave.
+  one, accept the start value 0 after other traffic, and serve the mailbox repeat request?
+  `flowlab master transfer` relies on all three: after a lost frame, and with `--op`, where
+  EtherCrab has read the PDO mapping over CoE and the first message carries 0 (against the
+  emulated ESC, which drops repeats as SOES does, a first counter equal to EtherCrab's last cost
+  one reply timeout). *Test:* `transfer --op` and `transfer --op --first-counter 1`, and with
+  frames dropped on the link (unplug briefly); check `resent_messages`, `repeat_requests` and
+  the file on the slave.
 - How far is the host's timing (`flowlab master run`) from the wire's? *Test:* `run` with a
   capture on a tap or with NIC hardware timestamps; compare the round-trip distributions.
 - Which mailbox policy does each candidate master implement (EtherCrab, SOEM, IgH, TwinCAT), and

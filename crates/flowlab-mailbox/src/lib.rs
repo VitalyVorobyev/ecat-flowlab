@@ -8,7 +8,9 @@
 //!   bytes on both sides, so the SHA-256s compare;
 //! * [`TransferPlan`]: one transfer of a simulator spec as the lab master needs it;
 //! * [`msg`]: the FoE, CoE SDO and EoE messages, mailbox buffers and counters, as the
-//!   simulator, the lab master, its virtual slave and the capture generator write them.
+//!   simulator, the lab master, its virtual slave and the capture generator write them;
+//! * [`responder`]: the slave application's FoE, CoE and EoE answers, shared by the lab
+//!   master's virtual slave and the emulated ESC (`flowlab-slave`).
 //!
 //! ```
 //! use flowlab_mailbox::MailboxPolicy;
@@ -21,6 +23,7 @@
 pub mod msg;
 mod payload;
 mod policy;
+pub mod responder;
 
 pub use payload::{payload, payload_bytes, payload_sha256, transfer_seed};
 pub use policy::MailboxPolicy;

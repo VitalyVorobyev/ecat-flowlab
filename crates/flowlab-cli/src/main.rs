@@ -11,6 +11,7 @@ use std::process::ExitCode;
 mod capture;
 mod master;
 mod pdi_bench;
+mod slave;
 
 use clap::{Parser, Subcommand};
 use flowlab_analysis::mailbox::{MailboxHint, write_eoe_pcapng};
@@ -212,6 +213,10 @@ enum Cmd {
     /// transfers measured like the simulator's. Sends frames; needs a build with
     /// `--features master`.
     Master(master::MasterArgs),
+    /// An emulated EtherCAT slave on a network interface: answers a master's frames like an
+    /// ESC with FoE, CoE and EoE behind its mailbox, for testing without EtherCAT hardware.
+    /// Sends frames; needs a build with `--features slave`.
+    Slave(slave::SlaveArgs),
     /// Print a JSON Schema.
     Schema {
         /// Which schema.
@@ -274,6 +279,20 @@ enum Cmd {
         #[arg(short, long)]
         out: Option<PathBuf>,
     },
+}
+
+/// `INDEX:SUBINDEX` of a CoE object, decimal or `0x` hex.
+#[cfg(any(feature = "master", feature = "slave"))]
+fn parse_object(s: &str) -> std::result::Result<(u16, u8), String> {
+    let bad = || format!("`{s}`: expected INDEX:SUBINDEX, e.g. 0x2000:0");
+    let (i, sub) = s.split_once(':').ok_or_else(bad)?;
+    let num = |v: &str| match v.strip_prefix("0x").or_else(|| v.strip_prefix("0X")) {
+        Some(h) => u32::from_str_radix(h, 16).ok(),
+        None => v.parse().ok(),
+    };
+    let index = num(i).and_then(|v| u16::try_from(v).ok()).ok_or_else(bad)?;
+    let sub = num(sub).and_then(|v| u8::try_from(v).ok()).ok_or_else(bad)?;
+    Ok((index, sub))
 }
 
 fn parse_station(s: &str) -> std::result::Result<u16, String> {
@@ -418,6 +437,7 @@ fn run(cli: Cli) -> Result<()> {
             },
         })?,
         Cmd::Master(m) => master::run(m)?,
+        Cmd::Slave(a) => slave::run(a)?,
         Cmd::Schema { which } => {
             let schema = match which.as_str() {
                 "sim" => flowlab_sim::spec_schema(),
