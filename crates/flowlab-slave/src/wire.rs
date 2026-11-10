@@ -5,14 +5,19 @@
 //! Apache-2.0), and answers every EtherCAT frame from a master with the frame the emulated
 //! slave returns. It refuses to start without the acknowledgement that the interface is on an
 //! isolated lab network: on a real segment it would answer a real master's frames a second
-//! time.
+//! time. Its own answers, which a macOS BPF socket hands back to it, are recognised by their
+//! bytes and not answered again; a Linux packet socket does not return its own frames.
 
 use std::time::{Duration, Instant};
 
 use ecat_wire::AlState;
 use pnet_datalink::{Channel, Config};
 
+use crate::echo::Echoes;
 use crate::{EmulatedSlave, SlaveError};
+
+/// Whether the socket hands this host's own frames back: BPF does, `AF_PACKET` does not.
+const OWN_FRAMES_COME_BACK: bool = !cfg!(target_os = "linux");
 
 /// Settings of [`serve`].
 #[derive(Debug, Clone)]
@@ -79,16 +84,24 @@ pub fn serve(
     let mut state = slave.al_state();
     let mut second = origin;
     let mut answered_since = 0u64;
+    let mut echoes = Echoes::default();
     loop {
         if o.duration.is_some_and(|d| origin.elapsed() >= d) {
             return Ok(());
         }
         match rx.next() {
             Ok(frame) => {
-                let now = origin.elapsed().as_nanos() as u64;
-                if let Some(back) = slave.handle(frame, now) {
+                let at = origin.elapsed();
+                let echo = OWN_FRAMES_COME_BACK && echoes.is_echo(at, frame);
+                let back = if echo { None } else { slave.handle(frame, at.as_nanos() as u64) };
+                if let Some(back) = back {
                     match tx.send_to(&back, None) {
-                        Some(Ok(())) => answered_since += 1,
+                        Some(Ok(())) => {
+                            if OWN_FRAMES_COME_BACK {
+                                echoes.sent(origin.elapsed(), &back);
+                            }
+                            answered_since += 1;
+                        }
                         Some(Err(e)) => return Err(SlaveError::Io(format!("send on {}: {e}", o.interface))),
                         None => return Err(SlaveError::Io(format!("send on {}: no buffer", o.interface))),
                     }

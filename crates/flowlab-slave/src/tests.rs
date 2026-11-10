@@ -137,6 +137,18 @@ fn returning_and_foreign_frames_are_ignored() {
 }
 
 #[test]
+fn behind_an_esc_frames_with_the_mac_bit_are_answered() {
+    let mut bus = Bus::new(SlaveConfig { behind_esc: true, ..SlaveConfig::default() });
+    // As an upstream ESC passes it on: bit 1 of the source MAC set, position decremented to 0.
+    let mut b = FrameBuilder::new(MacAddr([0xff; 6]), MacAddr([0x12; 6]));
+    b.push(DatagramSpec::new(Command::Brd, 0, 0, &[0])).unwrap();
+    let back = bus.slave.handle(&b.finish(), 0).expect("answered behind an ESC");
+    let f = parse_frame(&back).unwrap().unwrap();
+    assert_eq!(f.pdu.datagrams().next().unwrap().unwrap().wkc, 1);
+    assert_eq!(back[6], 0x12);
+}
+
+#[test]
 fn eeprom_holds_identity_mailbox_and_name() {
     let mut bus = Bus::new(SlaveConfig { serial: 42, ..SlaveConfig::default() });
     bus.dg(Command::Apwr, 0, 0x0010, &STATION.to_le_bytes());

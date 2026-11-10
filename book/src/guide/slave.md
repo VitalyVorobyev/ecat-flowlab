@@ -17,8 +17,9 @@ flowlab master transfer -i en7 --isolated-lab-network --station 0x1000 --protoco
 ```
 
 > **This sends frames.** It answers every EtherCAT frame on the interface. Use it only on a cable
-> or switch that connects it to the master under test, with no production equipment and no
-> other EtherCAT slaves: on a real segment it would answer a real master's frames a second time.
+> or switch that connects it to the master under test, or on the downstream port of the last
+> slave of a lab line (`--behind-esc`), with no production equipment. Beside other slaves on a
+> switch, or on a real segment, it would answer a master's frames a second time.
 
 ## What it tells you, and what not
 
@@ -71,7 +72,8 @@ FoE file `flowlab.bin`: 20000 B, SHA-256 0606fc6f…
   reads, writes and read-writes, and logical `LRD`/`LWR`/`LRW` through three FMMUs, with the
   ESC's working counter rules (read 1, write 1, read-write 3; LRW 1 for reading, 2 for writing).
   Position and broadcast datagrams leave with their ADP incremented; the answer has bit 1 of the
-  source MAC set, as an ESC sets it, and frames that already have it are not answered.
+  source MAC set, as an ESC sets it. Frames that already have it are returning frames and are
+  not answered, unless the slave runs with `--behind-esc` (below).
 - **Registers**: station address, DL status (link and communication on port 0, ports 1–3
   closed), AL control, status and status code, the SII interface over the EEPROM image (8-byte
   reads; writes only with the write-enable bit), FMMUs and SyncManagers. Read-only registers
@@ -125,3 +127,22 @@ A Mac with a USB Ethernet adapter cabled to a Verdin iMX95 (Torizon OS):
 
 SSH to the Verdin over the same cable keeps working: the master and the slave ignore IP traffic,
 and the capture filter takes only EtherCAT frames.
+
+## Behind a real slave
+
+With `--behind-esc`, the emulated slave is cabled to the downstream port of a real slave (an
+EK1100's X2 OUT, for example) and becomes the next slave of the line:
+
+```text
+master ── real slave: IN (port 0) … OUT (port 1) ── emulated slave (--behind-esc)
+```
+
+The real ESC passes the master's frames on with bit 1 of the source MAC already set, so the
+option makes the slave answer such frames. Its answer goes back through the real slave to the
+master. On macOS the BPF socket also hands the slave its own answers; it recognises them by their
+bytes for 100 ms after sending and does not answer them again. A Linux socket does not return
+them.
+
+Behind an ESC, the master's frames reach the slave only through that ESC. SSH and other IP
+traffic to the slave's host need another port or Wi-Fi: an ESC need not pass non-EtherCAT frames
+on unchanged.

@@ -15,7 +15,8 @@ by `flowlab slave` ([Emulated slave](../guide/slave.md)) on a network interface,
 ```text
  Ethernet frame ─▶ EmulatedSlave::handle ─▶ Esc::process ─ per datagram ─┬─ physical: registers, SII, AL, SyncManagers
    (EtherType 0x88A4,                         WKC, ADP++                  └─ logical: FMMUs ─▶ process RAM
-    source MAC bit 1 clear)                                │
+    source MAC bit 1 clear,
+    or set behind an ESC)                                │
                                                            ▼ "mailbox out" full
                                               flowlab_mailbox::responder::Responder ─▶ outbox ─▶ "mailbox in"
  ◀─ the same frame, source MAC bit 1 set
@@ -23,8 +24,9 @@ by `flowlab slave` ([Emulated slave](../guide/slave.md)) on a network interface,
 
 - **`EmulatedSlave::handle(frame, now_ns)`** returns the answer to an Ethernet frame (VLAN-tagged
   or not), or `None` for other EtherTypes, malformed frames and frames whose source MAC has bit
-  1 set: an ESC sets that bit, so such a frame has passed a slave (the answer to itself, when the
-  socket also delivers outgoing frames). Nothing in it does I/O; `now_ns` drives only the EoE
+  1 set: an ESC sets that bit, so such a frame has passed a slave. With
+  `SlaveConfig::behind_esc` those frames are answered, because an upstream ESC passes the
+  master's frames on with the bit set. Nothing in it does I/O; `now_ns` drives only the EoE
   send's start.
 - **`Esc`** holds 64 KiB of memory: registers below `0x1000`, 8 KiB of process RAM from
   `0x1000`. A datagram is applied in place: its data, working counter and (position, broadcast)
@@ -45,7 +47,10 @@ by `flowlab slave` ([Emulated slave](../guide/slave.md)) on a network interface,
 - **`wire::serve`** (feature `wire`) opens the interface with `pnet_datalink` (Linux
   `AF_PACKET`, macOS BPF; MIT OR Apache-2.0, safe API, so the crate keeps `unsafe_code =
   forbid`), refuses without the isolated-network acknowledgement, and answers frame by frame on
-  one thread, reporting AL changes and a once-a-second tick to a callback.
+  one thread, reporting AL changes and a once-a-second tick to a callback. Where the socket
+  hands back the host's own frames (BPF, not `AF_PACKET`), `echo::Echoes` keeps each answer for
+  100 ms and drops the first received frame with the same bytes, so a slave behind an ESC does
+  not answer itself.
 
 ## API
 

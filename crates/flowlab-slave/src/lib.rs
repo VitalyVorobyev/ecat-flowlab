@@ -6,7 +6,9 @@
 //! slave sends back, as the last slave of a line returns it through port 0: datagrams applied
 //! to its memory, working counters and auto-increment addresses updated, and bit 1 of the
 //! source MAC set, as an ESC sets it. A frame that already has that bit set has passed an
-//! ESC (it is a returning frame) and is ignored.
+//! ESC: it is a returning frame and is ignored, unless the slave sits behind a real ESC
+//! ([`SlaveConfig::behind_esc`]), whose downstream port passes the master's frames on with
+//! the bit set.
 //!
 //! What the model does:
 //!
@@ -50,6 +52,8 @@
 //! assert_eq!(back[6], 0x12); // the ESC's source MAC bit
 //! ```
 
+#[cfg(any(feature = "wire", test))]
+mod echo;
 mod esc;
 mod sii;
 #[cfg(test)]
@@ -91,6 +95,10 @@ pub struct SlaveConfig {
     /// The application behind the mailbox. Its `objects` are extended by the mapping and
     /// identity objects.
     pub responder: ResponderConfig,
+    /// The slave sits behind a real ESC (cabled to its downstream port): frames arrive with
+    /// bit 1 of the source MAC already set by that ESC and are answered. Without it, such
+    /// frames are taken for returning frames and ignored.
+    pub behind_esc: bool,
 }
 
 impl Default for SlaveConfig {
@@ -105,6 +113,7 @@ impl Default for SlaveConfig {
             input_bytes: 4,
             eoe_start_after_ns: 1_000_000_000,
             responder: ResponderConfig::default(),
+            behind_esc: false,
         }
     }
 }
@@ -196,6 +205,7 @@ pub struct SlaveStats {
 pub struct EmulatedSlave {
     esc: esc::Esc,
     layout: Layout,
+    behind_esc: bool,
 }
 
 impl std::fmt::Debug for EmulatedSlave {
@@ -224,12 +234,13 @@ impl EmulatedSlave {
         let len = usize::from(layout.mbx_len);
         let app = Responder::new(rc, len, len);
         let esc = esc::Esc::new(sii::image(&id, &layout), layout, app, cfg.eoe_start_after_ns);
-        Ok(Self { esc, layout })
+        Ok(Self { esc, layout, behind_esc: cfg.behind_esc })
     }
 
     /// Process one Ethernet frame that arrived at `now_ns` (any monotonic origin). Returns the
     /// frame to send back, or `None` if it is not an EtherCAT frame for this slave: another
-    /// EtherType, a frame that already passed an ESC, or a malformed one.
+    /// EtherType, a malformed one, or one that already passed an ESC, unless the slave is
+    /// [behind an ESC](SlaveConfig::behind_esc).
     pub fn handle(&mut self, frame: &[u8], now_ns: u64) -> Option<Vec<u8>> {
         if frame.len() < 16 {
             return None;
@@ -240,7 +251,7 @@ impl EmulatedSlave {
             at = 16;
             ethertype = u16::from_be_bytes([frame[16], frame[17]]);
         }
-        if ethertype != ETHERTYPE_ETHERCAT || frame[6] & 0x02 != 0 {
+        if ethertype != ETHERTYPE_ETHERCAT || (frame[6] & 0x02 != 0 && !self.behind_esc) {
             return None;
         }
         let mut f = frame.to_vec();

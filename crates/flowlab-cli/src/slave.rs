@@ -82,6 +82,11 @@ mod imp {
         /// Serial number in the EEPROM.
         #[arg(long, default_value_t = 0)]
         serial: u32,
+        /// The interface is cabled to the downstream port of a real slave (e.g. an EK1100's
+        /// X2 OUT): answer the frames its ESC passes on, which already carry the ESC's source
+        /// MAC bit.
+        #[arg(long)]
+        behind_esc: bool,
         /// Stop after this long, seconds (default: until Ctrl-C).
         #[arg(long, value_name = "SECONDS")]
         duration: Option<f64>,
@@ -121,6 +126,7 @@ mod imp {
             output_bytes: a.output_bytes,
             input_bytes: a.input_bytes,
             eoe_start_after_ns: a.eoe_start_after_ms * 1_000_000,
+            behind_esc: a.behind_esc,
             ..SlaveConfig::default()
         };
         cfg.responder.sdo_index = a.sdo.0;
@@ -139,9 +145,15 @@ mod imp {
         let mut seen = (0, 0, 0);
         serve(&mut slave, &options, |s, e| match e {
             Event::Listening => eprintln!(
-                "emulated ESC on {}: mailbox {} B at {:#06x}/{:#06x}, outputs {} B, inputs {} B; FoE, CoE, EoE. \
+                "emulated ESC on {}{}: mailbox {} B at {:#06x}/{:#06x}, outputs {} B, inputs {} B; FoE, CoE, EoE. \
                  Not an ESC: frames come back when this host has processed them. Ctrl-C stops.",
-                a.interface, l.mbx_len, l.mbx_out, l.mbx_in, l.output_len, l.input_len
+                a.interface,
+                if a.behind_esc { " behind an ESC" } else { "" },
+                l.mbx_len,
+                l.mbx_out,
+                l.mbx_in,
+                l.output_len,
+                l.input_len
             ),
             Event::State(state, code) => {
                 match code {
