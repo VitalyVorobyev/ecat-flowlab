@@ -147,6 +147,12 @@ the first and last message.
   number and an offset (× 32 bytes) equal to the bytes so far → last fragment. Any break is a
   reassembly error. Reassembled frames are kept with their absolute time in
   `MailboxAnalysis::eoe_packets`.
+- *FlowLab VoE* ([reference](../reference/voe.md)): per station, OPEN → READY → DATA (in order
+  by their 13-bit numbers; a later number counts as a gap, an earlier one as a repeat) → DONE
+  (to the slave) or the master's ACK after the last DATA (from the slave) ends the transfer `ok`.
+  The payload is kept, and its SHA-256 compared with the one in DONE (`digest_matches`). ABORT
+  ends it `aborted`. The message format is parsed in `mailbox/voe.rs` itself, not through
+  `flowlab_mailbox::voe`.
 - *SoE* error responses and mailbox error replies are counted and listed.
 
 `mailbox::write_eoe_pcapng(&analysis.mailbox, provenance, source_name, out)` writes the
@@ -201,7 +207,8 @@ and interval jitter (σ and √2 σ), missed cycles, round trip (wire time plus 
 lost frames, WKC errors, stations, positions and AL states, mailbox counts, SDO, FoE and EoE
 results, hint and heuristic channels without start-up, ENI-based WKC when errors dominate, and
 byte-identical JSON across runs. Unit tests in `mailbox/tests.rs` cover a toggle violation,
-superseded and orphan aborts, an FoE error and an EoE gap; `stats.rs` covers percentiles,
+superseded and orphan aborts, an FoE error, an EoE gap, and FlowLab VoE transfers both ways
+(a gap repaired, a DONE that does not match); `stats.rs` covers percentiles,
 histogram bins and decimation.
 
 ## Example

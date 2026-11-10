@@ -51,7 +51,7 @@ pub fn interface_names() -> Vec<String> {
 pub fn serve(
     slave: &mut EmulatedSlave,
     o: &ServeOptions,
-    mut on_event: impl FnMut(&EmulatedSlave, Event),
+    mut on_event: impl FnMut(&mut EmulatedSlave, Event),
 ) -> Result<(), SlaveError> {
     if !o.isolated_lab_network {
         return Err(SlaveError::Refused(

@@ -36,7 +36,8 @@ What FlowLab does not do, or does only partly. Each item is a property of the cu
 - **Host timing.** Cycle starts and round trips are the host's clock around EtherCrab calls,
   including the operating system and the socket, not the wire's.
 - **One slave, one transfer** at a time; with one slave, the round-robin policy serves it every
-  cycle. FoE, CoE (SDO normal transfer) and EoE carrying UDP; no PDO channel, TCP, VoE or SoE.
+  cycle. FoE, CoE (SDO normal transfer), EoE carrying UDP and [FlowLab VoE](voe.md); no PDO
+  channel, TCP, SoE or other vendors' VoE.
 - **Separate frames.** EtherCrab sends each mailbox access as its own Ethernet frame; the
   simulator packs a cycle's write and read into one.
 - **Process data** in `run` and `transfer --op` is whatever EtherCrab maps (zeros are sent);
@@ -60,7 +61,7 @@ What FlowLab does not do, or does only partly. Each item is a property of the cu
 ## Simulator
 
 - **EoE carries UDP-like datagrams**; TCP over EoE (acknowledgements, windows, retransmission)
-  is not modelled. VoE is not modelled.
+  is not modelled. VoE is FlowLab VoE only.
 - **Master policies are idealised** (fixed quota, round robin, opportunistic); none is a model
   of a particular product. Priority or weighted schedulers are not modelled.
 - **No operating system.** Master and slave scheduling latency appear only as cycle jitter

@@ -19,6 +19,7 @@ import {
   type EmergencyEvent,
   type EoeFrame,
   type FoeTransfer,
+  type VoeTransfer,
   type MailboxChannel,
   type MailboxErrorEvent,
   type ProtocolStats,
@@ -304,6 +305,66 @@ const FOE_COLUMNS: Column<FoeTransfer>[] = [
   },
 ];
 
+const VOE_COLUMNS: Column<VoeTransfer>[] = [
+  {
+    key: "t",
+    header: "Time",
+    numeric: true,
+    width: "7.5rem",
+    cell: (t) => captureTime(t.start_ns),
+  },
+  {
+    key: "st",
+    header: "Station",
+    width: "5.5rem",
+    cell: (t) => <span className="font-mono">{hex(t.station)}</span>,
+  },
+  {
+    key: "dir",
+    header: "Direction",
+    width: "7rem",
+    cell: (t) => (t.direction === "to_slave" ? "to slave" : "from slave"),
+  },
+  { key: "b", header: "Bytes", numeric: true, cell: (t) => count(t.bytes) },
+  { key: "m", header: "DATA", numeric: true, cell: (t) => count(t.data_messages) },
+  { key: "w", header: "Window", numeric: true, cell: (t) => t.window },
+  { key: "a", header: "ACKs", numeric: true, cell: (t) => count(t.acks) },
+  { key: "gap", header: "Gaps", numeric: true, cell: (t) => count(t.gaps) },
+  {
+    key: "d",
+    header: "Duration",
+    numeric: true,
+    cell: (t) => (t.end_ns === null ? "–" : ns(t.end_ns - t.start_ns)),
+  },
+  {
+    key: "g",
+    header: "Goodput",
+    numeric: true,
+    cell: (t) => (t.goodput_bps === null ? "–" : bitRate(t.goodput_bps)),
+  },
+  {
+    key: "o",
+    header: "Outcome",
+    cell: (t) => (
+      <span className="flex items-center gap-2">
+        {t.outcome === "ok" ? (
+          <span className="text-xs text-fg-muted">ok</span>
+        ) : (
+          <Badge tone={t.outcome === "incomplete" ? "neutral" : "warning"}>
+            {t.outcome.replace("_", " ")}
+          </Badge>
+        )}
+        {t.digest_matches === true ? (
+          <span className="text-xs text-fg-muted">SHA-256 matches</span>
+        ) : t.digest_matches === false ? (
+          <Badge tone="defect">SHA-256 differs</Badge>
+        ) : null}
+        {t.abort_text ? <span className="text-xs text-fg-muted">{t.abort_text}</span> : null}
+      </span>
+    ),
+  },
+];
+
 const EOE_COLUMNS: Column<EoeFrame>[] = [
   {
     key: "t",
@@ -374,7 +435,7 @@ const ERROR_COLUMNS: Column<MailboxErrorEvent>[] = [
   { key: "x", header: "Meaning", cell: (e) => e.text },
 ];
 
-type Tab = "sdo" | "emergencies" | "foe" | "eoe" | "errors";
+type Tab = "sdo" | "emergencies" | "foe" | "eoe" | "voe" | "errors";
 
 function plural(n: number, word: string): string {
   return `${count(n)} ${word}${n === 1 ? "" : "s"}`;
@@ -402,6 +463,7 @@ export function Mailbox({
     emergencies: Number(coe.emergencies_total),
     foe: m.foe.length,
     eoe: Number(m.eoe.frames_total) + Number(m.eoe.reassembly_errors),
+    voe: m.voe.length,
     errors: m.errors.length,
   };
   const first = (Object.keys(counts) as Tab[]).find((t) => counts[t] > 0) ?? "sdo";
@@ -565,6 +627,7 @@ export function Mailbox({
               count: Number(m.eoe.frames_total),
               disabled: counts.eoe === 0,
             },
+            { id: "voe", label: "FlowLab VoE", count: counts.voe, disabled: counts.voe === 0 },
             {
               id: "errors",
               label: "Mailbox errors",
@@ -615,6 +678,14 @@ export function Mailbox({
                 windowed={windowed(m.eoe.frames.length)}
               />
             </div>
+          ) : tab === "voe" ? (
+            <Table
+              columns={VOE_COLUMNS}
+              rows={m.voe}
+              rowKey={(t) => `${t.first_frame}-${t.station}`}
+              onRowClick={(t) => onOpenFrame(t.first_frame)}
+              windowed={windowed(m.voe.length)}
+            />
           ) : (
             <Table
               columns={ERROR_COLUMNS}

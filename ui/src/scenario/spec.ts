@@ -23,9 +23,9 @@ export const PROTOCOL_OPTIONS: {
   { value: "eoe", label: "EoE", note: "Ethernet over EtherCAT, UDP/IPv4" },
   { value: "foe", label: "FoE", note: "File access over EtherCAT" },
   { value: "coe_segmented", label: "CoE SDO", note: "segmented download / upload" },
+  { value: "voe", label: "FlowLab VoE", note: "ACK per window, slave confirms by SHA-256" },
   { value: "pdo_channel", label: "PDO channel", note: "chunks in cyclic process data" },
   { value: "tcp_eoe", label: "TCP over EoE", note: "not in the model", disabled: true },
-  { value: "voe", label: "VoE", note: "not in the model", disabled: true },
 ];
 
 export const POLICY_OPTIONS: { value: PolicyKind; label: string; hint: string }[] = [
@@ -54,6 +54,8 @@ export function defaultProtocol(kind: ProtocolKind): TransferProtocol {
       return { kind };
     case "coe_segmented":
       return { kind };
+    case "voe":
+      return { kind, window: 16 };
     case "pdo_channel":
       return { kind, bytes_per_cycle: 256, window: 2, retransmit_after_cycles: 8 };
   }
@@ -78,6 +80,8 @@ export function protocolName(p: TransferProtocol): string {
       return "FoE";
     case "coe_segmented":
       return "CoE";
+    case "voe":
+      return "VoE";
     case "pdo_channel":
       return "PDO channel";
   }
@@ -88,6 +92,8 @@ export function protocolDetail(p: TransferProtocol): string {
   switch (p.kind) {
     case "eoe":
       return `EoE, MTU ${p.mtu_bytes} B`;
+    case "voe":
+      return `VoE, window ${p.window}`;
     case "pdo_channel":
       return `PDO channel, ${p.bytes_per_cycle} B/cycle`;
     default:

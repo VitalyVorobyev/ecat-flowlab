@@ -163,7 +163,7 @@ fn eeprom_holds_identity_mailbox_and_name() {
     assert_eq!(u16::from_le_bytes([mbx[2], mbx[3]]), l.mbx_len);
     assert_eq!(u16::from_le_bytes([mbx[4], mbx[5]]), l.mbx_in);
     let protocols = bus.eeprom(0x001C);
-    assert_eq!(u16::from_le_bytes([protocols[0], protocols[1]]), 0x000E);
+    assert_eq!(u16::from_le_bytes([protocols[0], protocols[1]]), 0x002E);
     // First category: strings, the device name first.
     let s = bus.eeprom(0x0040);
     assert_eq!(u16::from_le_bytes([s[0], s[1]]), 10);

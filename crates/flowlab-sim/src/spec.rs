@@ -136,6 +136,13 @@ pub enum TransferProtocol {
     Foe,
     /// CoE SDO download or upload, normal transfer with segments.
     CoeSegmented,
+    /// FlowLab VoE: DATA messages that fill the mailbox, acknowledged once per window; the
+    /// receiving slave confirms a write with DONE.
+    Voe {
+        /// DATA messages per acknowledgement (1–4096).
+        #[serde(default = "default_voe_window")]
+        window: u16,
+    },
     /// A custom channel in cyclic process data: sequence-numbered chunks, cumulative
     /// acknowledgements in the opposite direction, go-back-N on a stalled window.
     PdoChannel {
@@ -223,6 +230,10 @@ fn default_app_processing() -> u32 {
 fn default_mtu() -> u16 {
     1500
 }
+
+fn default_voe_window() -> u16 {
+    flowlab_mailbox::voe::DEFAULT_WINDOW
+}
 fn default_window() -> u32 {
     2
 }
@@ -289,12 +300,13 @@ impl SimSlave {
 }
 
 impl TransferProtocol {
-    /// Short name: `EoE`, `FoE`, `CoE` or `PDO channel`, as results write it.
+    /// Short name: `EoE`, `FoE`, `CoE`, `VoE` or `PDO channel`, as results write it.
     pub const fn name(&self) -> &'static str {
         match self {
             Self::Eoe { .. } => ecat_wire::MailboxType::Eoe.name(),
             Self::Foe => ecat_wire::MailboxType::Foe.name(),
             Self::CoeSegmented => ecat_wire::MailboxType::Coe.name(),
+            Self::Voe { .. } => ecat_wire::MailboxType::Voe.name(),
             Self::PdoChannel { .. } => "PDO channel",
         }
     }
@@ -315,6 +327,7 @@ impl SimSpec {
             TransferProtocol::Eoe { mtu_bytes } => MailboxProtocol::Eoe { mtu_bytes: *mtu_bytes },
             TransferProtocol::Foe => MailboxProtocol::Foe,
             TransferProtocol::CoeSegmented => MailboxProtocol::CoeSegmented,
+            TransferProtocol::Voe { window } => MailboxProtocol::Voe { window: *window },
             TransferProtocol::PdoChannel { .. } => {
                 return Err(format!("transfer {index} uses the PDO channel, which is not a mailbox protocol"));
             }
@@ -415,6 +428,15 @@ impl SimSpec {
                 other => {
                     if s.mailbox_out_bytes == 0 {
                         return Err(format!("transfer {k}: slave {} ({}) has no mailbox", t.slave, s.name));
+                    }
+                    if let TransferProtocol::Voe { window } = other {
+                        if !(1..=flowlab_mailbox::voe::MAX_WINDOW).contains(window) {
+                            return Err(format!("transfer {k}: VoE window must be within 1..=4096"));
+                        }
+                        let min = flowlab_mailbox::voe::MIN_MAILBOX as u16;
+                        if s.mailbox_out_bytes.min(s.mailbox_in_bytes) < min {
+                            return Err(format!("transfer {k}: FlowLab VoE needs mailboxes of ≥ {min} bytes"));
+                        }
                     }
                     if let TransferProtocol::Eoe { mtu_bytes } = other {
                         if !(68..=1500).contains(mtu_bytes) {

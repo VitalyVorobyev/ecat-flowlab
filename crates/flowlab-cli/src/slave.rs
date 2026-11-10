@@ -92,19 +92,39 @@ mod imp {
         duration: Option<f64>,
     }
 
-    /// Print what the application received since the last call.
-    fn report_new(log: &ResponderLog, seen: &mut (usize, usize, usize)) {
-        for (name, data) in &log.files[seen.0..] {
-            eprintln!("FoE file `{name}`: {} B, SHA-256 {}", data.len(), flowlab_core::sha256_hex(data));
+    /// EoE totals so far (the frames themselves are not kept).
+    #[derive(Default)]
+    struct Totals {
+        eoe_frames: usize,
+        eoe_bytes: usize,
+        voe_sent: u64,
+    }
+
+    /// Print what the application received since the last call, and forget it there, so a
+    /// long run neither grows nor stalls on copying what it received.
+    fn report_new(log: ResponderLog, t: &mut Totals) {
+        let sha = flowlab_core::sha256_hex;
+        for (name, data) in &log.files {
+            eprintln!("FoE file `{name}`: {} B, SHA-256 {}", data.len(), sha(data));
         }
-        for data in &log.objects[seen.1..] {
-            eprintln!("SDO download: {} B, SHA-256 {}", data.len(), flowlab_core::sha256_hex(data));
+        for data in &log.objects {
+            eprintln!("SDO download: {} B, SHA-256 {}", data.len(), sha(data));
         }
-        if log.eoe_frames.len() > seen.2 {
-            let bytes: usize = log.eoe_frames.iter().map(Vec::len).sum();
-            eprintln!("EoE: {} frame(s), {bytes} B so far", log.eoe_frames.len());
+        if !log.eoe_frames.is_empty() {
+            t.eoe_frames += log.eoe_frames.len();
+            t.eoe_bytes += log.eoe_frames.iter().map(Vec::len).sum::<usize>();
+            eprintln!("EoE: {} frame(s), {} B so far", t.eoe_frames, t.eoe_bytes);
         }
-        *seen = (log.files.len(), log.objects.len(), log.eoe_frames.len());
+        for data in &log.voe_received {
+            eprintln!("VoE payload: {} B, SHA-256 {}", data.len(), sha(data));
+        }
+        if log.voe_sent > 0 {
+            t.voe_sent += log.voe_sent;
+            eprintln!("VoE upload sent ({} so far)", t.voe_sent);
+        }
+        for (index, sub, value) in &log.settings {
+            eprintln!("setting {index:#06x}:{sub} written: {value:02x?} (applies at the next INIT)");
+        }
     }
 
     pub(crate) fn run(a: SlaveArgs) -> Result<()> {
@@ -142,10 +162,11 @@ mod imp {
         let l = slave.layout();
         let options =
             ServeOptions { interface: a.interface.clone(), isolated_lab_network: a.isolated_lab_network, duration };
-        let mut seen = (0, 0, 0);
+        let mut totals = Totals::default();
+        let mut mailbox = l.mbx_len;
         serve(&mut slave, &options, |s, e| match e {
             Event::Listening => eprintln!(
-                "emulated ESC on {}{}: mailbox {} B at {:#06x}/{:#06x}, outputs {} B, inputs {} B; FoE, CoE, EoE. \
+                "emulated ESC on {}{}: mailbox {} B at {:#06x}/{:#06x}, outputs {} B, inputs {} B; FoE, CoE, EoE, VoE. \
                  Not an ESC: frames come back when this host has processed them. Ctrl-C stops.",
                 a.interface,
                 if a.behind_esc { " behind an ESC" } else { "" },
@@ -162,9 +183,14 @@ mod imp {
                     }
                     None => eprintln!("AL {}, station {:#06x}", state.name(), s.station()),
                 }
-                report_new(&s.log(), &mut seen);
+                if s.layout().mbx_len != mailbox {
+                    mailbox = s.layout().mbx_len;
+                    let l = s.layout();
+                    eprintln!("mailbox now {mailbox} B at {:#06x}/{:#06x} (setting)", l.mbx_out, l.mbx_in);
+                }
+                report_new(s.drain_log(), &mut totals);
             }
-            Event::Second => report_new(&s.log(), &mut seen),
+            Event::Second => report_new(s.drain_log(), &mut totals),
         })?;
         let st = slave.stats();
         eprintln!(

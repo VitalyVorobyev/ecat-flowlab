@@ -24,6 +24,7 @@
 - [Input files](reference/specs.md)
 - [Report and result files](reference/reports.md)
 - [HTTP API](reference/api.md)
+- [FlowLab VoE](reference/voe.md)
 - [Limitations](reference/limitations.md)
 - [Glossary](reference/glossary.md)
 - [Sources](reference/sources.md)

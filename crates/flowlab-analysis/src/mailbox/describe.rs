@@ -174,7 +174,18 @@ pub fn describe(h: &MailboxHeader, body: &[u8]) -> (String, Vec<(String, String)
             Ok(v) => {
                 kv("Vendor id", format!("0x{:08X}", v.vendor_id));
                 kv("Vendor type", format!("0x{:04X}", v.vendor_type));
-                format!("VoE vendor 0x{:08X} type 0x{:04X}", v.vendor_id, v.vendor_type)
+                match super::voe::parse(body) {
+                    Some((op, seq, tail)) => {
+                        let name = super::voe::op_name(op);
+                        kv("FlowLab VoE", format!("{name}, sequence {seq}"));
+                        if op == 2 {
+                            format!("FlowLab VoE DATA {seq} ({} B)", tail.len())
+                        } else {
+                            format!("FlowLab VoE {name} {seq}")
+                        }
+                    }
+                    None => format!("VoE vendor 0x{:08X} type 0x{:04X}", v.vendor_id, v.vendor_type),
+                }
             }
         },
         MailboxType::Error => match MailboxErrorReply::parse(body) {

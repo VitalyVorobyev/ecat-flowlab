@@ -2,7 +2,7 @@
 
 `flowlab-sim` is a deterministic discrete-event model of an EtherCAT segment: a master, the link,
 each slave's ESC (SyncManagers, ESC RAM) and its PDI (the slave application's access to the ESC).
-It runs bulk transfers over EoE, FoE, CoE or a process-data channel and writes every frame through
+It runs bulk transfers over EoE, FoE, CoE, FlowLab VoE or a process-data channel and writes every frame through
 `ecat-wire` into a pcapng labelled `simulated`, so a simulated run is analysed by the same code as
 a capture. Every result follows from the spec's parameters; nothing it produces is a measurement.
 
@@ -63,7 +63,7 @@ bulk endpoint running EoE, FoE, CoE and a PDO channel of 256 kB each.
 | ESC RAM | see below |
 | Process image | ≤ 1400 bytes over all slaves, PDO channels included (one LRW in this model) |
 | Transfers | at least one; `slave` exists; `start_ms` ≥ 0 and finite; `payload_bytes` ≤ 1,000,000,000 |
-| Mailbox protocols | the slave has a mailbox; EoE `mtu_bytes` in 68..=1500 |
+| Mailbox protocols | the slave has a mailbox; EoE `mtu_bytes` in 68..=1500; VoE `window` in 1..=4096 and mailboxes ≥ 62 bytes |
 | PDO channel | `bytes_per_cycle` > 8 (the chunk header); `window` ≥ 1; one channel per slave |
 
 **ESC RAM gating.** SyncManagers use one buffer per mailbox and three buffers per process-data
@@ -147,6 +147,7 @@ parallel. Receivers check every byte against `payload_bytes` and hash it with SH
 |---|---|
 | EoE | UDP/IPv4 datagrams of `mtu_bytes − 28` payload bytes in EoE fragments; fragments except the last carry a multiple of 32 bytes; frame numbers 1–15. No acknowledgements, no TCP, ARP or IP fragmentation. Documentation addresses (192.0.2.0/24, IANA MACs) |
 | FoE | Write: WRQ, ACK 0, then DATA *n* / ACK *n* until a packet shorter than the mailbox capacity. Read: RRQ, then DATA / ACK. File name `flowlab.bin` |
+| VoE | [FlowLab VoE](../reference/voe.md): OPEN, READY, DATA filling the mailbox after an 8-byte header with at most `window` unacknowledged, an ACK per window; a receiving slave ends with DONE (length, SHA-256), a receiving master with the ACK of the last message. An ACK behind what was sent makes the sender go back to it |
 | CoE segmented | SDO 0x2000:00, normal transfer with size indicated: initiate request/response carrying the first chunk, then segments with alternating toggle and the `last` flag; download (master → slave) and upload (slave → master) |
 | PDO channel | Chunks with an 8-byte header (sequence u32, length u16, reserved u16) in `bytes_per_cycle` of process data; the receiver returns the next expected sequence (u32) in the opposite direction. At most `window` chunks unacknowledged; after `retransmit_after_cycles` sender updates without progress it goes back to the first unacknowledged chunk (go-back-N) |
 

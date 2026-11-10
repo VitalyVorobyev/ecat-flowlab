@@ -12,7 +12,7 @@ use flowlab_core::{EMULATED_ESC_ASSUMPTION, EMULATED_ESC_NAME};
 use flowlab_mailbox::msg::udp_payload;
 use flowlab_master::hardware::{Session, SessionOptions};
 use flowlab_master::{EoeAddresses, MailboxLayout, Payload, TransferJob, TransferOptions, TransferProtocol};
-use flowlab_slave::{EmulatedSlave, SlaveConfig};
+use flowlab_slave::{EmulatedSlave, SETTING_MAILBOX_BYTES, SlaveConfig};
 
 fn pattern(n: usize, seed: u8) -> Vec<u8> {
     (0..n).map(|i| (i as u32).wrapping_mul(2_654_435_761).to_le_bytes()[1] ^ seed).collect()
@@ -50,7 +50,7 @@ fn scan_run_and_transfers_against_the_emulated_slave() {
     assert_eq!(r.slaves.len(), 1);
     let s0 = &r.slaves[0];
     assert_eq!((s0.name.as_str(), s0.station, s0.al_state.as_str()), (EMULATED_ESC_NAME, 0x1000, "PREOP"));
-    assert_eq!(s0.mailbox_protocols, ["EoE", "CoE", "FoE"]);
+    assert_eq!(s0.mailbox_protocols, ["EoE", "CoE", "FoE", "VoE"]);
     assert_eq!(s0.dc_support, "none");
     let mailboxes: Vec<_> =
         s0.sync_managers.iter().filter(|m| m.mode == "mailbox").map(|m| (m.start, m.length)).collect();
@@ -121,4 +121,30 @@ fn scan_run_and_transfers_against_the_emulated_slave() {
     let r = session.transfer(0x1000, job(TransferProtocol::eoe(), receive(&payload)), &o, false).unwrap();
     assert!(r.completed, "EoE receive: {:?}", r.error);
     assert_eq!(r.verified, Some(true));
+
+    // FlowLab VoE both ways: the slave's DONE verifies a write, READY announces an upload.
+    let mut cfg = SlaveConfig::default();
+    cfg.responder.upload = payload.clone();
+    replace(cfg);
+    let r = session.transfer(0x1000, job(TransferProtocol::voe(), Payload::Send(payload.clone())), &o, false).unwrap();
+    assert!(r.completed, "VoE send: {:?}", r.error);
+    assert_eq!(r.verified, Some(true));
+    assert_eq!(slave.lock().unwrap().log().voe_received, vec![payload.clone()]);
+    let unknown_size = Payload::Receive { expected_bytes: None, expected_sha256: Some(sha256(&payload)) };
+    let r = session.transfer(0x1000, job(TransferProtocol::voe(), unknown_size), &o, false).unwrap();
+    assert!(r.completed, "VoE receive: {:?}", r.error);
+    assert_eq!((r.payload_bytes, r.verified), (payload.len() as u64, Some(true)));
+
+    // A mailbox size written over CoE applies at the next INIT: the next start reads it.
+    let setting = TransferProtocol::Coe { index: SETTING_MAILBOX_BYTES.0, subindex: SETTING_MAILBOX_BYTES.1 };
+    let r = session.transfer(0x1000, job(setting, Payload::Send(512u16.to_le_bytes().to_vec())), &o, false).unwrap();
+    assert!(r.completed, "setting: {:?}", r.error);
+    let r = session.scan().unwrap();
+    let mailboxes: Vec<_> =
+        r.slaves[0].sync_managers.iter().filter(|m| m.mode == "mailbox").map(|m| (m.start, m.length)).collect();
+    assert_eq!(mailboxes, [(0x1000, 512), (0x1200, 512)]);
+    let r = session.transfer(0x1000, job(TransferProtocol::voe(), Payload::Send(payload.clone())), &o, false).unwrap();
+    assert!(r.completed, "VoE send in 512-byte mailboxes: {:?}", r.error);
+    assert_eq!(r.verified, Some(true));
+    assert_eq!(r.messages_to_slave, 1 + 6000u64.div_ceil(flowlab_mailbox::voe::capacity(512) as u64));
 }

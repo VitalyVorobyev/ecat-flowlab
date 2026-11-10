@@ -45,7 +45,7 @@ The development Mac only runs FlowLab; it is not a lab master.
 | L0 | Plain Ethernet: PC ↔ Verdin TCP, 10 MB with checksum, throughput and CPU | the baseline every result is compared with |
 | L1 | ESC bring-up: PDI register access and timing, EEPROM, identity, state machine, small PDOs | `flowlab pdi-bench` (link check, SPI timing, [below](#measuring-the-spi)); `flowlab master scan` (identity, SyncManagers, ENI), `flowlab master run`; capture → Stations (AL states), Timing (cycle, WKC) |
 | L2 | Basic transfer: 1 KB, 1 MB, 10 MB with integrity, timeouts and diagnostics | `flowlab master transfer`; Mailbox view: messages, rejected writes, empty reads |
-| L3 | One protocol at a time: FoE, EoE, CoE, VoE, PDO channel, each verified on both ends | `flowlab master transfer` for FoE, CoE and EoE (it has no VoE or PDO channel: those need another master); per-protocol transfer tables, Compare |
+| L3 | One protocol at a time: FoE, EoE, CoE, VoE, PDO channel, each verified on both ends | `flowlab master transfer` for FoE, CoE, EoE and [FlowLab VoE](../../reference/voe.md) (it has no PDO channel, and a slave needs FlowLab VoE in its stack); per-protocol transfer tables, Compare |
 | L4 | Calibration: measured PDI timing (from L1) and master policy as lab inputs; check against the captures and report residuals | `flowlab pdi-fit`, `flowlab policy`, `flowlab study --capture` |
 | L5 | Optimisation: constrained sweeps; check the best candidates over several trials with control traffic present | `scripts/bulk-transfer-report.py --lab lab.json --out DIR` |
 | L6 | Other masters, only once L0–L5 work | Compare per master |
@@ -146,7 +146,7 @@ every table with the lab inputs it used.
 | No suitable ESC or slave stack | no real slave | select and validate ESC and stack first |
 | SPI/PDI too slow | transfer far below link rate | measure early (L1); consider HBI or another ESC |
 | ESC RAM too small | mailbox/PDO configuration impossible | plan against 4 KiB; verify ESI and SII |
-| Master lacks EoE/FoE/VoE APIs | no transport adapter | verify versions and APIs before choosing; `flowlab master` has FoE, CoE and EoE, not VoE |
+| Master lacks EoE/FoE/VoE APIs | no transport adapter | verify versions and APIs before choosing; `flowlab master` has FoE, CoE, EoE and FlowLab VoE |
 | Licence conflicts (e.g. GPL master) | cannot ship | review before embedding |
 | Mailbox scheduling modelled wrongly | misleading optimisation | capture each master's polling; calibrate |
 | Bulk traffic disturbs control | safety, determinism | isolated lab, cycle constraints in every study |

@@ -40,7 +40,13 @@ by `flowlab slave` ([Emulated slave](../guide/slave.md)) on a network interface,
   virtual slave runs in virtual time. It takes each message as soon as its last byte is written;
   answers wait in an outbox and enter "mailbox in" whenever it is free, with the counter cycling
   1–7. The inputs echo the outputs after every logical write.
-- **`sii`** builds the EEPROM (ETG.2010: identity, standard mailbox, protocol word, the
+- **Settings.** `SETTING_MAILBOX_BYTES` (`0x2001:0`) and `SETTING_EOE_SEND` (`0x2002:0`) are
+  writable responder settings. After a frame that leaves the ESC in INIT, `EmulatedSlave`
+  compares them with the configuration it runs: a change builds a new `Layout` and EEPROM and
+  hands them to `Esc::reconfigure`, which keeps the registers (station address) and the
+  application's log. A size that does not fit is written back.
+- **`sii`** builds the EEPROM (ETG.2010: identity, standard mailbox, protocol word with EoE,
+  CoE, FoE and VoE, the
   checksum of words 0–6 with the CRC-8 that EtherCrab checks, and the categories Strings,
   General, FMMU, SyncManager, TxPDO, RxPDO) and the CoE objects of the same mapping, so a master
   maps the process data from either.
@@ -57,7 +63,8 @@ by `flowlab slave` ([Emulated slave](../guide/slave.md)) on a network interface,
 | Item | Purpose |
 |---|---|
 | `EmulatedSlave::new(SlaveConfig)`, `handle`, `al_state`, `station`, `layout`, `log`, `stats`, `responder` | the slave |
-| `SlaveConfig` | identity, mailbox and process data sizes, the EoE send's start, the `ResponderConfig` |
+| `SlaveConfig` | identity, mailbox and process data sizes, the EoE send's start, whether it sits behind an ESC, the `ResponderConfig` |
+| `SETTING_MAILBOX_BYTES`, `SETTING_EOE_SEND` | the settings a master writes over CoE; they apply at the next INIT |
 | `Layout` | where the SyncManager buffers are |
 | `SlaveStats` | frames, datagrams, messages each way, repeats, AL changes |
 | `SlaveError` | `Invalid`, `Refused`, `Io` |

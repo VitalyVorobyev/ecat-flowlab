@@ -23,8 +23,14 @@ questions that real captures should answer.
   adding to the working counter), distributed clocks, the three-buffer mode, a configurable
   processing delay, and a Windows build (Npcap).
 - Lab master: load a `MeasuredTransfer` into the UI's Compare view next to a simulated run;
-  several slaves and transfers at once (the policies' multi-slave behaviour); TCP over EoE and
-  VoE; distributed clocks in `run`.
+  several slaves and transfers at once (the policies' multi-slave behaviour); TCP over EoE;
+  distributed clocks in `run`.
+- FlowLab VoE in a slave stack (SOES on the LAN9252), so its fewer acknowledgements are
+  measured against a real PDI; VoE conversations in `flowlab-synth`; VoE goodput in the
+  Compare view.
+- Lab master: more than one mailbox frame in flight. On a host whose round trip is hundreds of
+  microseconds (a USB adapter, a userspace slave), the round trip per message, not the link,
+  limits every protocol.
 - Run `flowlab pdi-bench` on the Verdin/LAN9252 with both read instructions and several clocks,
   and answer the LAN9252 questions in the [design decisions](decisions.md#open-questions).
 - PDI profiling of the real stack: a converter from kernel SPI trace events (ftrace/`trace-cmd`

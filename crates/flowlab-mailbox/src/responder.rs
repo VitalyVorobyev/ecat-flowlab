@@ -11,6 +11,12 @@
 //!   normal, segmented) from it; further objects ([`ResponderConfig::objects`]) are read-only.
 //! * EoE: fragments are reassembled into frames; with [`ResponderConfig::eoe_send`] the slave
 //!   sends [`ResponderConfig::upload`] as UDP frames.
+//! * FlowLab VoE ([`crate::voe`]): OPEN to the slave is answered READY; DATA messages are
+//!   acknowledged once per window and the payload ends with DONE (length and SHA-256); OPEN
+//!   from the slave is answered READY and a window of DATA messages from
+//!   [`ResponderConfig::upload`], continued after each ACK. VoE of another vendor is refused
+//!   with a mailbox error reply.
+//! * Settings ([`ResponderConfig::settings`]): objects the master may write as well as read.
 //!
 //! ```
 //! use ecat_wire::{FoeOpcode, MailboxType};
@@ -34,6 +40,7 @@ use ecat_wire::{
 };
 
 use crate::msg::{self, EoeAddresses, EoeReassembler, eoe_fragments, foe, udp_frame};
+use crate::voe;
 
 /// SDO abort: object does not exist in the object dictionary.
 const ABORT_NO_OBJECT: u32 = 0x0602_0000;
@@ -71,6 +78,11 @@ pub struct ResponderConfig {
     pub eoe_mtu: usize,
     /// Addresses of the slave's EoE frames.
     pub eoe_addresses: EoeAddresses,
+    /// Largest FlowLab VoE window the slave grants.
+    pub voe_max_window: u16,
+    /// Objects the master may write (any size up to the mailbox) and read: `(index, subindex)
+    /// → value`. A write replaces the value and is logged in [`ResponderLog::settings`].
+    pub settings: BTreeMap<(u16, u8), Vec<u8>>,
 }
 
 impl Default for ResponderConfig {
@@ -86,6 +98,8 @@ impl Default for ResponderConfig {
             eoe_send: false,
             eoe_mtu: 1500,
             eoe_addresses: EoeAddresses::default(),
+            voe_max_window: voe::MAX_WINDOW,
+            settings: BTreeMap::new(),
         }
     }
 }
@@ -105,6 +119,12 @@ pub struct ResponderLog {
     pub messages_in: u64,
     /// Messages dropped because their counter repeated the previous one.
     pub duplicates_dropped: u64,
+    /// Payloads received over FlowLab VoE, in order.
+    pub voe_received: Vec<Vec<u8>>,
+    /// Uploads sent over FlowLab VoE to the end.
+    pub voe_sent: u64,
+    /// Settings the master wrote, in order: (index, subindex, value).
+    pub settings: Vec<(u16, u8, Vec<u8>)>,
 }
 
 /// A message the slave sends: its mailbox type and the data after the mailbox header.
@@ -128,6 +148,12 @@ enum Foe {
     Reading { packet: u32, offset: usize, last: bool },
 }
 
+enum Voe {
+    Idle,
+    Receiving { length: u64, window: u64, data: Vec<u8>, count: u64 },
+    Sending { window: u64, offset: usize, queued: u64, acked: u64, messages: u64 },
+}
+
 enum Sdo {
     Idle,
     Download { toggle: bool, data: Vec<u8> },
@@ -146,6 +172,9 @@ pub struct Responder {
     eoe_rx: EoeReassembler,
     eoe_tx_offset: usize,
     eoe_frame_no: u8,
+    voe: Voe,
+    /// The last DONE, repeated when the master writes DATA again (its DONE was lost).
+    voe_last_done: Option<Vec<u8>>,
     log: ResponderLog,
 }
 
@@ -170,8 +199,29 @@ impl Responder {
             eoe_rx: EoeReassembler::default(),
             eoe_tx_offset: 0,
             eoe_frame_no: 0,
+            voe: Voe::Idle,
+            voe_last_done: None,
             log: ResponderLog::default(),
         }
+    }
+
+    /// Carry on with the mailbox sizes and EoE send of a reconfigured slave: the log and the
+    /// settings stay, transfers start over (as after INIT).
+    pub fn reconfigure(&mut self, out_len: usize, in_len: usize, eoe_send: bool) {
+        self.out_len = out_len;
+        self.in_len = in_len;
+        self.cfg.eoe_send = eoe_send;
+        self.restart();
+    }
+
+    /// The current value of a setting.
+    pub fn setting(&self, index: u16, subindex: u8) -> Option<&[u8]> {
+        self.cfg.settings.get(&(index, subindex)).map(Vec::as_slice)
+    }
+
+    /// Set a setting's value (as the slave's own correction, not logged as a write).
+    pub fn put_setting(&mut self, key: (u16, u8), value: Vec<u8>) {
+        self.cfg.settings.insert(key, value);
     }
 
     /// The settings.
@@ -184,12 +234,21 @@ impl Responder {
         ResponderLog { eoe_broken: self.eoe_rx.broken, ..self.log.clone() }
     }
 
+    /// What was received since the last call, handed over and forgotten here: a long-running
+    /// slave keeps neither the payloads nor the time to copy them.
+    pub fn drain_log(&mut self) -> ResponderLog {
+        let broken = std::mem::take(&mut self.eoe_rx.broken);
+        ResponderLog { eoe_broken: broken, ..std::mem::take(&mut self.log) }
+    }
+
     /// Start over, as after the slave went back to INIT: abandon open FoE and SDO transfers
     /// and EoE frames, forget the last message counter, and restart an EoE send from its
     /// first byte. The log is kept.
     pub fn restart(&mut self) {
         self.foe = Foe::Idle;
         self.sdo = Sdo::Idle;
+        self.voe = Voe::Idle;
+        self.voe_last_done = None;
         self.last_in_counter = 0;
         let broken = self.eoe_rx.broken;
         self.eoe_rx = EoeReassembler::default();
@@ -236,6 +295,7 @@ impl Responder {
                 }
                 Vec::new()
             }
+            MailboxType::Voe if voe::parse(body).is_some() => self.on_voe(body),
             _ => {
                 // Mailbox error reply: protocol not supported.
                 let e = MailboxErrorReply { service: 1, detail: 2 };
@@ -300,12 +360,128 @@ impl Responder {
         }
     }
 
-    /// The value of a read-only object, or the abort code.
+    fn on_voe(&mut self, body: &[u8]) -> Vec<Message> {
+        let Some(m) = voe::parse(body) else { return Vec::new() };
+        let reply = |b: Vec<u8>| Message::new(MailboxType::Voe, b);
+        let cap_in = voe::capacity(self.in_len) as u64;
+        match (m.op, &mut self.voe) {
+            (voe::Op::Open, _) => {
+                self.voe_last_done = None;
+                let Some((dir, window, length)) = voe::parse_open(m.tail) else {
+                    return vec![reply(voe::abort(voe::ABORT_PROTOCOL, "malformed OPEN"))];
+                };
+                let window = window.clamp(1, self.cfg.voe_max_window.clamp(1, voe::MAX_WINDOW));
+                match dir {
+                    voe::Direction::ToSlave => {
+                        self.voe = Voe::Receiving { length, window: window.into(), data: Vec::new(), count: 0 };
+                        let mut out = vec![reply(voe::ready(window, length))];
+                        if length == 0 {
+                            out.extend(self.voe_finish_receive());
+                        }
+                        out
+                    }
+                    voe::Direction::FromSlave => {
+                        let len = self.cfg.upload.len() as u64;
+                        let messages = len.div_ceil(cap_in.max(1));
+                        self.voe = Voe::Sending { window: window.into(), offset: 0, queued: 0, acked: 0, messages };
+                        let mut out = vec![reply(voe::ready(window, len))];
+                        out.extend(self.voe_fill_window());
+                        if messages == 0 {
+                            self.voe = Voe::Idle;
+                            self.log.voe_sent += 1;
+                        }
+                        out
+                    }
+                }
+            }
+            (voe::Op::Data, Voe::Receiving { length, window, data, count }) => {
+                if voe::classify(*count, m.seq) != voe::Arrival::Next {
+                    // A repeat (the master's reply timeout) or a gap: say again what is next.
+                    return vec![reply(voe::encode(voe::Op::Ack, *count as u32, &[]))];
+                }
+                let room = (*length - data.len() as u64) as usize;
+                data.extend_from_slice(&m.tail[..m.tail.len().min(room)]);
+                *count += 1;
+                if data.len() as u64 >= *length {
+                    self.voe_finish_receive()
+                } else if (*count).is_multiple_of(*window) {
+                    vec![reply(voe::encode(voe::Op::Ack, *count as u32, &[]))]
+                } else {
+                    Vec::new()
+                }
+            }
+            (voe::Op::Ack, Voe::Sending { acked, queued, offset, messages, .. }) => {
+                let n = voe::unwrap_seq(*acked, m.seq);
+                if n > *queued {
+                    return Vec::new();
+                }
+                *acked = n;
+                if n >= *messages {
+                    self.voe = Voe::Idle;
+                    self.log.voe_sent += 1;
+                    return Vec::new();
+                }
+                if n < *queued {
+                    // The master misses message n: go back and send again from there.
+                    *queued = n;
+                    *offset = n as usize * voe::capacity(self.in_len).max(1);
+                }
+                self.voe_fill_window()
+            }
+            (voe::Op::Abort, _) => {
+                self.voe = Voe::Idle;
+                Vec::new()
+            }
+            (voe::Op::Data, Voe::Idle) => self.voe_last_done.iter().map(|d| reply(d.clone())).collect(),
+            (voe::Op::Ack, Voe::Idle) => Vec::new(),
+            _ => vec![reply(voe::abort(voe::ABORT_PROTOCOL, "unexpected message"))],
+        }
+    }
+
+    /// DONE for the payload received, and back to idle.
+    fn voe_finish_receive(&mut self) -> Vec<Message> {
+        let Voe::Receiving { data, .. } = std::mem::replace(&mut self.voe, Voe::Idle) else { return Vec::new() };
+        let done = voe::done(data.len() as u64, &voe::sha256(&data));
+        self.voe_last_done = Some(done.clone());
+        self.log.voe_received.push(data);
+        vec![Message::new(MailboxType::Voe, done)]
+    }
+
+    /// The DATA messages the window allows now.
+    fn voe_fill_window(&mut self) -> Vec<Message> {
+        let cap = voe::capacity(self.in_len).max(1);
+        let Voe::Sending { window, offset, queued, acked, messages } = &mut self.voe else { return Vec::new() };
+        let mut out = Vec::new();
+        while *queued < *messages && *queued < *acked + *window {
+            let end = (*offset + cap).min(self.cfg.upload.len());
+            out.push(Message::new(
+                MailboxType::Voe,
+                voe::encode(voe::Op::Data, *queued as u32, &self.cfg.upload[*offset..end]),
+            ));
+            *offset = end;
+            *queued += 1;
+        }
+        out
+    }
+
+    /// The value of a read-only object or a setting, or the abort code.
     fn object(&self, index: u16, subindex: u8) -> Result<&[u8], u32> {
-        if let Some(v) = self.cfg.objects.get(&(index, subindex)) {
+        if let Some(v) = self.cfg.objects.get(&(index, subindex)).or_else(|| self.cfg.settings.get(&(index, subindex)))
+        {
             return Ok(v);
         }
-        if self.cfg.objects.keys().any(|(i, _)| *i == index) { Err(ABORT_NO_SUBINDEX) } else { Err(ABORT_NO_OBJECT) }
+        let known = |(i, _): &(u16, u8)| *i == index;
+        if self.cfg.objects.keys().any(known) || self.cfg.settings.keys().any(known) {
+            Err(ABORT_NO_SUBINDEX)
+        } else {
+            Err(ABORT_NO_OBJECT)
+        }
+    }
+
+    /// Store a setting the master wrote.
+    fn write_setting(&mut self, index: u16, subindex: u8, value: Vec<u8>) {
+        self.log.settings.push((index, subindex, value.clone()));
+        self.cfg.settings.insert((index, subindex), value);
     }
 
     fn on_coe(&mut self, body: &[u8]) -> Option<Message> {
@@ -320,7 +496,24 @@ impl Responder {
         let abort = |code: u32| msg::sdo(CoeService::SdoResponse, SdoCommand::Abort, ix, sub, code, &[]);
         let cap_init = msg::sdo_initiate_capacity(self.in_len);
         let cap_seg = msg::sdo_segment_capacity(self.in_len);
+        let setting = self.cfg.settings.contains_key(&(ix, sub));
         let m = match (cmd, &mut self.sdo) {
+            (SdoCommand::InitiateDownloadRequest { expedited: true, size_indicated, unused, .. }, _) if setting => {
+                let n = if size_indicated { 4 - usize::from(unused.min(3)) } else { 4 };
+                let value = hdr.map_or(0, |h| h.data).to_le_bytes()[..n].to_vec();
+                self.write_setting(ix, sub, value);
+                msg::sdo(CoeService::SdoResponse, SdoCommand::InitiateDownloadResponse, ix, sub, 0, &[])
+            }
+            (SdoCommand::InitiateDownloadRequest { expedited: false, .. }, _) if setting => {
+                let size = hdr.map_or(0, |h| h.data) as usize;
+                let tail = &body[CoeHeader::LEN + SdoHeader::LEN..];
+                if tail.len() < size {
+                    abort(ABORT_COMMAND)
+                } else {
+                    self.write_setting(ix, sub, tail[..size].to_vec());
+                    msg::sdo(CoeService::SdoResponse, SdoCommand::InitiateDownloadResponse, ix, sub, 0, &[])
+                }
+            }
             (SdoCommand::InitiateDownloadRequest { .. }, _) if !transfer_object => {
                 abort(self.object(ix, sub).map_or_else(|code| code, |_| ABORT_READ_ONLY))
             }
@@ -459,6 +652,96 @@ mod tests {
             128,
         ));
         assert_eq!(abort_code(&m), ABORT_READ_ONLY);
+    }
+
+    fn voe_buffer(body: &[u8], counter: u8) -> Vec<u8> {
+        msg::mailbox_buffer(MailboxType::Voe, counter, 0, body, 128)
+    }
+
+    #[test]
+    fn voe_to_the_slave_acknowledges_per_window_and_ends_with_its_digest() {
+        let mut r = Responder::new(ResponderConfig::default(), 128, 128);
+        let payload: Vec<u8> = (0..1000u32).map(|i| i as u8).collect();
+        let cap = voe::capacity(128);
+        let m = r.take_message(&voe_buffer(&voe::open(voe::Direction::ToSlave, 4, payload.len() as u64), 1));
+        let ready = voe::parse(&m[0].body).unwrap();
+        assert_eq!((ready.op, voe::parse_ready(ready.tail)), (voe::Op::Ready, Some((4, 1000))));
+        let mut counter = 1;
+        let mut acks = Vec::new();
+        let mut done = None;
+        for (n, chunk) in payload.chunks(cap).enumerate() {
+            counter = msg::next_counter(counter);
+            for reply in r.take_message(&voe_buffer(&voe::encode(voe::Op::Data, n as u32, chunk), counter)) {
+                let p = voe::parse(&reply.body).unwrap();
+                match p.op {
+                    voe::Op::Ack => acks.push(p.seq),
+                    voe::Op::Done => done = voe::parse_done(p.tail),
+                    op => panic!("unexpected {}", op.name()),
+                }
+            }
+        }
+        assert_eq!(acks, vec![4, 8], "one ACK per window of 4, none for the last message");
+        assert_eq!(done, Some((1000, voe::sha256(&payload))));
+        assert_eq!(r.log().voe_received, vec![payload]);
+        // A repeated DATA message is answered with the next expected number, not stored twice.
+        // (Counter 0: the slave does not compare it with the previous message's.)
+        r.take_message(&voe_buffer(&voe::open(voe::Direction::ToSlave, 4, 500), 0));
+        r.take_message(&voe_buffer(&voe::encode(voe::Op::Data, 0, &[1; 114]), 0));
+        let again = r.take_message(&voe_buffer(&voe::encode(voe::Op::Data, 0, &[1; 114]), 0));
+        assert_eq!(voe::parse(&again[0].body).map(|p| (p.op, p.seq)), Some((voe::Op::Ack, 1)));
+    }
+
+    #[test]
+    fn voe_from_the_slave_sends_a_window_and_continues_after_each_ack() {
+        let upload: Vec<u8> = (0..700u32).map(|i| (i * 7) as u8).collect();
+        let cfg = ResponderConfig { upload: upload.clone(), ..ResponderConfig::default() };
+        let mut r = Responder::new(cfg, 128, 128);
+        let m = r.take_message(&voe_buffer(&voe::open(voe::Direction::FromSlave, 2, 0), 1));
+        assert_eq!(voe::parse_ready(voe::parse(&m[0].body).unwrap().tail), Some((2, 700)));
+        let data = |m: &[Message]| -> Vec<u8> {
+            m.iter()
+                .filter_map(|x| voe::parse(&x.body))
+                .filter(|p| p.op == voe::Op::Data)
+                .flat_map(|p| p.tail.to_vec())
+                .collect()
+        };
+        let mut got = data(&m[1..]);
+        assert_eq!(m.len(), 3, "READY and a window of two");
+        let mut counter = 1;
+        let mut acked = 2;
+        while got.len() < upload.len() {
+            counter = msg::next_counter(counter);
+            let more = r.take_message(&voe_buffer(&voe::encode(voe::Op::Ack, acked, &[]), counter));
+            acked += more.len() as u32;
+            got.extend(data(&more));
+        }
+        assert_eq!(got, upload);
+        counter = msg::next_counter(counter);
+        assert!(r.take_message(&voe_buffer(&voe::encode(voe::Op::Ack, acked, &[]), counter)).is_empty());
+        assert_eq!(r.log().voe_sent, 1);
+    }
+
+    #[test]
+    fn foreign_voe_is_refused_and_settings_are_writable() {
+        let mut cfg = ResponderConfig::default();
+        cfg.settings.insert((0x2001, 0), 128u16.to_le_bytes().to_vec());
+        let mut r = Responder::new(cfg, 128, 128);
+        let foreign = ecat_wire::VoeHeader { vendor_id: 7, vendor_type: 1 }.encode();
+        assert_eq!(r.take_message(&voe_buffer(&foreign, 1))[0].kind, MailboxType::Error);
+        let expedited = SdoCommand::InitiateDownloadRequest {
+            complete_access: false,
+            expedited: true,
+            size_indicated: true,
+            unused: 2,
+        };
+        let body = msg::sdo(CoeService::SdoRequest, expedited, 0x2001, 0, 512, &[]);
+        let m = r.take_message(&msg::mailbox_buffer(MailboxType::Coe, 2, 0, &body, 128));
+        let h = SdoHeader::parse(&m[0].body[CoeHeader::LEN..]).unwrap();
+        assert!(matches!(SdoCommand::decode(h.command, false), SdoCommand::InitiateDownloadResponse));
+        assert_eq!(r.setting(0x2001, 0), Some(&512u16.to_le_bytes()[..]));
+        assert_eq!(r.log().settings, vec![(0x2001, 0, 512u16.to_le_bytes().to_vec())]);
+        let m = r.take_message(&coe_request(upload_request(), 0x2001, 0));
+        assert_eq!(SdoHeader::parse(&m[0].body[CoeHeader::LEN..]).unwrap().data, 512);
     }
 
     #[test]

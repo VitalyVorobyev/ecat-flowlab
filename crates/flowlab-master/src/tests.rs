@@ -24,6 +24,19 @@ fn settle(slave: &VirtualSlave) {
     block_on(slave.sleep_until_ns(slave.now_ns() + 10_000_000));
 }
 
+trait Sha {
+    fn sha(&self) -> Option<String>;
+}
+
+impl Sha for Payload {
+    fn sha(&self) -> Option<String> {
+        match self {
+            Payload::Receive { expected_sha256, .. } => expected_sha256.clone(),
+            Payload::Send(_) => None,
+        }
+    }
+}
+
 fn receive(expected: &[u8]) -> Payload {
     Payload::Receive {
         expected_bytes: Some(expected.len() as u64),
@@ -129,6 +142,49 @@ fn eoe_frames_reassemble_at_the_slave_and_the_master() {
     let r = run(&slave, job(&slave, TransferProtocol::eoe(), receive(&data)), &TransferOptions::default());
     assert!(r.completed, "{:?}", r.error);
     assert_eq!(r.verified, Some(true));
+}
+
+#[test]
+fn voe_acknowledges_once_per_window_and_the_slave_confirms_the_payload() {
+    let data = pattern(10_000, 6);
+    let slave = VirtualSlave::new(VirtualSlaveConfig::default());
+    let p = TransferProtocol::Voe { window: 4 };
+    let r = run(&slave, job(&slave, p.clone(), Payload::Send(data.clone())), &TransferOptions::default());
+    assert!(r.completed, "{:?}", r.error);
+    assert_eq!(r.verified, Some(true), "DONE carried the payload's length and SHA-256");
+    assert_eq!(r.protocol, "VoE");
+    settle(&slave);
+    assert_eq!(slave.log().voe_received, vec![data.clone()]);
+    // 88 DATA messages of 114 bytes: READY, an ACK after every 4th but the last, DONE.
+    let messages = 10_000u64.div_ceil(flowlab_mailbox::voe::capacity(128) as u64);
+    assert_eq!(r.messages_to_slave, 1 + messages);
+    assert_eq!(r.messages_from_slave, 1 + (messages - 1) / 4 + 1);
+
+    // Slave → master: READY announces the length; the master acknowledges per window.
+    let cfg = VirtualSlaveConfig { upload: data.clone(), ..Default::default() };
+    let slave = VirtualSlave::new(cfg);
+    let p = Payload::Receive { expected_bytes: None, expected_sha256: receive(&data).sha() };
+    let r = run(&slave, job(&slave, TransferProtocol::Voe { window: 8 }, p), &TransferOptions::default());
+    assert!(r.completed, "{:?}", r.error);
+    assert_eq!((r.payload_bytes, r.verified), (10_000, Some(true)));
+    assert_eq!(r.messages_to_slave, 1 + messages.div_ceil(8), "OPEN and one ACK per window (and the last)");
+    settle(&slave);
+    assert_eq!(slave.log().voe_sent, 1);
+}
+
+#[test]
+fn voe_survives_lost_frames_both_ways() {
+    let data = pattern(6_000, 7);
+    for direction in [true, false] {
+        let cfg = VirtualSlaveConfig { upload: data.clone(), lose_every: Some(7), ..Default::default() };
+        let slave = VirtualSlave::new(cfg);
+        let payload = if direction { Payload::Send(data.clone()) } else { receive(&data) };
+        let o = TransferOptions { reply_timeout_ns: 20_000_000, max_resends: 20, ..TransferOptions::default() };
+        let r = run(&slave, job(&slave, TransferProtocol::voe(), payload), &o);
+        assert!(r.completed, "to the slave: {direction}: {:?}", r.error);
+        assert_eq!(r.verified, Some(true));
+        assert!(r.lost_frames > 0);
+    }
 }
 
 #[test]
