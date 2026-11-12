@@ -25,7 +25,7 @@ use flowlab_mailbox::{msg, payload_sha256, transfer_seed};
 use crate::SimError;
 use crate::protocol::{
     ChannelReceiver, ChannelSender, Endpoint, EoeReceiver, EoeSender, FoeReceiver, FoeSender, SdoReceiver, SdoSender,
-    Sink, Source,
+    Sink, Source, VoeReceiver, VoeSender,
 };
 use crate::result::{SimResult, SlaveResult, TransferResult};
 use crate::spec::{MailboxAccess, MailboxPolicy, SimSpec, TransferDirection, TransferProtocol};
@@ -783,6 +783,14 @@ impl<'a, W: Write> Sim<'a, W> {
                 master: Box::new(SdoReceiver::new(sink(), true)),
                 slave: Box::new(SdoSender::new(src(), len, in_len, false)),
             },
+            (TransferProtocol::Voe { window }, true) => Kind::Mailbox {
+                master: Box::new(VoeSender::new(seed, len, *window, out_len, true)),
+                slave: Box::new(VoeReceiver::new(sink(), *window, false)),
+            },
+            (TransferProtocol::Voe { window }, false) => Kind::Mailbox {
+                master: Box::new(VoeReceiver::new(sink(), *window, true)),
+                slave: Box::new(VoeSender::new(seed, len, *window, in_len, false)),
+            },
             (TransferProtocol::PdoChannel { bytes_per_cycle, window, retransmit_after_cycles }, _) => Kind::Channel {
                 sender: Box::new(ChannelSender::new(
                     seed,
@@ -963,6 +971,7 @@ fn assumptions() -> Vec<String> {
         "PDI: the slave application moves mailbox data (the whole SyncManager buffer, or only the message plus the triggering last byte, per pdi.mailbox_access) and process data at the configured rate plus a fixed overhead per access, one access at a time; mailbox and process data compete for it.".into(),
         "Master: cycle-driven; it learns whether a mailbox write was accepted from the returning working counter and retries otherwise; master CPU and operating-system delays are not modelled beyond the configured cycle jitter.".into(),
         "EoE carries UDP/IPv4 datagrams: a simplified tunnel without TCP, ARP or IP fragmentation.".into(),
+        "VoE is FlowLab VoE: DATA messages fill the mailbox after an 8-byte header and are acknowledged once per window; a slave receiving a write ends it with DONE.".into(),
         "Payload bytes are generated deterministically and checked byte for byte and by SHA-256 at the receiver.".into(),
         "Ethernet reference: TCP over a dedicated link at the same rate, MSS 1460 in 1538 wire bytes per segment, steady state, no loss, no slow start; a lower bound on plain-Ethernet time, not a prediction.".into(),
     ]

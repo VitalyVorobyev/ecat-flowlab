@@ -885,6 +885,28 @@ fn print_summary(r: &CaptureReport) {
                 t.goodput_bps.map_or(String::new(), |b| format!(", {:.1} kbit/s", b / 1e3))
             );
         }
+        for t in &m.voe {
+            println!(
+                "    FlowLab VoE {} station 0x{:04X}: {} B in {} DATA, window {}, {} ACKs, {} gaps, {}{}{}",
+                match t.direction {
+                    flowlab_analysis::MailboxDirection::ToSlave => "to slave",
+                    flowlab_analysis::MailboxDirection::FromSlave => "from slave",
+                },
+                t.station,
+                t.bytes,
+                t.data_messages,
+                t.window,
+                t.acks,
+                t.gaps,
+                t.outcome,
+                t.goodput_bps.map_or(String::new(), |b| format!(", {:.1} kbit/s", b / 1e3)),
+                match t.digest_matches {
+                    Some(true) => ", slave's SHA-256 matches",
+                    Some(false) => ", slave's SHA-256 DIFFERS",
+                    None => "",
+                }
+            );
+        }
         for c in &m.channels {
             if let Some(sv) = &c.service {
                 print_service(c.station, sv);

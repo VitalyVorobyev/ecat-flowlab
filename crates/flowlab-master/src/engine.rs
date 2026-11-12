@@ -7,6 +7,7 @@ use ecat_wire::{
 use flowlab_core::sha256_hex;
 use flowlab_core::{InputRef, Provenance, ReportMeta, units};
 use flowlab_mailbox::msg::{self, EoeAddresses};
+use flowlab_mailbox::voe;
 use flowlab_mailbox::{MailboxPolicy, MailboxProtocol, TransferDirection, TransferPlan};
 use serde::{Deserialize, Serialize};
 
@@ -14,7 +15,9 @@ use crate::MasterError;
 use crate::bus::{
     BusError, MailboxBus, MailboxLayout, SM_MAILBOX_IN, read_mailbox, read_sm, read_sm_status, write_mailbox,
 };
-use crate::protocol::{Endpoint, EoeReceive, EoeSend, FoeRead, FoeWrite, Outgoing, SdoDownload, SdoUpload};
+use crate::protocol::{
+    Endpoint, EoeReceive, EoeSend, FoeRead, FoeWrite, Outgoing, SdoDownload, SdoUpload, VoeReceive, VoeSend,
+};
 use crate::result::{CycleRecord, CycleTiming, MeasuredTransfer, Summary};
 
 /// The protocol a transfer uses, with its parameters.
@@ -43,6 +46,12 @@ pub enum TransferProtocol {
         /// Addresses and ports of the tunnelled frames.
         addresses: EoeAddresses,
     },
+    /// FlowLab VoE (`flowlab_mailbox::voe`): DATA messages acknowledged once per window; the
+    /// slave confirms a payload it received with its SHA-256.
+    Voe {
+        /// DATA messages per acknowledgement the master asks for (the slave may grant fewer).
+        window: u16,
+    },
 }
 
 impl TransferProtocol {
@@ -61,12 +70,18 @@ impl TransferProtocol {
         Self::Eoe { mtu_bytes: 1500, addresses: EoeAddresses::default() }
     }
 
+    /// FlowLab VoE with the default window.
+    pub fn voe() -> Self {
+        Self::Voe { window: voe::DEFAULT_WINDOW }
+    }
+
     /// The protocol without its parameters.
     pub const fn kind(&self) -> MailboxProtocol {
         match self {
             Self::Foe { .. } => MailboxProtocol::Foe,
             Self::Coe { .. } => MailboxProtocol::CoeSegmented,
             Self::Eoe { mtu_bytes, .. } => MailboxProtocol::Eoe { mtu_bytes: *mtu_bytes },
+            Self::Voe { window } => MailboxProtocol::Voe { window: *window },
         }
     }
 
@@ -580,6 +595,21 @@ fn endpoint(job: &TransferJob) -> Result<Box<dyn Endpoint>, MasterError> {
             };
             Box::new(EoeReceive::new(addresses.destination_port, *n))
         }
+        (TransferProtocol::Voe { window }, payload) => {
+            if out_len < voe::MIN_MAILBOX || in_len < voe::MIN_MAILBOX {
+                return Err(MasterError::Invalid(format!(
+                    "FlowLab VoE needs mailboxes of at least {} bytes each",
+                    voe::MIN_MAILBOX
+                )));
+            }
+            if !(1..=voe::MAX_WINDOW).contains(window) {
+                return Err(MasterError::Invalid(format!("VoE window {window} is outside 1–{}", voe::MAX_WINDOW)));
+            }
+            match payload {
+                Payload::Send(d) => Box::new(VoeSend::new(d.clone(), *window, out_len)),
+                Payload::Receive { .. } => Box::new(VoeReceive::new(*window)),
+            }
+        }
     })
 }
 
@@ -749,7 +779,7 @@ pub async fn run_transfer<B: MailboxBus>(
         Payload::Receive { expected_bytes, .. } => e.ep.total().or(*expected_bytes).unwrap_or(e.delivered),
     };
     let (sha256, verified) = match &job.payload {
-        Payload::Send(d) => (sha256_hex(d), None),
+        Payload::Send(d) => (sha256_hex(d), e.ep.verified().map(|ok| completed && ok)),
         Payload::Receive { expected_sha256, expected_bytes, .. } => {
             let got = e.ep.received().unwrap_or_default();
             let sha = sha256_hex(got);
@@ -785,7 +815,7 @@ pub async fn run_transfer<B: MailboxBus>(
     ];
     if to_slave {
         assumptions.push(
-            "Master → slave: delivered bytes are bytes in writes the slave accepted, and the end is the return of the last acknowledgement (EoE: of the last fragment's write). The simulator's end is when the slave got the last byte, so compare exchange_ns, defined alike."
+            "Master → slave: delivered bytes are bytes in writes the slave accepted, and the end is the return of the last acknowledgement (EoE: of the last fragment's write; FlowLab VoE: of the slave's DONE). The simulator's end is when the slave got the last byte, so compare exchange_ns, defined alike."
                 .into(),
         );
     }
@@ -884,6 +914,7 @@ pub fn setup_like(plan: &TransferPlan) -> Result<SimulatedSetup, MasterError> {
         MailboxProtocol::Eoe { mtu_bytes } => TransferProtocol::Eoe { mtu_bytes, addresses: EoeAddresses::default() },
         MailboxProtocol::Foe => TransferProtocol::foe(),
         MailboxProtocol::CoeSegmented => TransferProtocol::coe(),
+        MailboxProtocol::Voe { window } => TransferProtocol::Voe { window },
     };
     let sha256 = flowlab_mailbox::payload_sha256(plan.payload_seed, plan.payload_bytes);
     let payload = match plan.direction {

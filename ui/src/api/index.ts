@@ -40,6 +40,7 @@ export type { CoeReport } from "./gen/CoeReport";
 export type { EmergencyEvent } from "./gen/EmergencyEvent";
 export type { EoeFrame } from "./gen/EoeFrame";
 export type { FoeTransfer } from "./gen/FoeTransfer";
+export type { VoeTransfer } from "./gen/VoeTransfer";
 export type { MailboxChannel } from "./gen/MailboxChannel";
 export type { MailboxService } from "./gen/MailboxService";
 export type { MailboxErrorEvent } from "./gen/MailboxErrorEvent";

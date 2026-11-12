@@ -12,9 +12,10 @@ engine without hardware dependencies, a virtual slave to test it, and, behind th
         ▼
  run_transfer ── per cycle: cyclic() ─ policy ─▶ frames of FPWR "mailbox out" / FPRD "mailbox in"
         │                                         (+ SM1 status, repeat request)
-        │            Endpoint: FoeWrite, FoeRead, SdoDownload, SdoUpload, EoeSend, EoeReceive
+        │            Endpoint: FoeWrite, FoeRead, SdoDownload, SdoUpload, EoeSend, EoeReceive,
+        │                      VoeSend, VoeReceive
         ▼
- MailboxBus (trait) ──┬── VirtualSlave: ESC SyncManagers + FoE/CoE/EoE responders, virtual time
+ MailboxBus (trait) ──┬── VirtualSlave: ESC SyncManagers + FoE/CoE/EoE/VoE responders, virtual time
                       └── hardware::Session (feature `hardware`): EtherCrab Command::fprd/fpwr,
                           SubDeviceGroup::tx_rx as the cyclic exchange, host clock
         │
@@ -30,7 +31,9 @@ engine without hardware dependencies, a virtual slave to test it, and, behind th
   (`futures_lite::future::zip`) as one policy frame.
 - **Endpoints** are the master's side of each protocol as message-level state machines. Their
   messages come from `flowlab_mailbox::msg`, as the simulator's do (FoE file name `flowlab.bin`,
-  CoE object `0x2000:00`, EoE UDP frames with documentation addresses as defaults). The engine adds the mailbox header and counter and
+  CoE object `0x2000:00`, EoE UDP frames with documentation addresses as defaults; FlowLab VoE
+  from `flowlab_mailbox::voe`). An endpoint can report the slave's confirmation of a payload it
+  received (`verified`, FlowLab VoE's DONE). The engine adds the mailbox header and counter and
   pads to the SyncManager length, so a write always reaches the buffer's last byte, and a read
   always reads the whole buffer, which is what hands a buffer over on an ESC.
 - **Policies** are `flowlab_mailbox::MailboxPolicy`, the type `SimSpec` uses; results name them
@@ -112,6 +115,9 @@ arrived and answers at that moment.
   the transfer with its text.
 - EoE: frames reassembled at the slave carry exactly the payload; a slave's EoE stream is
   reassembled by the master; an EoE receive needs a byte count.
+- FlowLab VoE: one ACK per window and DONE verify a write (message counts checked); READY's
+  length lets an upload run without a byte count; both directions complete, verified, with every
+  7th datagram lost.
 - A slow slave makes writes rejected and reads empty; fixed quota 1 and 2, round robin and
   opportunistic give different accesses per cycle and cycle counts (opportunistic within its
   budget); status polling reads the buffer only when full.
@@ -131,7 +137,8 @@ arrived and answers at that moment.
 `flowlab-slave`'s emulated ESC through `Session::in_process`: a scan (identity, name, mailbox
 SyncManagers, protocols, no DC, PRE-OP, the emulator's assumption), a 200 ms cyclic run in OP
 (WKC 3 every cycle, no loss, back to PRE-OP), FoE write and read, SDO download in OP and upload,
-EoE both ways, each byte-identical or verified by SHA-256; in OP, the first counter 0 needs no
+EoE both ways, FlowLab VoE both ways, and a mailbox size written to the setting `0x2001` that
+the next scan reads, each byte-identical or verified by SHA-256; in OP, the first counter 0 needs no
 resend, while counter 1 collides with EtherCrab's last mapping request and is resent once. CI
 builds the `master` and `slave` features of the CLI with clippy and runs the `hardware` tests on
 Linux and macOS. The macOS BPF transport and EtherCrab's Linux socket run only on a real

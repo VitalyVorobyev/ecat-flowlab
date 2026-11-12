@@ -226,6 +226,7 @@ fn protocol_name(p: &TransferProtocol) -> String {
         TransferProtocol::Eoe { .. } => "EoE".into(),
         TransferProtocol::Foe => "FoE".into(),
         TransferProtocol::CoeSegmented => "CoE".into(),
+        TransferProtocol::Voe { window } => format!("VoE (window {window})"),
         TransferProtocol::PdoChannel { bytes_per_cycle, .. } => format!("PDO channel {bytes_per_cycle} B/cycle"),
     }
 }
@@ -391,6 +392,7 @@ fn candidates(spec: &SimSpec) -> Vec<Candidate> {
             json!({ "kind": "eoe", "mtu_bytes": 1500 }),
             json!({ "kind": "foe" }),
             json!({ "kind": "coe_segmented" }),
+            json!({ "kind": "voe", "window": 16 }),
             json!({ "kind": "pdo_channel", "bytes_per_cycle": PDO_CHANNEL_BYTES, "window": 2, "retransmit_after_cycles": 8 }),
         ];
         let kind = serde_json::to_value(&t.protocol).ok().and_then(|v| v.get("kind").cloned());

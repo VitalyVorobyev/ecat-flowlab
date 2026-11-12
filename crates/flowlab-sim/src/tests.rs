@@ -20,6 +20,7 @@ fn protocols() -> Vec<TransferProtocol> {
         TransferProtocol::Eoe { mtu_bytes: 1500 },
         TransferProtocol::Foe,
         TransferProtocol::CoeSegmented,
+        TransferProtocol::Voe { window: 4 },
         TransferProtocol::PdoChannel { bytes_per_cycle: 256, window: 2, retransmit_after_cycles: 8 },
     ]
 }

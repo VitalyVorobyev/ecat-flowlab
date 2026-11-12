@@ -48,7 +48,7 @@ pub struct VirtualSlaveConfig {
     /// Its subindex.
     pub sdo_subindex: u8,
     /// What the slave sends: the file for an FoE read, the object for an SDO upload, the UDP
-    /// payload for an EoE send.
+    /// payload for an EoE send, the payload of a FlowLab VoE upload.
     pub upload: Vec<u8>,
     /// Send `upload` over EoE from the start.
     pub eoe_send: bool,
@@ -94,6 +94,10 @@ pub struct VirtualSlaveLog {
     pub messages_in: u64,
     /// Messages dropped because their counter repeated the previous one.
     pub duplicates_dropped: u64,
+    /// Payloads received over FlowLab VoE, in order.
+    pub voe_received: Vec<Vec<u8>>,
+    /// Uploads sent over FlowLab VoE to the end.
+    pub voe_sent: u64,
     /// Messages put into "mailbox in".
     pub messages_out: u64,
     /// Repeat requests served.
@@ -178,6 +182,8 @@ impl VirtualSlave {
             eoe_broken: app.eoe_broken,
             messages_in: app.messages_in,
             duplicates_dropped: app.duplicates_dropped,
+            voe_received: app.voe_received,
+            voe_sent: app.voe_sent,
             ..st.log.clone()
         }
     }

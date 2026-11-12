@@ -124,6 +124,20 @@ impl Esc {
         &self.app
     }
 
+    pub(crate) fn app_mut(&mut self) -> &mut Responder {
+        &mut self.app
+    }
+
+    /// Change the EEPROM and the SyncManager layout (in INIT): the master reads the new ones
+    /// when it starts again. The application keeps its log and settings.
+    pub(crate) fn reconfigure(&mut self, eeprom: Vec<u8>, layout: Layout, eoe_send: bool) {
+        self.eeprom = eeprom;
+        self.layout = layout;
+        let len = usize::from(layout.mbx_len);
+        self.app.reconfigure(len, len, eoe_send);
+        self.restart();
+    }
+
     pub(crate) fn al_state(&self) -> AlState {
         AlState::from_code(self.mem[REG_AL_STATUS] & 0x0F)
     }

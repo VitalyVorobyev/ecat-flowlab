@@ -536,6 +536,47 @@ pub struct FoeTransfer {
     pub error_text: Option<String>,
 }
 
+/// A FlowLab VoE transfer (FlowLab's own protocol in VoE messages).
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct VoeTransfer {
+    /// Station.
+    pub station: u16,
+    /// Direction of the payload.
+    pub direction: MailboxDirection,
+    /// DATA messages per acknowledgement: asked for in OPEN, granted in READY.
+    pub window: u16,
+    /// Payload length announced (OPEN to the slave, READY from it).
+    pub length: Option<u64>,
+    /// Payload bytes received in order.
+    pub bytes: u64,
+    /// DATA messages in order.
+    pub data_messages: u64,
+    /// ACK messages.
+    pub acks: u64,
+    /// DATA messages seen again (repeats after a gap or a reply timeout).
+    pub repeats: u64,
+    /// DATA messages that skipped one (a lost read; the slave sends again from the gap).
+    pub gaps: u64,
+    /// OPEN time, ns.
+    pub start_ns: f64,
+    /// Final message time (DONE, the last ACK, ABORT), ns.
+    pub end_ns: Option<f64>,
+    /// Payload bytes · 8 / (end − start), bit/s.
+    pub goodput_bps: Option<f64>,
+    /// OPEN frame.
+    pub first_frame: u32,
+    /// Final frame.
+    pub last_frame: u32,
+    /// `"ok"`, `"aborted"`, `"incomplete"` or `"protocol_error"` (DONE before the length).
+    pub outcome: String,
+    /// To the slave: the length and SHA-256 in the slave's DONE equal those of the payload in
+    /// the capture.
+    pub digest_matches: Option<bool>,
+    /// ABORT text.
+    pub abort_text: Option<String>,
+}
+
 /// An Ethernet frame reassembled from EoE fragments.
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
@@ -612,6 +653,8 @@ pub struct MailboxReport {
     pub foe: Vec<FoeTransfer>,
     /// EoE.
     pub eoe: EoeReport,
+    /// FlowLab VoE transfers (first 2000).
+    pub voe: Vec<VoeTransfer>,
     /// SoE messages with the error flag.
     pub soe_errors: u64,
     /// Mailbox error replies (first 2000).

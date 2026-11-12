@@ -115,9 +115,11 @@ pub struct MeasuredTransfer {
     /// Master → slave: payload bytes in writes the slave accepted. Slave → master: payload
     /// bytes received in order.
     pub delivered_bytes: u64,
-    /// Slave → master: the received bytes' SHA-256 equals the expected one. `None` when there
-    /// was nothing to compare with, or for master → slave (the master cannot see the slave's
-    /// copy; compare `sha256` with a hash taken on the slave).
+    /// Slave → master: the received bytes' SHA-256 equals the expected one. Master → slave
+    /// over FlowLab VoE: the length and SHA-256 the slave reported in DONE equal the payload's.
+    /// `None` when there was nothing to compare with, or for master → slave over FoE, CoE and
+    /// EoE (the master cannot see the slave's copy; compare `sha256` with a hash taken on the
+    /// slave).
     pub verified: Option<bool>,
     /// SHA-256 of the payload (sent, or received), hex.
     pub sha256: String,

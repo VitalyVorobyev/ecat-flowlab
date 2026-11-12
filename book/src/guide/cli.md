@@ -42,7 +42,7 @@ flowlab <COMMAND>
 | `policy CAPTURE` | `--station N` · `--mailbox …` · `--eni XML` · `--lab JSON` store the policy in a lab-inputs file (measured captures only) |
 | `apply-lab SPEC` | `--lab JSON` (required) · `--slave N` (required: index in `slaves`, which gets the PDI and application time) · `-o/--out FILE` (default: print) |
 | `master scan\|run\|transfer` | always `-i/--interface IF` and `--isolated-lab-network` · `--listen S` (2) · `--tool` · `--no-master-check` · `--pdu-timeout-ms` (30) · `-o/--out FILE`; `scan --eni XML`; `run --cycle-us US --duration S --records N`; `transfer --station N --protocol foe\|coe\|eoe --direction to-slave\|from-slave --file F\|--bytes N --policy … --cycle-us US --poll read\|status --op` or `--like SIM_JSON --transfer K`; payload, FoE, CoE, EoE and retry options in [Lab master § transfer](master.md#transfer) |
-| `slave` | always `-i/--interface IF` and `--isolated-lab-network` · `--mailbox-bytes N` (128) · `--output-bytes N` `--input-bytes N` (4) · `--upload FILE` or `--upload-bytes N --seed S` · `--eoe-send` `--eoe-start-after-ms MS` (1000) `--eoe-mtu N` · `--sdo INDEX:SUB` · `--busy-every N` · `--serial N` · `--duration S` ([Emulated slave](slave.md)) |
+| `slave` | always `-i/--interface IF` and `--isolated-lab-network` · `--mailbox-bytes N` (128) · `--output-bytes N` `--input-bytes N` (4) · `--upload FILE` or `--upload-bytes N --seed S` · `--eoe-send` `--eoe-start-after-ms MS` (1000) `--eoe-mtu N` · `--sdo INDEX:SUB` · `--busy-every N` · `--serial N` · `--behind-esc` · `--duration S` ([Emulated slave](slave.md)) |
 
 Commands that take a spec use a built-in example when it is omitted. Errors go to stderr with
 a non-zero exit code. Specs with unknown fields are rejected, so a typo cannot silently fall

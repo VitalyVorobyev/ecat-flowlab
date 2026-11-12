@@ -1,7 +1,8 @@
 # Emulated slave
 
 `flowlab slave` turns an ordinary Ethernet port into an EtherCAT slave: it answers a master's
-frames as an ESC with FoE, CoE and EoE behind its mailbox would. With it, the
+frames as an ESC with FoE, CoE, EoE and [FlowLab VoE](../reference/voe.md) behind its mailbox
+would. With it, the
 [lab master](master.md), [live capture](live.md) and the analysis run on a real cable between two
 computers when no EtherCAT hardware is at hand.
 
@@ -17,8 +18,9 @@ flowlab master transfer -i en7 --isolated-lab-network --station 0x1000 --protoco
 ```
 
 > **This sends frames.** It answers every EtherCAT frame on the interface. Use it only on a cable
-> or switch that connects it to the master under test, with no production equipment and no
-> other EtherCAT slaves: on a real segment it would answer a real master's frames a second time.
+> or switch that connects it to the master under test, or on the downstream port of the last
+> slave of a lab line (`--behind-esc`), with no production equipment. Beside other slaves on a
+> switch, or on a real segment, it would answer a master's frames a second time.
 
 ## What it tells you, and what not
 
@@ -39,12 +41,33 @@ simulator.
 | What | Behaviour |
 |---|---|
 | Identity | vendor ID 0 (none assigned), product code 1, revision 1, `--serial` (0); name `FlowLab emulated ESC` |
-| Mailbox | SyncManager 0 ("mailbox out") at `0x1000` and 1 ("mailbox in") right after it, `--mailbox-bytes` each (128); protocols FoE, CoE, EoE |
+| Mailbox | SyncManager 0 ("mailbox out") at `0x1000` and 1 ("mailbox in") right after it, `--mailbox-bytes` each (128), or the [setting](#settings) `0x2001`; protocols FoE, CoE, EoE, VoE |
 | Process data | SyncManager 2: `--output-bytes` (4), SyncManager 3: `--input-bytes` (4); the inputs echo the outputs of the previous exchange; mapped in 32-bit entries (`0x1600`/`0x7000`, `0x1A00`/`0x6000`), readable over CoE (`0x1C12`, `0x1C13`) and in the EEPROM |
 | FoE | write: stores the file (its size and SHA-256 are printed); read: sends the upload |
 | CoE | SDO download into the transfer object `--sdo` (`0x2000:0`); upload of the upload from it; the mapping objects and `0x1018` (identity) are read-only |
-| EoE | reassembles frames; with `--eoe-send`, sends the upload as UDP/IPv4 frames of `--eoe-mtu` (1500) bytes, from `--eoe-start-after-ms` (1000) after it entered PRE-OP |
+| EoE | reassembles frames; with `--eoe-send` (or the setting `0x2002`), sends the upload as UDP/IPv4 frames of `--eoe-mtu` (1500) bytes, from `--eoe-start-after-ms` (1000) after it entered PRE-OP |
+| FlowLab VoE | receives a payload (its size and SHA-256 are printed, and sent back in DONE); sends the upload; windows up to 4096 messages. VoE of another vendor gets a mailbox error reply |
 | Faults | `--busy-every N`: every n-th FoE DATA packet is answered BUSY once; a message with the previous message's counter (not 0) is dropped, as SOES drops it |
+
+## Settings
+
+Two CoE objects change the slave while it runs, so a sweep needs no restart:
+
+| Object | Value | Takes effect |
+|---|---|---|
+| `0x2001:0` | size of each mailbox, bytes (u16, 32–1024) | when the master next takes the slave to INIT: the EEPROM and the SyncManager layout change, and the master reads the new size when it starts again |
+| `0x2002:0` | EoE send (u8, 0 or 1) | at the next INIT |
+
+Write them with an SDO download, for example from a two-byte file:
+
+```bash
+python3 -c "import sys; sys.stdout.buffer.write((512).to_bytes(2, 'little'))" > mbx512.bin
+flowlab master transfer -i en10 --isolated-lab-network --station 0x1001 --protocol coe --sdo 0x2001:0 --file mbx512.bin
+flowlab master scan -i en10 --isolated-lab-network     # mailbox [SM0 0x1000+512, SM1 0x1200+512]
+```
+
+Every `flowlab master` command starts in INIT. A mailbox size that does not fit the process RAM
+is set back to the current one. The slave prints each write and the new mailbox.
 
 The upload is `--upload FILE`, or `--upload-bytes N` of the simulator's payload for `--seed S`:
 the bytes `flowlab master transfer --direction from-slave --bytes N --seed S` expects, so the
@@ -71,7 +94,8 @@ FoE file `flowlab.bin`: 20000 B, SHA-256 0606fc6f…
   reads, writes and read-writes, and logical `LRD`/`LWR`/`LRW` through three FMMUs, with the
   ESC's working counter rules (read 1, write 1, read-write 3; LRW 1 for reading, 2 for writing).
   Position and broadcast datagrams leave with their ADP incremented; the answer has bit 1 of the
-  source MAC set, as an ESC sets it, and frames that already have it are not answered.
+  source MAC set, as an ESC sets it. Frames that already have it are returning frames and are
+  not answered, unless the slave runs with `--behind-esc` (below).
 - **Registers**: station address, DL status (link and communication on port 0, ports 1–3
   closed), AL control, status and status code, the SII interface over the EEPROM image (8-byte
   reads; writes only with the write-enable bit), FMMUs and SyncManagers. Read-only registers
@@ -125,3 +149,22 @@ A Mac with a USB Ethernet adapter cabled to a Verdin iMX95 (Torizon OS):
 
 SSH to the Verdin over the same cable keeps working: the master and the slave ignore IP traffic,
 and the capture filter takes only EtherCAT frames.
+
+## Behind a real slave
+
+With `--behind-esc`, the emulated slave is cabled to the downstream port of a real slave (an
+EK1100's X2 OUT, for example) and becomes the next slave of the line:
+
+```text
+master ── real slave: IN (port 0) … OUT (port 1) ── emulated slave (--behind-esc)
+```
+
+The real ESC passes the master's frames on with bit 1 of the source MAC already set, so the
+option makes the slave answer such frames. Its answer goes back through the real slave to the
+master. On macOS the BPF socket also hands the slave its own answers; it recognises them by their
+bytes for 100 ms after sending and does not answer them again. A Linux socket does not return
+them.
+
+Behind an ESC, the master's frames reach the slave only through that ESC. SSH and other IP
+traffic to the slave's host need another port or Wi-Fi: an ESC need not pass non-EtherCAT frames
+on unchanged.

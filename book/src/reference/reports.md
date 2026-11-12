@@ -150,6 +150,7 @@ capture views read the same object.
 | `coe` | `transactions[]` (`SdoTransaction`: station, `kind` upload/download, index, subindex, `transfer` expedited/normal/segmented, `bytes`, `start_ns`, `end_ns`, `outcome` `ok`/`aborted`/`superseded`/`incomplete`/`protocol_error`, abort code and text), counts (`transactions_total`, `ok`, `aborted`, `unfinished`, `protocol_errors`), `duration`, `emergencies[]`, `sdo_info_messages` |
 | `foe[]` | `FoeTransfer`: station, `kind` (`"write"`/`"read"`), `file_name`, `bytes`, `packets`, `busy`, `start_ns`, `end_ns`, `goodput_bps`, `outcome` (`"ok"`, `"error"`, `"incomplete"`, `"protocol_error"`), error code and text |
 | `eoe` | `frames[]` (station, direction `to_slave`/`from_slave`, `start_ns`, `end_ns`, fragments, `bytes`, MACs, EtherType), `frames_total`, `bytes_to_slaves`, `bytes_from_slaves`, `reassembly_errors`, `service_messages` |
+| `voe[]` | `VoeTransfer` ([FlowLab VoE](voe.md)): station, `direction`, `window`, `length`, `bytes`, `data_messages`, `acks`, `repeats`, `gaps`, `start_ns`, `end_ns`, `goodput_bps`, `outcome` (`"ok"`, `"aborted"`, `"incomplete"`, `"protocol_error"`), `digest_matches` (the slave's DONE against the payload in the capture), `abort_text` |
 | `soe_errors`, `errors[]`, `malformed` | SoE error responses; mailbox error replies; data at a mailbox address that is not a valid mailbox header |
 
 Durations of mailbox transfers are measured at the capture point, between the frames carrying

@@ -9,8 +9,10 @@
 //! * [`TransferPlan`]: one transfer of a simulator spec as the lab master needs it;
 //! * [`msg`]: the FoE, CoE SDO and EoE messages, mailbox buffers and counters, as the
 //!   simulator, the lab master, its virtual slave and the capture generator write them;
-//! * [`responder`]: the slave application's FoE, CoE and EoE answers, shared by the lab
-//!   master's virtual slave and the emulated ESC (`flowlab-slave`).
+//! * [`voe`]: FlowLab VoE, FlowLab's own bulk transfer protocol in VoE messages (windowed
+//!   acknowledgements, the receiver's SHA-256 at the end);
+//! * [`responder`]: the slave application's FoE, CoE, EoE and FlowLab VoE answers, shared by
+//!   the lab master's virtual slave and the emulated ESC (`flowlab-slave`).
 //!
 //! ```
 //! use flowlab_mailbox::MailboxPolicy;
@@ -24,6 +26,7 @@ pub mod msg;
 mod payload;
 mod policy;
 pub mod responder;
+pub mod voe;
 
 pub use payload::{payload, payload_bytes, payload_sha256, transfer_seed};
 pub use policy::MailboxPolicy;
@@ -71,6 +74,11 @@ pub enum MailboxProtocol {
         /// IP MTU of the tunnelled frames, bytes.
         mtu_bytes: u16,
     },
+    /// FlowLab VoE ([`voe`]).
+    Voe {
+        /// DATA messages per acknowledgement.
+        window: u16,
+    },
 }
 
 impl MailboxProtocol {
@@ -80,10 +88,11 @@ impl MailboxProtocol {
             Self::Foe => ecat_wire::MailboxType::Foe,
             Self::CoeSegmented => ecat_wire::MailboxType::Coe,
             Self::Eoe { .. } => ecat_wire::MailboxType::Eoe,
+            Self::Voe { .. } => ecat_wire::MailboxType::Voe,
         }
     }
 
-    /// Short name: `FoE`, `CoE`, `EoE`.
+    /// Short name: `FoE`, `CoE`, `EoE`, `VoE`.
     pub const fn name(self) -> &'static str {
         self.mailbox_type().name()
     }

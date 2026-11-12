@@ -104,8 +104,8 @@ mod imp {
             #[arg(short, long)]
             out: Option<PathBuf>,
         },
-        /// Move a payload to or from a slave with FoE, CoE or EoE, under a mailbox policy and
-        /// cycle time, and measure it like the simulator does.
+        /// Move a payload to or from a slave with FoE, CoE, EoE or FlowLab VoE, under a mailbox
+        /// policy and cycle time, and measure it like the simulator does.
         Transfer(Box<TransferArgs>),
     }
 
@@ -125,7 +125,7 @@ mod imp {
         #[arg(long, default_value_t = 0, requires = "like")]
         transfer: usize,
         /// Protocol.
-        #[arg(long, value_parser = ["foe", "coe", "eoe"], required_unless_present = "like")]
+        #[arg(long, value_parser = ["foe", "coe", "eoe", "voe"], required_unless_present = "like")]
         protocol: Option<String>,
         /// Direction.
         #[arg(long, value_parser = ["to-slave", "from-slave"], default_value = "to-slave")]
@@ -134,7 +134,7 @@ mod imp {
         #[arg(long, conflicts_with = "bytes")]
         file: Option<PathBuf>,
         /// To the slave: send this many bytes of the simulator's payload for `--seed`. From
-        /// the slave: wait for this many bytes (required for EoE).
+        /// the slave: wait for this many bytes (required for EoE; FlowLab VoE announces it).
         #[arg(long)]
         bytes: Option<u64>,
         /// Seed of the generated payload (`--bytes`); the expected SHA-256 for a receive.
@@ -189,6 +189,9 @@ mod imp {
         /// EoE: UDP destination port.
         #[arg(long)]
         eoe_port: Option<u16>,
+        /// FlowLab VoE: DATA messages per acknowledgement (the slave may grant fewer).
+        #[arg(long, default_value_t = flowlab_mailbox::voe::DEFAULT_WINDOW)]
+        voe_window: u16,
         /// Without a reply for this long, send the last message again with a new counter, ms.
         #[arg(long, default_value_t = 1000, value_name = "MS")]
         reply_timeout_ms: u64,
@@ -383,6 +386,7 @@ mod imp {
                 let protocol = match a.protocol.as_deref() {
                     Some("foe") => TransferProtocol::Foe { file_name: a.foe_file.clone(), password: a.foe_password },
                     Some("coe") => TransferProtocol::Coe { index: a.sdo.0, subindex: a.sdo.1 },
+                    Some("voe") => TransferProtocol::Voe { window: a.voe_window },
                     _ => TransferProtocol::Eoe { mtu_bytes: a.eoe_mtu, addresses },
                 };
                 let generated = |n: u64, seed: u64| flowlab_mailbox::payload(seed, n as usize);

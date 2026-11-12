@@ -46,7 +46,10 @@ cyclic streams.
 - **EoE**: fragments per station and direction are reassembled into Ethernet frames, checking
   frame number and offset. `--eoe-out eoe.pcapng` (or the download in the Mailbox view) writes
   the reassembled frames as their own capture, for Wireshark.
-- **SoE, VoE, AoE**: headers are decoded and counted.
+- **FlowLab VoE** ([reference](../reference/voe.md)): each transfer records direction, window,
+  length, bytes, DATA messages, ACKs, gaps and repeats, and goodput. To the slave, the SHA-256
+  in the slave's DONE is compared with the payload in the capture.
+- **SoE, other VoE, AoE**: headers are decoded and counted.
 
 Durations are measured at the capture point, between the frames that carried the first and
 the last message of a transfer. This is the span a calibration compares with the simulator (see
@@ -55,7 +58,7 @@ the last message of a transfer. This is the span a calibration compares with the
 ## The Mailbox view
 
 Per channel: addresses and their source, accepted and rejected writes, empty reads, polling
-cadence. **How the master serves the mailbox** shows the service pattern per busy slave (below). Traffic per protocol, and tables of SDO transfers, emergencies, FoE transfers and EoE
+cadence. **How the master serves the mailbox** shows the service pattern per busy slave (below). Traffic per protocol, and tables of SDO transfers, emergencies, FoE transfers, FlowLab VoE transfers and EoE
 frames. In **Frames**, the *Mailbox* filter selects a protocol, and the detail pane shows each
 message's decoded fields.
 

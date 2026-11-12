@@ -6,7 +6,9 @@
 //! slave sends back, as the last slave of a line returns it through port 0: datagrams applied
 //! to its memory, working counters and auto-increment addresses updated, and bit 1 of the
 //! source MAC set, as an ESC sets it. A frame that already has that bit set has passed an
-//! ESC (it is a returning frame) and is ignored.
+//! ESC: it is a returning frame and is ignored, unless the slave sits behind a real ESC
+//! ([`SlaveConfig::behind_esc`]), whose downstream port passes the master's frames on with
+//! the bit set.
 //!
 //! What the model does:
 //!
@@ -50,6 +52,8 @@
 //! assert_eq!(back[6], 0x12); // the ESC's source MAC bit
 //! ```
 
+#[cfg(any(feature = "wire", test))]
+mod echo;
 mod esc;
 mod sii;
 #[cfg(test)]
@@ -61,6 +65,13 @@ use ecat_wire::AlState;
 use flowlab_mailbox::responder::{Responder, ResponderConfig, ResponderLog};
 
 pub use flowlab_core::EMULATED_ESC_NAME;
+
+/// Setting: the size of each mailbox, bytes (u16, 32–1024). A write takes effect when the
+/// master next takes the slave to INIT: the EEPROM and the SyncManager layout change with it,
+/// so the master reads the new size on its next start.
+pub const SETTING_MAILBOX_BYTES: (u16, u8) = (0x2001, 0);
+/// Setting: send the upload over EoE after PRE-OP (u8, 0 or 1); takes effect at the next INIT.
+pub const SETTING_EOE_SEND: (u16, u8) = (0x2002, 0);
 
 /// First byte of process RAM.
 const RAM_START: u16 = 0x1000;
@@ -91,6 +102,10 @@ pub struct SlaveConfig {
     /// The application behind the mailbox. Its `objects` are extended by the mapping and
     /// identity objects.
     pub responder: ResponderConfig,
+    /// The slave sits behind a real ESC (cabled to its downstream port): frames arrive with
+    /// bit 1 of the source MAC already set by that ESC and are answered. Without it, such
+    /// frames are taken for returning frames and ignored.
+    pub behind_esc: bool,
 }
 
 impl Default for SlaveConfig {
@@ -105,6 +120,19 @@ impl Default for SlaveConfig {
             input_bytes: 4,
             eoe_start_after_ns: 1_000_000_000,
             responder: ResponderConfig::default(),
+            behind_esc: false,
+        }
+    }
+}
+
+impl SlaveConfig {
+    fn identity(&self) -> sii::Identity<'static> {
+        sii::Identity {
+            name: EMULATED_ESC_NAME,
+            vendor_id: self.vendor_id,
+            product_code: self.product_code,
+            revision: self.revision,
+            serial: self.serial,
         }
     }
 }
@@ -196,6 +224,9 @@ pub struct SlaveStats {
 pub struct EmulatedSlave {
     esc: esc::Esc,
     layout: Layout,
+    behind_esc: bool,
+    /// The configuration the slave runs with now (its responder part is not kept).
+    shape: SlaveConfig,
 }
 
 impl std::fmt::Debug for EmulatedSlave {
@@ -212,24 +243,48 @@ impl EmulatedSlave {
     /// A slave in INIT with station address 0.
     pub fn new(cfg: SlaveConfig) -> Result<Self, SlaveError> {
         let layout = Layout::of(&cfg)?;
-        let id = sii::Identity {
-            name: EMULATED_ESC_NAME,
-            vendor_id: cfg.vendor_id,
-            product_code: cfg.product_code,
-            revision: cfg.revision,
-            serial: cfg.serial,
-        };
         let mut rc = cfg.responder;
+        let shape = SlaveConfig { responder: ResponderConfig::default(), ..cfg };
+        let id = shape.identity();
         rc.objects.extend(sii::objects(&id, &layout));
+        rc.settings.insert(SETTING_MAILBOX_BYTES, shape.mailbox_bytes.to_le_bytes().to_vec());
+        rc.settings.insert(SETTING_EOE_SEND, vec![u8::from(rc.eoe_send)]);
         let len = usize::from(layout.mbx_len);
         let app = Responder::new(rc, len, len);
-        let esc = esc::Esc::new(sii::image(&id, &layout), layout, app, cfg.eoe_start_after_ns);
-        Ok(Self { esc, layout })
+        let esc = esc::Esc::new(sii::image(&id, &layout), layout, app, shape.eoe_start_after_ns);
+        Ok(Self { esc, layout, behind_esc: shape.behind_esc, shape })
+    }
+
+    /// In INIT, apply the settings the master wrote ([`SETTING_MAILBOX_BYTES`],
+    /// [`SETTING_EOE_SEND`]). A mailbox size that does not fit is put back to the current one.
+    fn apply_settings(&mut self) {
+        let app = self.esc.app();
+        let mailbox = app.setting(SETTING_MAILBOX_BYTES.0, SETTING_MAILBOX_BYTES.1).and_then(|v| v.get(..2));
+        let mailbox = mailbox.map_or(self.shape.mailbox_bytes, |v| u16::from_le_bytes([v[0], v[1]]));
+        let eoe_send = app.setting(SETTING_EOE_SEND.0, SETTING_EOE_SEND.1).and_then(|v| v.first()).map(|b| *b != 0);
+        let eoe_send = eoe_send.unwrap_or(app.config().eoe_send);
+        if mailbox == self.shape.mailbox_bytes && eoe_send == app.config().eoe_send {
+            return;
+        }
+        let shape = SlaveConfig { mailbox_bytes: mailbox, ..self.shape.clone() };
+        let layout = match Layout::of(&shape) {
+            Ok(l) => l,
+            Err(_) => {
+                let current = self.shape.mailbox_bytes.to_le_bytes().to_vec();
+                self.esc.app_mut().put_setting(SETTING_MAILBOX_BYTES, current);
+                return;
+            }
+        };
+        let eeprom = sii::image(&shape.identity(), &layout);
+        self.esc.reconfigure(eeprom, layout, eoe_send);
+        self.layout = layout;
+        self.shape = shape;
     }
 
     /// Process one Ethernet frame that arrived at `now_ns` (any monotonic origin). Returns the
     /// frame to send back, or `None` if it is not an EtherCAT frame for this slave: another
-    /// EtherType, a frame that already passed an ESC, or a malformed one.
+    /// EtherType, a malformed one, or one that already passed an ESC, unless the slave is
+    /// [behind an ESC](SlaveConfig::behind_esc).
     pub fn handle(&mut self, frame: &[u8], now_ns: u64) -> Option<Vec<u8>> {
         if frame.len() < 16 {
             return None;
@@ -240,12 +295,15 @@ impl EmulatedSlave {
             at = 16;
             ethertype = u16::from_be_bytes([frame[16], frame[17]]);
         }
-        if ethertype != ETHERTYPE_ETHERCAT || frame[6] & 0x02 != 0 {
+        if ethertype != ETHERTYPE_ETHERCAT || (frame[6] & 0x02 != 0 && !self.behind_esc) {
             return None;
         }
         let mut f = frame.to_vec();
         if !self.esc.process(&mut f, at + 2, now_ns) {
             return None;
+        }
+        if self.esc.al_state() == AlState::Init {
+            self.apply_settings();
         }
         f[6] |= 0x02;
         self.esc.stats.frames += 1;
@@ -270,6 +328,12 @@ impl EmulatedSlave {
     /// What the application received.
     pub fn log(&self) -> ResponderLog {
         self.esc.app().log()
+    }
+
+    /// What the application received since the last call; it is forgotten here
+    /// ([`Responder::drain_log`]).
+    pub fn drain_log(&mut self) -> ResponderLog {
+        self.esc.app_mut().drain_log()
     }
 
     /// Counters.

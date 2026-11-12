@@ -125,3 +125,42 @@ fn foe_error_and_eoe_gap() {
     assert_eq!((r.frames[0].fragments, r.frames[0].bytes), (2, 64));
     assert_eq!(packets.len(), 1);
 }
+
+#[test]
+fn flowlab_voe_transfers_are_rebuilt_and_the_slaves_digest_checked() {
+    use flowlab_mailbox::voe;
+    let payload: Vec<u8> = (0..300u32).map(|i| (i * 3) as u8).collect();
+    let mut v = VoeTracker::default();
+    // To the slave, window 2: three DATA messages, an ACK after the second, DONE.
+    v.on(&ctx(1, TO), &voe::open(voe::Direction::ToSlave, 2, 300));
+    v.on(&ctx(2, FROM), &voe::ready(2, 300));
+    for (n, chunk) in payload.chunks(114).enumerate() {
+        v.on(&ctx(3 + n as u64, TO), &voe::encode(voe::Op::Data, n as u32, chunk));
+    }
+    v.on(&ctx(6, FROM), &voe::encode(voe::Op::Ack, 2, &[]));
+    v.on(&ctx(7, FROM), &voe::done(300, &voe::sha256(&payload)));
+    // From the slave, a lost read: DATA 1 is missing, the master asks again, the slave repeats.
+    v.on(&ctx(10, TO), &voe::open(voe::Direction::FromSlave, 8, 0));
+    v.on(&ctx(11, FROM), &voe::ready(8, 200));
+    v.on(&ctx(12, FROM), &voe::encode(voe::Op::Data, 0, &payload[..114]));
+    v.on(&ctx(13, FROM), &voe::encode(voe::Op::Data, 2, &[0; 10]));
+    v.on(&ctx(14, TO), &voe::encode(voe::Op::Ack, 1, &[]));
+    v.on(&ctx(15, FROM), &voe::encode(voe::Op::Data, 1, &payload[114..200]));
+    v.on(&ctx(16, TO), &voe::encode(voe::Op::Ack, 2, &[]));
+    // A transfer whose DONE does not match.
+    v.on(&ctx(20, TO), &voe::open(voe::Direction::ToSlave, 4, 3));
+    v.on(&ctx(21, TO), &voe::encode(voe::Op::Data, 0, b"abc"));
+    v.on(&ctx(22, FROM), &voe::done(3, &voe::sha256(b"abd")));
+    let t = v.finish();
+    assert_eq!(t.len(), 3);
+    assert_eq!((t[0].direction, t[0].window, t[0].length, t[0].bytes), (MailboxDirection::ToSlave, 2, Some(300), 300));
+    assert_eq!((t[0].data_messages, t[0].acks, t[0].outcome.as_str()), (3, 1, "ok"));
+    assert_eq!(t[0].digest_matches, Some(true));
+    assert!(t[0].goodput_bps.is_some());
+    assert_eq!((t[1].direction, t[1].length, t[1].bytes), (MailboxDirection::FromSlave, Some(200), 200));
+    assert_eq!((t[1].gaps, t[1].outcome.as_str(), t[1].digest_matches), (1, "ok", None));
+    assert_eq!((t[2].outcome.as_str(), t[2].digest_matches), ("ok", Some(false)));
+    // The frame details name the operation.
+    let (h, body) = msg(MailboxType::Voe, voe::encode(voe::Op::Data, 5, &[1; 20]));
+    assert_eq!(describe(&h, &body).0, "FlowLab VoE DATA 5 (20 B)");
+}

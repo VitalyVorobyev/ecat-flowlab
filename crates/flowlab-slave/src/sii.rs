@@ -17,8 +17,8 @@ pub(crate) const SM_CONTROL_OUTPUTS: u8 = 0x64;
 /// Inputs: buffered, ECAT reads, PDI interrupt.
 pub(crate) const SM_CONTROL_INPUTS: u8 = 0x20;
 
-/// Mailbox protocol word: EoE (0x02), CoE (0x04), FoE (0x08).
-pub(crate) const PROTOCOLS: u16 = 0x02 | 0x04 | 0x08;
+/// Mailbox protocol word: EoE (0x02), CoE (0x04), FoE (0x08), VoE (0x20).
+pub(crate) const PROTOCOLS: u16 = 0x02 | 0x04 | 0x08 | 0x20;
 
 /// Index of the output data objects (0x7000:n) and input data objects (0x6000:n).
 const OUTPUT_OBJECTS: u16 = 0x7000;

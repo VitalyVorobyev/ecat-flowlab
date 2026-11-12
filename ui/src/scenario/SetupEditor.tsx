@@ -399,6 +399,16 @@ function TransferFields({
           onChange={(v) => proto({ ...p, mtu_bytes: v })}
         />
       ) : null}
+      {p.kind === "voe" ? (
+        <Num
+          label="Window"
+          unit="DATA per ACK"
+          value={p.window}
+          min={1}
+          max={4096}
+          onChange={(v) => proto({ ...p, window: v })}
+        />
+      ) : null}
       {p.kind === "pdo_channel" ? (
         <>
           <Num

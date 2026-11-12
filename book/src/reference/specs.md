@@ -188,6 +188,7 @@ fields are required:
 | `eoe` | `mtu_bytes: u16` (default 1500, 68–1500) | UDP/IPv4 datagrams tunnelled by EoE (no TCP); mailboxes ≥ 42 bytes |
 | `foe` | — | FoE write (master → slave) or read (slave → master) |
 | `coe_segmented` | — | CoE SDO download or upload, normal transfer with segments |
+| `voe` | `window: u16` (default 16, 1–4096) | [FlowLab VoE](voe.md): DATA messages acknowledged once per window, DONE from a receiving slave; mailboxes ≥ 62 bytes |
 | `pdo_channel` | `bytes_per_cycle: u16` (> 8), `window: u32` (default 2, ≥ 1), `retransmit_after_cycles: u32` (default 8) | sequence-numbered chunks in cyclic process data with cumulative acknowledgements and go-back-N; one per slave |
 
 `SimFaults` has `frame_loss_probability` (f64, default 0, in [0, 1)). `CaptureSpec` has

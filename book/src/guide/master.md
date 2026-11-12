@@ -108,7 +108,8 @@ is the comparison.
 ## transfer
 
 Moves a payload to (`--direction to-slave`, the default) or from (`from-slave`) the slave at
-`--station`, with FoE, CoE or EoE, at a cycle time and under a mailbox policy. The mailbox comes
+`--station`, with FoE, CoE, EoE or [FlowLab VoE](../reference/voe.md), at a cycle time and under
+a mailbox policy. The mailbox comes
 from the slave's SyncManager 0 and 1 registers.
 
 ```bash
@@ -127,9 +128,9 @@ flowlab master transfer -i enp3s0 --isolated-lab-network --station 0x1000 \
 
 | Option | Meaning |
 |---|---|
-| `--protocol foe\|coe\|eoe`, `--direction to-slave\|from-slave` | what moves where |
+| `--protocol foe\|coe\|eoe\|voe`, `--direction to-slave\|from-slave` | what moves where |
 | `--file FILE` or `--bytes N [--seed S]` | the payload to send: a file, or N bytes of the simulator's generated payload |
-| `--bytes N`, `--expect-sha256 HEX` or `--seed S`, `--save-received FILE` | from the slave: how much to wait for (required for EoE), what it should hash to, where to keep it |
+| `--bytes N`, `--expect-sha256 HEX` or `--seed S`, `--save-received FILE` | from the slave: how much to wait for (required for EoE; FlowLab VoE announces it), what it should hash to, where to keep it |
 | `--like SIM_JSON --transfer K` | everything from transfer K of a simulator spec (below) |
 | `--cycle-us US` (1000) | cycle time |
 | `--policy` (`fixed-quota:2`) | `fixed-quota:N`, `round-robin:N` or `opportunistic:PERCENT[,TURNAROUND_NS]`, the simulator's [policies](simulation.md#what-is-modelled) |
@@ -138,6 +139,7 @@ flowlab master transfer -i enp3s0 --isolated-lab-network --station 0x1000 \
 | `--foe-file NAME`, `--foe-password N` | FoE request (default `flowlab.bin`, 0) |
 | `--sdo INDEX:SUB` | CoE object (default `0x2000:0`) |
 | `--eoe-mtu`, `--eoe-slave-mac`, `--eoe-slave-ip`, `--eoe-master-mac`, `--eoe-master-ip`, `--eoe-port` | the UDP/IPv4 frames EoE carries |
+| `--voe-window N` (16) | FlowLab VoE: DATA messages per acknowledgement the master asks for |
 | `--reply-timeout-ms` (1000), `--max-resends` (3), `--max-duration` (600 s), `--first-counter` (1; 0 with `--op`) | retries and limits |
 | `-o FILE` | result JSON (default `results/master/transfer-UNIXTIME.json`) |
 
@@ -194,6 +196,14 @@ first counter is 1.
   From the slave, the master reassembles frames and keeps the payload of UDP datagrams to
   `--eoe-port`; something on the slave must send them (for example a UDP sender bound to its EoE
   interface), and `--bytes` says when the transfer is complete.
+- **FlowLab VoE**: FlowLab's own protocol in VoE messages ([reference](../reference/voe.md)).
+  DATA messages fill the mailbox after an 8-byte header and are acknowledged once per
+  `--voe-window` messages, so the master writes whenever "mailbox out" is free and reads while
+  messages are unacknowledged. To the slave, the slave ends the transfer with DONE, carrying the
+  length and SHA-256 of what it received: `verified` is then true or false for a write as well.
+  From the slave, READY announces the length, and a gap in the DATA numbers (a lost read) makes
+  the slave send again from the missing message. The slave must implement it: the
+  [emulated slave](slave.md) does.
 
 The PDO channel of the simulator is not a mailbox protocol; the lab master does not run it.
 
