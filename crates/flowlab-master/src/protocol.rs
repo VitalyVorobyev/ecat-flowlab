@@ -40,6 +40,12 @@ pub(crate) trait Endpoint {
     fn on(&mut self, kind: MailboxType, body: &[u8]) -> Result<bool, String>;
     /// The slave may have messages for the master (the master reads only then).
     fn wants_input(&self) -> bool;
+    /// The slave may send messages the transfer does not wait for (EoE: its network stack's
+    /// ARP requests and ICMP replies). The master reads them, so that a full "mailbox in" does
+    /// not stop the slave from taking the next message, but expects no reply.
+    fn reads_unsolicited(&self) -> bool {
+        false
+    }
     /// The master's part is finished.
     fn done(&self) -> bool;
     /// The slave asked for the last message again (FoE busy): resend it.
@@ -458,6 +464,8 @@ impl Endpoint for SdoUpload {
 
 /// EoE send: the payload in UDP datagrams of `mtu` bytes (IP MTU), each frame fragmented to
 /// fit "mailbox out". No acknowledgements: the transfer ends when the last fragment is written.
+/// Meanwhile the master reads what the slave's network stack sends (ARP, ICMP): a stack that
+/// waits for "mailbox in" to be read takes no further fragments otherwise.
 pub(crate) struct EoeSend {
     data: Vec<u8>,
     addresses: EoeAddresses,
@@ -502,6 +510,10 @@ impl Endpoint for EoeSend {
 
     fn wants_input(&self) -> bool {
         false
+    }
+
+    fn reads_unsolicited(&self) -> bool {
+        !self.done()
     }
 
     fn done(&self) -> bool {

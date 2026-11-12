@@ -210,8 +210,8 @@ enum Cmd {
         link_mbps: u64,
     },
     /// FlowLab's own EtherCAT master on an isolated lab segment: scan, a cyclic run, mailbox
-    /// transfers measured like the simulator's. Sends frames; needs a build with
-    /// `--features master`.
+    /// transfers measured like the simulator's, and a gateway to a slave's TCP services over
+    /// EoE. Sends frames; needs a build with `--features master`.
     Master(master::MasterArgs),
     /// An emulated EtherCAT slave on a network interface: answers a master's frames like an
     /// ESC with FoE, CoE and EoE behind its mailbox, for testing without EtherCAT hardware.

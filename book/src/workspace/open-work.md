@@ -13,26 +13,31 @@ questions that real captures should answer.
   master, then commit a calibrated bulk-transfer report next to the placeholder one.
 - Run live capture (`flowlab capture`, the Live view) on Linux and Windows; on macOS it has
   captured an EK1100 and the emulated slave behind it.
-- Run the lab master (`flowlab master scan`, `run`, `transfer`) on the Verdin/LAN9252 rig with
-  a real ESC, on Linux and then Windows, and answer its open questions in the
+- Run the lab master on Linux and then Windows, and answer its open questions in the
   [design decisions](decisions.md). From macOS it has run against an EK1100 (scan, a cyclic
-  run) and against the [emulated slave](../guide/slave.md), on a cable and behind the EK1100
-  (scan, a cyclic run, FoE, CoE and EoE both ways); EtherCrab's Linux socket and Npcap have not
+  run), against the [emulated slave](../guide/slave.md) on a cable and behind the EK1100 (scan,
+  a cyclic run, FoE, CoE and EoE both ways), and against a LAN9252 slave behind an EK1100 and
+  EK1122 (scan, CoE, EoE both ways, the gateway); EtherCrab's Linux socket and Npcap have not
   run yet.
+- That LAN9252 slave does not reach SAFE-OP under EtherCrab (`run`, `transfer --op`: state
+  transition timeout). Read its AL status code after the attempt and EtherCrab's PDO mapping
+  over CoE, then run `run` and `transfer --op` there.
 - Emulated slave: several slaves on one port (a line of ESC models, each incrementing ADP and
   adding to the working counter), distributed clocks, the three-buffer mode, a configurable
   processing delay, and a Windows build (Npcap).
 - Lab master: load a `MeasuredTransfer` into the UI's Compare view next to a simulated run;
-  several slaves and transfers at once (the policies' multi-slave behaviour); TCP over EoE;
-  distributed clocks in `run`.
+  several slaves and transfers at once (the policies' multi-slave behaviour); distributed
+  clocks in `run`.
+- Gateway: a host network interface (utun on macOS, tap on Linux, needs root) next to the port
+  forwards, so the host's own TCP/IP stack talks to the slave; UDP forwards.
 - FlowLab VoE in a slave stack (SOES on the LAN9252), so its fewer acknowledgements are
   measured against a real PDI; VoE conversations in `flowlab-synth`; VoE goodput in the
   Compare view.
 - Lab master: more than one mailbox frame in flight. On a host whose round trip is hundreds of
   microseconds (a USB adapter, a userspace slave), the round trip per message, not the link,
   limits every protocol.
-- Run `flowlab pdi-bench` on the Verdin/LAN9252 with both read instructions and several clocks,
-  and answer the LAN9252 questions in the [design decisions](decisions.md#open-questions).
+- Run `flowlab pdi-bench` writes (`--allow-writes`) on the Verdin/LAN9252 and store the fit in a
+  `lab.json`; reads have run at 10–25 MHz.
 - PDI profiling of the real stack: a converter from kernel SPI trace events (ftrace/`trace-cmd`
   `spi:spi_transfer_start`/`stop`) of the running slave application to PDI timing samples for
   `flowlab pdi-fit`, grouping the transfers of one ESC access.
@@ -56,7 +61,9 @@ questions that real captures should answer.
 
 ## Simulator and studies
 
-- TCP over EoE (acknowledgements, windows, retransmission) and VoE.
+- TCP over EoE (acknowledgements, windows, retransmission) and VoE, with the slave stack's
+  time per mailbox message and per Ethernet frame as parameters; the gateway's results on the
+  LAN9252 rig (`results/lan9252/gw/`, not committed) give both.
 - Priority and weighted mailbox policies.
 - The bulk-transfer study's application session protocol.
 - A `SimSpec` of an existing segment in one step: from the planner, an ENI, a `master scan` or a

@@ -72,7 +72,10 @@ after every access), and times each one ([flowlab-pdi](../../workspace/flowlab-p
 
    The command first reads `BYTE_TEST` (must be 0x87654321), `HW_CFG` and `ID_REV` (chip
    0x9252), and stops with a hint if they are wrong (wiring, SPI mode, clock, level shifting). It
-   refuses to run unless the ESC is in INIT, and discards the run if AL Status changes. It never
+   refuses to run unless the ESC is in INIT, and discards the run if AL Status changes. If a
+   master keeps the ESC in another state (PRE-OP) while the application is stopped,
+   `--app-stopped` accepts that state for reads from an explicit `--area` outside the
+   SyncManagers' buffers; no master may run meanwhile. It never
    accesses the AL Control or SyncManager registers. By default it only reads, from process RAM
    at 0x1000; writes need `--allow-writes` and an `--area START+LEN` of process RAM that nothing
    uses (in INIT nothing does; the area is overwritten):
@@ -84,7 +87,8 @@ after every access), and times each one ([flowlab-pdi](../../workspace/flowlab-p
 
    Sizes default to 1 to 1024 bytes in powers of two (`--sizes`), 50 timed accesses each
    (`--reps`) after 3 untimed ones (`--warmup`), in a shuffled order. Above 30 MHz use
-   `--read-instruction fast-read`. It prints the median and 95th percentile per size and writes
+   `--read-instruction fast-read`. (On the Verdin iMX8MP rig, the link check fails at 30 MHz and
+   above with either instruction, and 25 MHz times like 20 MHz.) It prints the median and 95th percentile per size and writes
    the [PDI timing samples](../../reference/specs.md#pdi-timing-samples), with the setup in
    comment lines.
 4. **Fit** (or pass `--fit` above):

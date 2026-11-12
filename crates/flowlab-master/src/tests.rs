@@ -145,6 +145,25 @@ fn eoe_frames_reassemble_at_the_slave_and_the_master() {
 }
 
 #[test]
+fn eoe_send_reads_what_the_slave_sends_meanwhile() {
+    // A stack that answers one message at a time and whose network stack replies to some
+    // frames (ARP, ICMP) takes no further fragment until the master has read the reply.
+    let data = pattern(5_000, 7);
+    let cfg = VirtualSlaveConfig { eoe_reply_every: Some(3), one_message_at_a_time: true, ..Default::default() };
+    let slave = VirtualSlave::new(cfg);
+    let p = TransferProtocol::Eoe { mtu_bytes: 100, addresses: EoeAddresses::default() };
+    let r = run(&slave, job(&slave, p, Payload::Send(data.clone())), &TransferOptions::default());
+    assert!(r.completed, "{:?}", r.error);
+    settle(&slave);
+    // The last fragment is written; the slave takes it once its last reply has been read,
+    // which nothing does after the transfer.
+    let frames = slave.log().eoe_frames.len() as u64;
+    assert!(frames + 1 >= 5_000u64.div_ceil(72), "{frames} frames arrived");
+    assert!(r.messages_from_slave >= frames / 3 - 1, "the slave's frames were read: {}", r.messages_from_slave);
+    assert_eq!(r.resent_messages, 0, "no reply is expected, so nothing is resent");
+}
+
+#[test]
 fn voe_acknowledges_once_per_window_and_the_slave_confirms_the_payload() {
     let data = pattern(10_000, 6);
     let slave = VirtualSlave::new(VirtualSlaveConfig::default());

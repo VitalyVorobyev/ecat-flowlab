@@ -135,6 +135,23 @@ fn an_esc_outside_init_is_refused() {
 }
 
 #[test]
+fn a_stopped_application_allows_reads_from_an_explicit_area_in_any_state() {
+    let area = Some("0x1800+256".parse::<Area>().unwrap());
+    let stopped = BenchOptions { app_stopped: true, sizes: vec![4, 128], reps: 3, ..BenchOptions::default() };
+    // Without an area, or with writes, it is refused before any access.
+    assert!(matches!(plan(&stopped), Err(PdiError::Refused(_))));
+    let writes = BenchOptions { allow_writes: true, area, ..stopped.clone() };
+    assert!(matches!(plan(&writes), Err(PdiError::Refused(_))));
+
+    let (mut sim, clock) = SimLan9252::new(SimTiming::default());
+    sim.set_al_status(0x0002);
+    let mut e = Lan9252::new(sim);
+    let r = run(&mut e, &clock, &BenchOptions { area, ..stopped }, 0x9252).expect("reads in PREOP");
+    assert_eq!(r.samples.len(), 6);
+    assert_eq!(r.plan.write_area, None);
+}
+
+#[test]
 fn writes_need_permission_and_an_area_in_process_ram() {
     let area = |s: &str| Some(s.parse::<Area>().unwrap());
     let o = |allow_writes, a| BenchOptions { allow_writes, area: a, ..BenchOptions::default() };
@@ -166,6 +183,7 @@ fn a_run_with_writes_stays_inside_its_area_and_away_from_protected_registers() {
         warmup: 1,
         area: Some("0x1800+512".parse().unwrap()),
         allow_writes: true,
+        app_stopped: false,
         seed: 9,
     };
     let r = run(&mut e, &clock, &o, 0x9252).unwrap();

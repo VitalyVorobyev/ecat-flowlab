@@ -17,8 +17,8 @@ flowlab <COMMAND>
   pdi-bench Time complete ESC reads and writes over a LAN9252's SPI (Linux spidev), as samples for `pdi-fit`
   policy    Read the master's mailbox service pattern from a capture, as a simulator policy
   apply-lab Put measured lab inputs (from pdi-fit --lab, policy --lab) into a simulator spec
-  master    FlowLab's own EtherCAT master on an isolated lab segment: scan, run, transfer
-            (in a build with --features master)
+  master    FlowLab's own EtherCAT master on an isolated lab segment: scan, run, transfer,
+            gateway (in a build with --features master)
   slave     An emulated EtherCAT slave on a network interface, for testing without EtherCAT
             hardware (in a build with --features slave)
 ```
@@ -38,10 +38,10 @@ flowlab <COMMAND>
 | `serve [CAPTURES…]` | `-p/--port` (7878) · `--host` (127.0.0.1) · `--ui-dir` (ui/dist; a release binary serves its built-in UI when the directory has none) · `--open` · `--eni XML` · `--mailbox …` · `--live` · `--live-dir DIR` (results/live) |
 | `schema WHICH` | `synth`, `sim`, `plan`, `study` or `lab` |
 | `pdi-fit SAMPLES.csv` | `--result FILE` the fit with residuals · `--lab JSON` store the values in a lab-inputs file (measured samples only) |
-| `pdi-bench` | `--device /dev/spidevB.C` or `--sim` · `-o/--out CSV` (required) · `--clock-hz HZ` (10000000) · `--mode 0-3` (0) · `--read-instruction read\|fast-read` · `--sizes 1,2,…` (1–1024, powers of two) · `--reps N` (50) · `--warmup N` (3) · `--area START+LEN` · `--allow-writes` · `--no-al-event` · `--chip-id HEX` (0x9252) · `--seed N` · `--sim-transaction-ns NS` (5000; with `--sim`, the fixed cost of every SPI transaction, a chosen value) · `--fit` · `--result FILE` · `--lab JSON` ([Measuring the SPI](../studies/bulk-transfer/lab.md#measuring-the-spi)) |
+| `pdi-bench` | `--device /dev/spidevB.C` or `--sim` · `-o/--out CSV` (required) · `--clock-hz HZ` (10000000) · `--mode 0-3` (0) · `--read-instruction read\|fast-read` · `--sizes 1,2,…` (1–1024, powers of two) · `--reps N` (50) · `--warmup N` (3) · `--area START+LEN` · `--allow-writes` · `--no-al-event` · `--app-stopped` · `--chip-id HEX` (0x9252) · `--seed N` · `--sim-transaction-ns NS` (5000; with `--sim`, the fixed cost of every SPI transaction, a chosen value) · `--fit` · `--result FILE` · `--lab JSON` ([Measuring the SPI](../studies/bulk-transfer/lab.md#measuring-the-spi)) |
 | `policy CAPTURE` | `--station N` · `--mailbox …` · `--eni XML` · `--lab JSON` store the policy in a lab-inputs file (measured captures only) |
 | `apply-lab SPEC` | `--lab JSON` (required) · `--slave N` (required: index in `slaves`, which gets the PDI and application time) · `-o/--out FILE` (default: print) |
-| `master scan\|run\|transfer` | always `-i/--interface IF` and `--isolated-lab-network` · `--listen S` (2) · `--tool` · `--no-master-check` · `--pdu-timeout-ms` (30) · `-o/--out FILE`; `scan --eni XML`; `run --cycle-us US --duration S --records N`; `transfer --station N --protocol foe\|coe\|eoe --direction to-slave\|from-slave --file F\|--bytes N --policy … --cycle-us US --poll read\|status --op` or `--like SIM_JSON --transfer K`; payload, FoE, CoE, EoE and retry options in [Lab master § transfer](master.md#transfer) |
+| `master scan\|run\|transfer\|gateway` | always `-i/--interface IF` and `--isolated-lab-network` · `--listen S` (2) · `--tool` · `--no-master-check` · `--pdu-timeout-ms` (30) · `-o/--out FILE`; `scan --eni XML`; `run --cycle-us US --duration S --records N`; `transfer --station N --protocol foe\|coe\|eoe --direction to-slave\|from-slave --file F\|--bytes N --policy … --cycle-us US --poll read\|status --op` or `--like SIM_JSON --transfer K`; payload, FoE, CoE, EoE and retry options in [Lab master § transfer](master.md#transfer); `gateway --station N --slave-ip IP --master-ip IP [--set-ip] --forward LOCAL:REMOTE …` ([Lab master § gateway](master.md#gateway)) |
 | `slave` | always `-i/--interface IF` and `--isolated-lab-network` · `--mailbox-bytes N` (128) · `--output-bytes N` `--input-bytes N` (4) · `--upload FILE` or `--upload-bytes N --seed S` · `--eoe-send` `--eoe-start-after-ms MS` (1000) `--eoe-mtu N` · `--sdo INDEX:SUB` · `--busy-every N` · `--serial N` · `--behind-esc` · `--duration S` ([Emulated slave](slave.md)) |
 
 Commands that take a spec use a built-in example when it is omitted. Errors go to stderr with
