@@ -41,6 +41,7 @@ use flowlab_core::{EMULATED_ESC_ASSUMPTION, EMULATED_ESC_NAME, InputRef, Provena
 use crate::MasterError;
 use crate::bus::{BusError, MailboxBus, MailboxLayout, Reply};
 use crate::engine::{TransferJob, TransferOptions, run_transfer};
+use crate::gateway::{GatewayConfig, GatewayResult, run_gateway};
 use crate::result::{
     CycleRecord, CycleTiming, MeasuredTransfer, RunResult, ScanResult, ScannedSlave, ScannedSm, Summary,
 };
@@ -639,6 +640,141 @@ impl Session {
                 let bus = EthercrabBus { md: &self.md, group: None, origin: self.origin };
                 run_transfer(&bus, job, &o).await
             }
+        })
+    }
+}
+
+/// Text of the AL status codes a mailbox reconfiguration can bring (ETG.1000.6).
+fn al_code_text(code: u16) -> &'static str {
+    match code {
+        0x0000 => "no error",
+        0x0011 => "invalid requested state change",
+        0x0012 => "unknown requested state",
+        0x0015 => "invalid mailbox configuration (bootstrap)",
+        0x0016 => "invalid mailbox configuration",
+        0x0017 => "invalid sync manager configuration",
+        _ => "see ETG.1000.6",
+    }
+}
+
+impl Session {
+    /// Ask `station` for AL state `state` and wait for it (or an error) up to `timeout`:
+    /// the AL status byte and the AL status code.
+    async fn request_state(&self, station: u16, state: u8, timeout: Duration) -> Result<(u8, u16), MasterError> {
+        Command::fpwr(station, 0x0120).send_receive_slice(&self.md, &[state, 0]).await.map_err(ec)?;
+        let t = Instant::now();
+        loop {
+            let st = Command::fprd(station, 0x0130).receive_slice(&self.md, 2).await.map_err(ec)?[0];
+            if st & 0x0F == state & 0x0F || st & 0x10 != 0 || t.elapsed() > timeout {
+                let c = Command::fprd(station, 0x0134).receive_slice(&self.md, 2).await.map_err(ec)?;
+                return Ok((st, u16::from_le_bytes([c[0], c[1]])));
+            }
+            async_io::Timer::after(Duration::from_millis(5)).await;
+        }
+    }
+
+    /// INIT, SyncManagers 0 and 1 to `bytes` each, PRE-OP; on refusal, restore and fail.
+    async fn resize_mailbox(&self, station: u16, bytes: u16, log: &mut dyn FnMut(String)) -> Result<(), MasterError> {
+        let sms = self.sync_managers(station).await?;
+        let get = |n: u8| sms.iter().find(|(i, _)| *i == n).map(|(_, s)| *s);
+        let (Some(sm0), Some(sm1)) = (get(0), get(1)) else {
+            return Err(MasterError::Invalid(format!("slave {station:#06x} has no SyncManagers 0 and 1")));
+        };
+        let base = sm0.start;
+        if !(64..=1024).contains(&bytes) || u32::from(base) + 2 * u32::from(bytes) > 0x3000 {
+            return Err(MasterError::Invalid(format!("a {bytes}-byte mailbox pair does not fit from {base:#06x}")));
+        }
+        // An enabled SyncManager keeps its start and length: disable it, write, enable, check.
+        let write = |n: u8, c: SyncManagerConfig| async move {
+            let off = SyncManagerConfig { activate: c.activate & !0x01, ..c };
+            Command::fpwr(station, sm_register(n)).send_receive_slice(&self.md, &off.encode()).await.map_err(ec)?;
+            Command::fpwr(station, sm_register(n)).send_receive_slice(&self.md, &c.encode()).await.map_err(ec)?;
+            let d = Command::fprd(station, sm_register(n)).receive_slice(&self.md, 8).await.map_err(ec)?;
+            match SyncManagerConfig::parse(&d) {
+                Ok(r) if r.start == c.start && r.length == c.length && r.activate & 0x01 == c.activate & 0x01 => Ok(()),
+                Ok(r) => Err(MasterError::Bus(format!(
+                    "SM{n} reads {:#06x}+{} after writing {:#06x}+{}",
+                    r.start, r.length, c.start, c.length
+                ))),
+                Err(e) => Err(MasterError::Bus(e.to_string())),
+            }
+        };
+        let (st, code) = self.request_state(station, 0x01, Duration::from_secs(5)).await?;
+        if st & 0x0F != 0x01 {
+            return Err(MasterError::Bus(format!(
+                "slave {station:#06x} did not go to INIT: AL status {st:#04x}, code {code:#06x}"
+            )));
+        }
+        write(0, SyncManagerConfig { start: base, length: bytes, ..sm0 }).await?;
+        write(1, SyncManagerConfig { start: base + bytes, length: bytes, ..sm1 }).await?;
+        let (st, code) = self.request_state(station, 0x02, Duration::from_secs(5)).await?;
+        if st & 0x0F == 0x02 && st & 0x10 == 0 {
+            log(format!(
+                "mailbox set to {bytes} B: SM0 {:#06x}, SM1 {:#06x}; the slave accepted PRE-OP",
+                base,
+                base + bytes
+            ));
+            return Ok(());
+        }
+        let _ = self.request_state(station, 0x11, Duration::from_secs(5)).await;
+        write(0, sm0).await?;
+        write(1, sm1).await?;
+        let back = self.request_state(station, 0x02, Duration::from_secs(5)).await?;
+        Err(MasterError::Refused(format!(
+            "slave {station:#06x} refused PRE-OP with {bytes}-byte mailboxes: AL status {st:#04x}, code {code:#06x} ({}); original SyncManagers restored (AL status {:#04x})",
+            al_code_text(code),
+            back.0
+        )))
+    }
+
+    /// Run an EoE gateway ([`run_gateway`]) to the slave at `station`, in PRE-OP, until
+    /// `cfg.stop` or its time limit. The mailbox comes from the slave's SyncManager registers.
+    ///
+    /// With `mailbox_bytes`, the slave goes back to INIT, its SyncManagers 0 and 1 get that
+    /// length each (SM0 where it was, SM1 right after it), and it is asked for PRE-OP again:
+    /// a larger mailbox without changing the EEPROM. A stack that does not allow the length
+    /// refuses PRE-OP; then the original SyncManagers are restored and the gateway does not
+    /// start.
+    pub fn gateway(
+        &self,
+        station: u16,
+        mut cfg: GatewayConfig,
+        mailbox_bytes: Option<u16>,
+        log: &mut dyn FnMut(String),
+    ) -> Result<GatewayResult, MasterError> {
+        async_io::block_on(async {
+            let group = self.init().await?;
+            let Some(sd) = group.iter(&self.md).find(|s| s.configured_address() == station) else {
+                return Err(MasterError::Invalid(format!("no slave with station address {station:#06x}")));
+            };
+            let name = sd.name().to_owned();
+            if let Some(n) = mailbox_bytes {
+                self.resize_mailbox(station, n, log).await?;
+                cfg.assumptions.push(format!(
+                    "The mailbox SyncManagers were set to {n} bytes each in INIT (not the EEPROM's sizes) before PRE-OP."
+                ));
+            }
+            let sms = self.sync_managers(station).await?;
+            let find = |d: SmDirection| sms.iter().find(|(_, s)| s.mode() == SmMode::Mailbox && s.direction() == d);
+            let (Some((_, out)), Some((_, inp))) = (find(SmDirection::EcatWrite), find(SmDirection::EcatRead)) else {
+                return Err(MasterError::Invalid(format!(
+                    "slave {station:#06x} has no mailbox SyncManagers configured"
+                )));
+            };
+            cfg.mailbox = MailboxLayout {
+                station,
+                out_start: out.start,
+                out_len: out.length,
+                in_start: inp.start,
+                in_len: inp.length,
+            };
+            cfg.assumptions.extend(host_assumptions());
+            if name == EMULATED_ESC_NAME {
+                cfg.assumptions.push(EMULATED_ESC_ASSUMPTION.into());
+            }
+            cfg.assumptions.push("The network was in PRE-OP: only mailbox traffic.".into());
+            let bus = EthercrabBus { md: &self.md, group: None, origin: self.origin };
+            run_gateway(&bus, &name, &cfg, log).await
         })
     }
 }

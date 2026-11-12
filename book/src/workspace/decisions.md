@@ -179,6 +179,19 @@ experiment can answer them.
   the same way). Linux and Windows keep EtherCrab's own tasks. Consequence: on macOS a master
   needs at least one slave between its frames and their return, as on any EtherCAT segment.
 
+- **ADR-040 EoE gateway with its own TCP/IP stack and port forwards.** `flowlab master
+  gateway` reaches a slave's TCP services over EoE through smoltcp (0BSD, pure Rust, no
+  `unsafe` needed here) inside the master, with local TCP ports on 127.0.0.1 forwarded to the
+  slave's, instead of a host network interface (utun on macOS, tap on Linux). It needs no root
+  and changes nothing in the host's network configuration (no interface, route or address),
+  binds only to loopback, and runs where the master runs, so curl, browsers and gRPC clients
+  work through it. The gateway's own TCP knobs (MTU, delayed acknowledgements, window) are
+  experiment parameters. The EoE Set IP Parameter request is encoded as SOEM writes it
+  (all fields at fixed places, IPv4 addresses least significant octet first); a slave on the
+  rig configured its interface from it as from TwinCAT's. Consequences: the master's TCP is
+  smoltcp's, not the operating system's, so a result says so in its assumptions; services that
+  need the slave to open connections to the master, or UDP, do not run through it.
+
 ## Open questions
 
 - Do TwinCAT / other masters' captures always show the ESC-set source-MAC bit, or are
@@ -197,13 +210,16 @@ experiment can answer them.
   0x080D) instead of FPRD? Such polls are counted as process data today. *Test:* TwinCAT capture.
 - Is "counter equal to the previous" a reliable repeat test when a master resets counters
   after a state change? *Test:* captures across INIT → PREOP transitions on real slaves.
-- What are a LAN9252-class ESC's effective SPI read/write rates and per-access overhead from a
-  Linux userspace driver on the Verdin? The simulator's PDI-bound results hinge on them.
-  *Test:* `flowlab pdi-bench` on the rig, then `flowlab pdi-fit`; check the fit against a
-  capture of mailbox turnaround.
-- Does the LAN9252's `ID_REV` read 0x9252 in bits 31:16, and does it accept the `FAST READ`
-  dummy byte value 0x01 that SOES sends? `pdi-bench` assumes both (`--chip-id` overrides the
-  first). *Test:* the first `pdi-bench` run on the Verdin, with both read instructions.
+- What are a LAN9252-class ESC's effective SPI write rates and per-access overhead from a Linux
+  userspace driver on the Verdin? Reads are measured (`pdi-bench`, 10–25 MHz: about 115 µs per
+  access and 3.8 Mbit/s at 20 MHz); writes and a fit into `lab.json` are not. A capture of the
+  real stack's mailbox turnaround (1.3–2.3 ms per 128-byte message) shows that its stack, not the
+  SPI rate, sets its time, so a PDI-bound model with these inputs describes a stack that accesses
+  the ESC in bursts. *Test:* `pdi-bench --allow-writes`, then `pdi-fit`.
+- Does the LAN9252 accept the `FAST READ` dummy byte value 0x01 that SOES sends? On the Verdin
+  rig, `ID_REV` reads 0x9252 in bits 31:16 and READ works up to 25 MHz; FAST READ was tried only
+  at 30 MHz and above, where the link check fails with either instruction, so the board's SPI
+  is the limit there. *Test:* `pdi-bench --read-instruction fast-read` at 20 MHz.
 - Does the access pattern of `pdi-bench` (one access at a fixed address per size, polling the
   PRAM command register before each FIFO burst) time the same as the real stack's accesses?
   *Test:* compare its fit with timing logged inside SOES on the same board.

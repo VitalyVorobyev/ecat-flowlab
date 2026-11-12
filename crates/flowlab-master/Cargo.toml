@@ -18,6 +18,8 @@ sha2.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 futures-lite = "2"
+# The EoE gateway's TCP/IP stack on the master's side (0BSD).
+smoltcp = { version = "0.12", default-features = false, features = ["std", "medium-ethernet", "proto-ipv4", "socket-tcp"] }
 flowlab-live = { workspace = true, optional = true }
 ethercrab = { version = "0.7.1", default-features = false, features = ["std"], optional = true }
 async-io = { version = "2", optional = true }

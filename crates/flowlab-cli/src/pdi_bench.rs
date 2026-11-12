@@ -56,6 +56,10 @@ pub(crate) struct PdiBenchArgs {
     /// Also time writes, into --area (overwrites it).
     #[arg(long)]
     allow_writes: bool,
+    /// The slave application is stopped and no master runs: accept the AL state it left
+    /// instead of INIT. Reads only, from an explicit --area outside the SyncManagers' buffers.
+    #[arg(long, conflicts_with = "allow_writes")]
+    app_stopped: bool,
     /// Do not read AL Event Request after every access (the SOES hardware layer does).
     #[arg(long)]
     no_al_event: bool,
@@ -94,6 +98,7 @@ pub(crate) fn run(a: PdiBenchArgs) -> Result<()> {
         warmup: a.warmup,
         area: a.area,
         allow_writes: a.allow_writes,
+        app_stopped: a.app_stopped,
         seed: a.seed,
     };
     let plan = flowlab_pdi::plan(&options)?;

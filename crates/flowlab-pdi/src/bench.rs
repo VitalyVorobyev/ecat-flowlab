@@ -73,13 +73,25 @@ pub struct BenchOptions {
     pub area: Option<Area>,
     /// Also time writes (into `area`, which must lie in process RAM).
     pub allow_writes: bool,
+    /// The slave application is stopped and no master runs: accept the AL state the
+    /// application left (it no longer answers state changes) instead of requiring INIT. Reads
+    /// only, from an explicit `area`, so that they stay off SyncManager buffers.
+    pub app_stopped: bool,
     /// Seed of the order shuffle.
     pub seed: u64,
 }
 
 impl Default for BenchOptions {
     fn default() -> Self {
-        Self { sizes: DEFAULT_SIZES.to_vec(), reps: 50, warmup: 3, area: None, allow_writes: false, seed: 1 }
+        Self {
+            sizes: DEFAULT_SIZES.to_vec(),
+            reps: 50,
+            warmup: 3,
+            area: None,
+            allow_writes: false,
+            app_stopped: false,
+            seed: 1,
+        }
     }
 }
 
@@ -127,6 +139,11 @@ pub fn plan(o: &BenchOptions) -> Result<Plan, PdiError> {
         }
         (true, Some(a)) => Some(a),
     };
+    if o.app_stopped && (write_area.is_some() || o.area.is_none()) {
+        return Err(PdiError::Refused(
+            "--app-stopped times reads only, from an explicit --area outside the SyncManagers' buffers".into(),
+        ));
+    }
     Ok(Plan { sizes, read_area, write_area })
 }
 
@@ -144,7 +161,7 @@ pub struct BenchRun {
 /// SplitMix64, for a reproducible order.
 const STATE_INIT: u16 = 1;
 
-/// Check the link, refuse unless the ESC is in INIT, then time every access of the plan in a
+/// Check the link, refuse unless the ESC is in INIT (or the application is stopped), then time every access of the plan in a
 /// shuffled order. With writes, one write and read-back of the largest size checks the area
 /// first (untimed). AL Status is read again at the end; a change discards the run.
 pub fn run<S: SpiBus, C: Clock + ?Sized>(
@@ -155,7 +172,7 @@ pub fn run<S: SpiBus, C: Clock + ?Sized>(
 ) -> Result<BenchRun, PdiError> {
     let plan = plan(o)?;
     let link = esc.check_link(chip_id)?;
-    if link.al_status & 0x0F != STATE_INIT {
+    if link.al_status & 0x0F != STATE_INIT && !o.app_stopped {
         return Err(PdiError::Refused(format!(
             "the ESC is in {}, not INIT: stop the master and the slave application first",
             link.al_state()

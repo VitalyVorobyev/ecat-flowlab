@@ -9,7 +9,9 @@
 //! * FoE packets ([`foe`]) and CoE SDO initiate and segment messages ([`sdo`], [`sdo_segment`],
 //!   [`sdo_unused`]), with how much payload each carries in a mailbox of a given size;
 //! * EoE: an Ethernet II / IPv4 / UDP frame ([`udp_frame`], [`udp_payload`]), its fragments
-//!   ([`eoe_fragments`]) and their reassembly ([`EoeReassembler`]).
+//!   ([`eoe_fragments`]) and their reassembly ([`EoeReassembler`]); the Set IP Parameter
+//!   request that configures the slave's interface ([`eoe_set_ip_request`],
+//!   [`eoe_set_ip_result`]).
 //!
 //! The analysis does not use this module: it reads messages with its own trackers, so that a
 //! misreading here cannot hide behind a matching misreading there.
@@ -221,6 +223,65 @@ pub fn eoe_fragments(frame: &[u8], capacity: usize, frame_no: u8) -> Vec<Vec<u8>
     }
 }
 
+/// What an EoE Set IP Parameter request configures on the slave's network interface. Fields
+/// left `None` are not set (their flag stays clear).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EoeIpParameters {
+    /// MAC address of the slave's interface.
+    pub mac: Option<[u8; 6]>,
+    /// IPv4 address.
+    pub ip: Option<[u8; 4]>,
+    /// Subnet mask.
+    pub subnet_mask: Option<[u8; 4]>,
+    /// Default gateway.
+    pub gateway: Option<[u8; 4]>,
+}
+
+/// Bytes of the Set IP Parameter request's data: flags (4), MAC (6), IP, subnet, gateway,
+/// DNS server (4 each), DNS name (32).
+const SET_IP_DATA: usize = 4 + 6 + 4 * 4 + 32;
+
+/// An EoE Set IP Parameter request (data after the mailbox header): the EoE header (type 2,
+/// port 0, one fragment) and every field at its fixed place, each with its flag set when
+/// given (ETG.1000.6; the layout SOEM writes). IPv4 addresses go least significant octet
+/// first, as SOEM writes them: 192.168.2.13 is `0d 02 a8 c0`.
+pub fn eoe_set_ip_request(p: &EoeIpParameters) -> Vec<u8> {
+    let h = EoeHeader {
+        frame_type: EoeType::SetIpRequest,
+        port: 0,
+        last_fragment: true,
+        time_appended: false,
+        time_request: false,
+        fragment: 0,
+        offset_blocks: 0,
+        frame_no: 0,
+    };
+    let mut v = h.encode().to_vec();
+    let mut data = [0u8; SET_IP_DATA];
+    let mut flags = 0u32;
+    if let Some(m) = p.mac {
+        flags |= 0x01;
+        data[4..10].copy_from_slice(&m);
+    }
+    for (i, a) in [p.ip, p.subnet_mask, p.gateway].into_iter().enumerate() {
+        if let Some(mut a) = a {
+            flags |= 0x02 << i;
+            a.reverse();
+            data[10 + 4 * i..14 + 4 * i].copy_from_slice(&a);
+        }
+    }
+    data[..4].copy_from_slice(&flags.to_le_bytes());
+    v.extend_from_slice(&data);
+    v
+}
+
+/// The result code of an EoE Set IP Parameter response (data after the mailbox header): 0 is
+/// success. `None` if `body` is not such a response.
+pub fn eoe_set_ip_result(body: &[u8]) -> Option<u16> {
+    let h = EoeHeader::parse(body).ok()?;
+    (h.frame_type == EoeType::SetIpResponse).then(|| u16::from_le_bytes([body[2], body[3]]))
+}
+
 /// Reassembles EoE fragments into Ethernet frames.
 #[derive(Debug, Default)]
 pub struct EoeReassembler {
@@ -286,6 +347,29 @@ mod tests {
         assert_eq!(sdo_unused(100), 0);
         assert_eq!(foe_capacity(128), 128 - 6 - 6);
         assert_eq!(sdo_initiate_capacity(128) + 8, sdo_segment_capacity(128) + 1);
+    }
+
+    #[test]
+    fn eoe_set_ip_request_layout() {
+        let p = EoeIpParameters {
+            mac: Some([0x02, 0x01, 0x05, 0x20, 0x03, 0xeb]),
+            ip: Some([192, 168, 2, 13]),
+            subnet_mask: Some([255, 255, 255, 0]),
+            gateway: None,
+        };
+        let v = eoe_set_ip_request(&p);
+        assert_eq!(v.len(), 4 + 58);
+        let h = EoeHeader::parse(&v).unwrap();
+        assert_eq!((h.frame_type, h.last_fragment), (EoeType::SetIpRequest, true));
+        assert_eq!(u32::from_le_bytes(v[4..8].try_into().unwrap()), 0x07);
+        assert_eq!(&v[8..14], &[0x02, 0x01, 0x05, 0x20, 0x03, 0xeb]);
+        assert_eq!(&v[14..18], &[13, 2, 168, 192]);
+        assert_eq!(&v[18..22], &[0, 255, 255, 255]);
+        assert_eq!(&v[22..], &[0; 40]);
+        assert_eq!(eoe_set_ip_result(&v), None);
+        let mut r = EoeHeader { frame_type: EoeType::SetIpResponse, ..h }.encode().to_vec();
+        r[2..4].copy_from_slice(&0x0002u16.to_le_bytes());
+        assert_eq!(eoe_set_ip_result(&r), Some(2));
     }
 
     #[test]

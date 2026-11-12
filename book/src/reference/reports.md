@@ -351,6 +351,17 @@ field means the same:
 `RunResult`: `interface`, `slaves`, `cycle_time_ns`, `process_image_bytes`, `expected_wkc`,
 `wkc_mismatches`, `lost_frames`, `final_states`, `timing` and `cycle_records[]` as above.
 
+`GatewayResult` ([gateway](../guide/master.md#gateway)): `station`, `slave`, `mailbox_out_bytes`,
+`mailbox_in_bytes`, the addresses, `mtu_bytes`, `cycle_ns`, `ack_delay_ms` and `tcp_buffer_bytes`
+it ran with; `set_ip_result` (0: success) and `set_ip_reply_ns`; `duration_ns`; the mailbox
+counters `messages_to_slave`, `messages_from_slave`, `rejected_writes`, `empty_reads`,
+`lost_frames`, `duplicate_messages`, `other_messages`; Ethernet frames and their bytes each way
+(`frames_to_slave`, `frame_bytes_to_slave`, …) and `broken_fragments`; `write_access` and
+`read_access` round-trip summaries; `connections[]` (`local_port`, `remote_port`, `opened_ns`,
+`established_ns`, `closed_ns`, bytes each way, first and last byte from the slave,
+`goodput_from_slave_bps`, `error`); and `timeline[]`, the messages and frame bytes each way per
+`timeline_bucket_ns` (100 ms).
+
 `ScanResult`: `interface` and `slaves[]` with `position`, `station`, `alias`, `name`,
 `vendor_id`, `product_code`, `revision`, `serial`, `al_state`, `al_status_code`,
 `mailbox_protocols`, `sync_managers[]` (`index`, `start`, `length`, `control`, `mode`,

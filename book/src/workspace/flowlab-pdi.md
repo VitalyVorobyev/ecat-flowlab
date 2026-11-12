@@ -43,11 +43,14 @@ After every access the AL Event Request (0x0220) is read, as the SOES hardware l
   and `ID_REV` (0x050, chip 0x9252 in bits 31:16), then AL Status (0x0130). Wrong wiring, SPI
   mode or clock fails here, before any access of the ESC core.
 - `run` refuses unless the ESC is in INIT, and discards the run if AL Status changed by the end.
+  With `app_stopped` (the slave application is stopped, no master runs), it accepts the AL
+  state the application left, for reads only, from an explicit area.
 - `Lan9252::read` and `write` refuse the AL Control (0x0120–0x0121) and SyncManager
   (0x0800–0x087F) registers (`PROTECTED`), anything past the 4 KiB process RAM, and ranges
   crossing 0x1000. `write` accepts process RAM only.
 - `plan` checks the options first: writes only with `allow_writes` and an explicit area that
-  starts at 0x1000 or above; every size fits its area.
+  starts at 0x1000 or above; `app_stopped` only without writes and with an explicit area;
+  every size fits its area.
 
 ## API
 
@@ -79,10 +82,11 @@ access and any protocol misuse: FIFO underruns, invalid CSR sizes, partial DWORD
   FIFO, at unaligned addresses; bytes around the range stay unchanged; the whole 4 KiB reads
   back.
 - A broken link (no answer, swapped bytes) and a wrong chip are refused with a hint; so is an
-  ESC outside INIT.
+  ESC outside INIT, unless the application is stopped and the run reads an explicit area.
 - Writes need `allow_writes` and an area in process RAM; without them a run only reads and
   leaves the memory unchanged; with them every write stays inside the area.
 - A run's CSV is parsed and fitted by `flowlab-study`: provenance `simulated`, and the rate equals
   what the simulated bus's per-burst cost implies within 1 %.
 
-The hardware backend has not been run on a LAN9252 yet ([Limitations](../reference/limitations.md)).
+The hardware backend has run on one board, a Verdin iMX8MP with a LAN9252 on SPI, reads only
+([Limitations](../reference/limitations.md#pdi-benchmark)).
