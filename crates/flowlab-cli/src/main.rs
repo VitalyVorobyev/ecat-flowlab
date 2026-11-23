@@ -14,6 +14,7 @@ mod pdi_bench;
 mod pdi_phy;
 mod pdi_slave;
 mod slave;
+mod tcp_bench;
 
 use clap::{Parser, Subcommand};
 use flowlab_analysis::mailbox::{MailboxHint, write_eoe_pcapng};
@@ -251,6 +252,9 @@ enum Cmd {
     /// Stop the slave's own application first: it shares the SPI. Checks the link first; writes
     /// only the MII management registers (0x0510–0x0517).
     PdiPhy(pdi_phy::PdiPhyArgs),
+    /// TCP throughput with SHA-256 checks, for TCP over EoE: `serve` on the slave's side,
+    /// `run` against it (a gateway's forwarded port). Plain TCP; no EtherCAT frames.
+    TcpBench(tcp_bench::TcpBenchArgs),
     /// FlowLab's slave application on a real ESC (a LAN9252 over Linux spidev), in place of the
     /// slave's own application: AL Control and the mailbox (FoE, CoE, EoE, FlowLab VoE) served
     /// through the PDI, with mailboxes up to --max-mailbox-bytes. Writes AL Status and the
@@ -519,6 +523,7 @@ fn run(cli: Cli) -> Result<()> {
         }
         Cmd::PdiBench(args) => pdi_bench::run(args)?,
         Cmd::PdiPhy(args) => pdi_phy::run(args)?,
+        Cmd::TcpBench(args) => tcp_bench::run(args)?,
         Cmd::PdiSlave(args) => pdi_slave::run(args)?,
         Cmd::Policy { capture, station, mailbox_hints, eni, lab } => {
             let trace = Trace::read(&capture).map_err(|e| format!("{}: {e}", capture.display()))?;
@@ -802,7 +807,7 @@ fn print_plan(r: &flowlab_devices::PlanResult) {
     }
 }
 
-fn ensure_parent(p: &Path) -> Result<()> {
+pub(crate) fn ensure_parent(p: &Path) -> Result<()> {
     if let Some(d) = p.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(d)?;
     }

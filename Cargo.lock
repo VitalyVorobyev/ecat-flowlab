@@ -702,6 +702,7 @@ dependencies = [
  "flowlab-synth",
  "open",
  "serde_json",
+ "sha2",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -839,7 +840,6 @@ dependencies = [
  "flowlab-pdi",
  "pnet_datalink",
  "thiserror",
- "tracing",
 ]
 
 [[package]]

@@ -13,7 +13,6 @@ flowlab-core.workspace = true
 flowlab-mailbox.workspace = true
 flowlab-pdi.workspace = true
 thiserror.workspace = true
-tracing.workspace = true
 pnet_datalink = { workspace = true, optional = true }
 
 [features]

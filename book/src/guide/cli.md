@@ -16,6 +16,7 @@ flowlab <COMMAND>
   pdi-fit   Fit the simulator's PDI model (cost per access + effective rate) to timed ESC accesses
   pdi-bench Time complete ESC reads and writes over a LAN9252's SPI (Linux spidev), as samples for `pdi-fit`
   pdi-phy   Show (and with --allow-phy-writes set) the LAN9252's PHY registers through the ESC's MII interface
+  tcp-bench TCP throughput with SHA-256 checks (serve | run), for TCP over EoE
   policy    Read the master's mailbox service pattern from a capture, as a simulator policy
   apply-lab Put measured lab inputs (from pdi-fit --lab, policy --lab) into a simulator spec
   master    FlowLab's own EtherCAT master on an isolated lab segment: scan, run, transfer,
@@ -47,6 +48,8 @@ flowlab <COMMAND>
 | `master scan\|run\|transfer\|gateway` | always `-i/--interface IF` and `--isolated-lab-network` · `--listen S` (2) · `--tool` · `--no-master-check` · `--pdu-timeout-ms` (30) · `-o/--out FILE`; `scan --eni XML`; `run --cycle-us US --duration S --records N`; `transfer --station N --protocol foe\|coe\|eoe --direction to-slave\|from-slave --file F\|--bytes N --policy … --cycle-us US --poll read\|status --op --mailbox-bytes N` or `--like SIM_JSON --transfer K`; payload, FoE, CoE, EoE and retry options in [Lab master § transfer](master.md#transfer); `gateway --station N --slave-ip IP --master-ip IP [--set-ip] --forward LOCAL:REMOTE …` ([Lab master § gateway](master.md#gateway)) |
 | `slave` | always `-i/--interface IF` and `--isolated-lab-network` · `--mailbox-bytes N` (128) · `--output-bytes N` `--input-bytes N` (4) · `--upload FILE` or `--upload-bytes N --seed S` · `--eoe-send` `--eoe-start-after-ms MS` (1000) `--eoe-mtu N` · `--sdo INDEX:SUB` · `--busy-every N` · `--serial N` · `--behind-esc` · `--duration S` ([Emulated slave](slave.md)) |
 | `pdi-phy` | `--device /dev/spidevB.C` or `--sim` · `--clock-hz HZ` (10000000) · `--mode 0-3` (0) · `--chip-id HEX` (0x9252) · `--phys 0,1,…` (0–3) · `--set PHY:REG=VALUE` · `--autoneg PHY` · `--allow-phy-writes` ([PHY registers](pdi-phy.md)) |
+| `tcp-bench serve` | `--listen ADDR` (0.0.0.0:8000) ([TCP over EoE](tcp-bench.md)) |
+| `tcp-bench run` | `--to HOST:PORT` (required) · `--download BYTES` (1M) · `--upload BYTES` (1M) · `--seed N` (1) · `--timeout S` (300) · `-o/--out JSON` · `--csv FILE --name NAME` |
 | `pdi-slave` | `--device /dev/spidevB.C` and `--replace-slave-application` (required) · `--clock-hz HZ` (10000000) · `--mode 0-3` (0) · `--read-instruction read\|fast-read` · `--chip-id HEX` (0x9252) · `--max-mailbox-bytes N` (1024) · `--upload FILE` or `--upload-bytes N --seed S` · `--duration S` · `--spi-tuning TUNING` (fast) · `--whole-buffers` · `--eoe-bridge IFACE --eoe-host IFACE` ([PDI slave](pdi-slave.md)) |
 
 Commands that take a spec use a built-in example when it is omitted. Errors go to stderr with

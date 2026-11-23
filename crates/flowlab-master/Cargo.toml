@@ -16,7 +16,7 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
-tracing.workspace = true
+tracing = { workspace = true, optional = true }
 futures-lite = "2"
 # The EoE gateway's TCP/IP stack on the master's side (0BSD).
 smoltcp = { version = "0.12", default-features = false, features = ["std", "medium-ethernet", "proto-ipv4", "socket-tcp"] }
@@ -35,7 +35,7 @@ flowlab-slave.workspace = true
 [features]
 default = []
 # EtherCrab on a real network interface: raw socket on Linux, BPF on macOS, Npcap on Windows.
-hardware = ["dep:ethercrab", "dep:async-io", "dep:flowlab-live", "dep:pnet_datalink"]
+hardware = ["dep:ethercrab", "dep:async-io", "dep:flowlab-live", "dep:pnet_datalink", "dep:tracing"]
 
 [lints]
 workspace = true
