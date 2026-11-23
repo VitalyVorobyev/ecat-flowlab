@@ -56,6 +56,7 @@
 //! assert_eq!(back[6], 0x12); // the ESC's source MAC bit
 //! ```
 
+pub mod bridge;
 #[cfg(any(feature = "wire", test))]
 mod echo;
 mod esc;

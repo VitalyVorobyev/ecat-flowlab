@@ -127,7 +127,7 @@ pub fn serve(
 
 /// An Ethernet interface opened for raw frames without blocking: the far end of a bridge
 /// (for example one end of a veth pair whose other end carries the IP address), for
-/// [`crate::pdi::PdiSlave`]'s EoE frames.
+/// [`crate::pdi::PdiSlave`]'s EoE frames through a [`crate::bridge::EoeBridge`].
 pub struct EthernetPort {
     tx: Box<dyn pnet_datalink::DataLinkSender>,
     rx: Box<dyn pnet_datalink::DataLinkReceiver>,
@@ -153,8 +153,11 @@ impl EthernetPort {
         }
     }
 
-    /// A frame, if one is waiting (frames this port sent itself included).
-    pub fn try_recv(&mut self) -> Result<Option<Vec<u8>>, SlaveError> {
+}
+
+/// Frames this port sent itself come back from it too.
+impl crate::bridge::FramePort for EthernetPort {
+    fn try_recv(&mut self) -> Result<Option<Vec<u8>>, SlaveError> {
         match self.rx.next() {
             Ok(f) => Ok(Some(f.to_vec())),
             Err(e) if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock) => Ok(None),
@@ -162,8 +165,7 @@ impl EthernetPort {
         }
     }
 
-    /// Send a frame.
-    pub fn send(&mut self, frame: &[u8]) -> Result<(), SlaveError> {
+    fn send(&mut self, frame: &[u8]) -> Result<(), SlaveError> {
         match self.tx.send_to(frame, None) {
             Some(Ok(())) => Ok(()),
             Some(Err(e)) => Err(SlaveError::Io(e.to_string())),

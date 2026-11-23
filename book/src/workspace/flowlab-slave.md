@@ -70,8 +70,11 @@ out" written, 9: "mailbox in" read) drive the mailbox when the master enabled th
 SyncManager status registers as the fallback (and every 64th poll). It reads a message up to
 its end and then the buffer's last DWORD, and writes an answer the same way (`message_only`;
 whole buffers otherwise). With `answer_set_ip`, EoE Set IP Parameter requests are answered with
-success and kept (`take_set_ip`); `take_eoe_frames` and `send_eoe_frame` move Ethernet frames
-for a bridge (`wire::EthernetPort`, a raw socket without blocking). The ESC is behind the
+success and kept (`take_set_ip`); `take_eoe_frames` and `send_eoe_frame` move Ethernet frames.
+`bridge::EoeBridge` moves them to a `bridge::FramePort` and back: the master's frames out, and
+of the frames the port receives only those with the host interface's source MAC, while fewer
+than 8 messages wait for "mailbox in". On hardware the port is `wire::EthernetPort`, a raw
+socket without blocking on one end of a veth pair. The ESC is behind the
 `pdi::EscPdi` trait (`flowlab_pdi::SlaveAccess` on hardware).
 
 ## API
@@ -86,7 +89,9 @@ for a bridge (`wire::EthernetPort`, a raw socket without blocking). The ESC is b
 | `SlaveError` | `Invalid`, `Refused`, `Io` |
 | `EMULATED_ESC_NAME` | the name in its EEPROM (from `flowlab-core`) |
 | `wire::{serve, ServeOptions, Event, interface_names}` | on a network interface (feature `wire`) |
-| `wire::EthernetPort` | `open`, `try_recv`, `send`: raw frames on an interface without blocking, for the PDI slave's EoE bridge (feature `wire`) |
+| `bridge::{EoeBridge, FramePort, BridgeStats}` | `new(port, host_mac)`, `pump(&mut slave)` (returns the Set IP requests to apply), `set_host_mac`, `stats` |
+| `bridge::{interface_mac, parse_mac}` | an interface's MAC from sysfs (Linux); the `aa:bb:…` form |
+| `wire::EthernetPort` | `open(name)`; a `FramePort`: raw frames on an interface without blocking (feature `wire`) |
 | `pdi::{PdiSlave, PdiSlaveConfig, EscPdi, Mailboxes, AlChange, PdiSlaveStats}` | the application on a real ESC: `new`, `step`, `stop`, `al_state`, `mailboxes`, `stats`, `drain_log`, `send_eoe_frame`, `take_eoe_frames`, `take_set_ip`, `outbox_len`; config `max_mailbox_bytes`, `answer_set_ip`, `message_only` |
 
 ## Tests

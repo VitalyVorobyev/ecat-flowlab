@@ -804,6 +804,61 @@ mod tests {
         assert_eq!(got, Some(frame));
     }
 
+    /// A port with frames waiting from the host, recording what it is sent.
+    #[derive(Default)]
+    struct MemoryPort {
+        waiting: std::collections::VecDeque<Vec<u8>>,
+        sent: Vec<Vec<u8>>,
+    }
+
+    impl crate::bridge::FramePort for MemoryPort {
+        fn try_recv(&mut self) -> Result<Option<Vec<u8>>, crate::SlaveError> {
+            Ok(self.waiting.pop_front())
+        }
+
+        fn send(&mut self, frame: &[u8]) -> Result<(), crate::SlaveError> {
+            self.sent.push(frame.to_vec());
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn the_bridge_forwards_the_masters_frames_and_only_the_hosts_back() {
+        use crate::bridge::{BridgeStats, EoeBridge};
+
+        let host = [0x02, 0, 0, 0, 0, 0x02];
+        let frame = |src: [u8; 6], n: usize| -> Vec<u8> {
+            let mut f = vec![0xff; 6];
+            f.extend_from_slice(&src);
+            f.extend((0..n - 12).map(|i| i as u8));
+            f
+        };
+        let cfg = PdiSlaveConfig { answer_set_ip: true, ..Default::default() };
+        let mut s = PdiSlave::new(FakeEsc::new(), cfg).unwrap();
+        s.esc.configure(1024);
+        s.esc.request(0x02);
+        s.step().unwrap();
+        let mut port = MemoryPort::default();
+        // The port hands back a frame it sent itself (another source MAC) and one of the host's.
+        port.waiting.push_back(frame([0x02, 0, 0, 0, 0, 0x09], 60));
+        port.waiting.push_back(frame(host, 1514));
+        let mut bridge = EoeBridge::new(port, host);
+        let p = EoeIpParameters { ip: Some([10, 0, 0, 2]), ..Default::default() };
+        let req = msg::eoe_set_ip_request(&p);
+        s.esc.master_write(&msg::mailbox_buffer(MailboxType::Eoe, 1, 0, &req, 1024));
+        run(&mut s, 2);
+        let to_master = frame([0x02, 0, 0, 0, 0, 0x01], 100);
+        let f = &msg::eoe_fragments(&to_master, msg::eoe_capacity(1024), 1)[0];
+        let _ = s.esc.master_read();
+        assert!(s.esc.master_write(&msg::mailbox_buffer(MailboxType::Eoe, 2, 0, f, 1024)));
+        run(&mut s, 1);
+        assert_eq!(bridge.pump(&mut s).unwrap(), [p], "the Set IP request goes to the caller");
+        assert_eq!(bridge.port().sent, [to_master]);
+        assert_eq!(s.outbox_len(), 2, "the host's 1514-byte frame, in two fragments");
+        let st = bridge.stats();
+        assert_eq!(st, BridgeStats { to_host: 1, to_host_bytes: 100, to_master: 1, to_master_bytes: 1514 });
+    }
+
     #[test]
     fn stop_shows_init() {
         let mut s = preop(128);

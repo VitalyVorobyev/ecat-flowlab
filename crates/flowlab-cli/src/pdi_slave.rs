@@ -37,6 +37,7 @@ mod imp {
     use flowlab_mailbox::responder::ResponderLog;
     use flowlab_pdi::{Lan9252, ReadInstruction, SlaveAccess, SpiBus, SpiTuning};
     use flowlab_slave::pdi::{AlChange, MIN_MAILBOX_BYTES, PdiSlave, PdiSlaveConfig, PdiSlaveStats};
+    use flowlab_slave::bridge::{BridgeStats, EoeBridge, interface_mac};
     use flowlab_slave::wire::EthernetPort;
 
     use crate::Result;
@@ -108,21 +109,6 @@ mod imp {
 
     fn parse_tuning(s: &str) -> std::result::Result<SpiTuning, String> {
         SpiTuning::parse(s).map_err(|e| e.to_string())
-    }
-
-    /// The MAC address of interface `name`, from sysfs.
-    fn interface_mac(name: &str) -> Result<[u8; 6]> {
-        let path = format!("/sys/class/net/{name}/address");
-        let text = std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))?;
-        let mut mac = [0u8; 6];
-        let parts: Vec<&str> = text.trim().split(':').collect();
-        if parts.len() != 6 {
-            return Err(format!("{path}: `{}` is not a MAC address", text.trim()).into());
-        }
-        for (m, p) in mac.iter_mut().zip(parts) {
-            *m = u8::from_str_radix(p, 16).map_err(|_| format!("{path}: `{}` is not a MAC address", text.trim()))?;
-        }
-        Ok(mac)
     }
 
     /// Apply an EoE Set IP Parameter request to interface `name` with `ip`.
@@ -244,7 +230,7 @@ mod imp {
             eprintln!("warning: the LAN9252 specifies READ up to 30 MHz; use --read-instruction fast-read above it");
         }
         let mut bridge = match (&a.eoe_bridge, &a.eoe_host) {
-            (Some(b), Some(h)) => Some((EthernetPort::open(b)?, h.clone(), interface_mac(h)?)),
+            (Some(b), Some(h)) => Some((EoeBridge::new(EthernetPort::open(b)?, interface_mac(h)?), h.clone())),
             _ => None,
         };
         let bus = flowlab_pdi::open_spidev(&a.device, a.clock_hz, a.mode)?;
@@ -262,7 +248,7 @@ mod imp {
             link.al_state(),
             a.max_mailbox_bytes
         );
-        if let Some((_, host, _)) = &bridge {
+        if let Some((_, host)) = &bridge {
             eprintln!(
                 "EoE bridged to {} (host side {host}); Set IP Parameter requests are applied to {host}",
                 a.eoe_bridge.as_deref().unwrap_or_default()
@@ -283,8 +269,7 @@ mod imp {
         let origin = Instant::now();
         let mut second = Instant::now();
         let mut before = slave.stats();
-        let mut eoe = BridgeStats::default();
-        let mut eoe_before = eoe;
+        let mut eoe_before = BridgeStats::default();
         let result = loop {
             if stop.load(Ordering::Relaxed) || duration.is_some_and(|d| origin.elapsed() >= d) {
                 break Ok(());
@@ -297,8 +282,8 @@ mod imp {
                 Ok(_) => {}
                 Err(e) => break Err(e.into()),
             }
-            if let Some((port, host, host_mac)) = bridge.as_mut()
-                && let Err(e) = pump_bridge(&mut slave, port, host, host_mac, &mut eoe)
+            if let Some((b, host)) = bridge.as_mut()
+                && let Err(e) = pump_bridge(&mut slave, b, host)
             {
                 break Err(e);
             }
@@ -306,7 +291,8 @@ mod imp {
                 let now = slave.stats();
                 if now.messages_in != before.messages_in || now.messages_out != before.messages_out {
                     print_rate(now, before, second.elapsed().as_secs_f64());
-                    if bridge.is_some() {
+                    if let Some((b, _)) = &bridge {
+                        let eoe = b.stats();
                         eprintln!(
                             "         EoE bridge: {} frames ({} B) to the host, {} frames ({} B) to the master",
                             eoe.to_host - eoe_before.to_host,
@@ -316,7 +302,9 @@ mod imp {
                         );
                     }
                 }
-                eoe_before = eoe;
+                if let Some((b, _)) = &bridge {
+                    eoe_before = b.stats();
+                }
                 report(slave.drain_log());
                 before = now;
                 second = Instant::now();
@@ -334,44 +322,16 @@ mod imp {
         Ok(())
     }
 
-    /// Frames moved by the EoE bridge.
-    #[derive(Debug, Clone, Copy, Default)]
-    struct BridgeStats {
-        to_host: u64,
-        to_host_bytes: u64,
-        to_master: u64,
-        to_master_bytes: u64,
-    }
-
-    /// Messages waiting for "mailbox in" before the bridge stops taking frames from the host.
-    const BRIDGE_OUTBOX: usize = 8;
-
-    /// Move frames between the slave's EoE and the bridge port; apply Set IP requests.
+    /// Pump the EoE bridge once and apply the Set IP requests to the host interface.
     fn pump_bridge<S: SpiBus>(
         slave: &mut PdiSlave<SlaveAccess<S>>,
-        port: &mut EthernetPort,
+        bridge: &mut EoeBridge<EthernetPort>,
         host: &str,
-        host_mac: &mut [u8; 6],
-        st: &mut BridgeStats,
     ) -> Result<()> {
-        for p in slave.take_set_ip() {
+        for p in bridge.pump(slave)? {
             apply_set_ip(host, &p)?;
-            *host_mac = interface_mac(host)?;
+            bridge.set_host_mac(interface_mac(host)?);
             eprintln!("EoE Set IP Parameter applied to {host}: {p:?}");
-        }
-        for f in slave.take_eoe_frames() {
-            port.send(&f)?;
-            st.to_host += 1;
-            st.to_host_bytes += f.len() as u64;
-        }
-        while slave.outbox_len() < BRIDGE_OUTBOX {
-            let Some(f) = port.try_recv()? else { break };
-            // The port also sees the frames it sent; only the host's go to the master.
-            if f.len() >= 14 && f[6..12] == host_mac[..] {
-                st.to_master += 1;
-                st.to_master_bytes += f.len() as u64;
-                slave.send_eoe_frame(&f);
-            }
         }
         Ok(())
     }
