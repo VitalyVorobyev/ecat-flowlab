@@ -28,19 +28,33 @@ What FlowLab does not do, or does only partly. Each item is a property of the cu
 
 ## Lab master
 
-- **Opt-in and untested on hardware.** Only a build with `--features master` sends frames
-  ([Lab master](../guide/master.md)). The transfer engine is tested against a virtual ESC; the
-  EtherCrab layer has not run against a real slave.
+- **Opt-in; one real ESC so far.** Only a build with `--features master` sends frames
+  ([Lab master](../guide/master.md)). The transfer engine is tested against a virtual ESC, and
+  the EtherCrab layer (scan, cyclic run, FoE, CoE and EoE both ways) against the
+  [emulated slave](../guide/slave.md), in one process and over a cable between two computers.
+  From macOS it has run against one real ESC, a LAN9252 slave behind an EK1100 and EK1122:
+  scan, CoE uploads, EoE both ways and the gateway, in PRE-OP. That slave did not reach SAFE-OP
+  under EtherCrab (`run` and `transfer --op`: state transition timeout).
 - **Host timing.** Cycle starts and round trips are the host's clock around EtherCrab calls,
   including the operating system and the socket, not the wire's.
 - **One slave, one transfer** at a time; with one slave, the round-robin policy serves it every
-  cycle. FoE, CoE (SDO normal transfer) and EoE carrying UDP; no PDO channel, TCP, VoE or SoE.
+  cycle. FoE, CoE (SDO normal transfer), EoE carrying UDP and [FlowLab VoE](voe.md); no PDO
+  channel, SoE or other vendors' VoE. TCP runs only through the gateway, whose TCP/IP stack is
+  smoltcp's: it is no model of the stack of another master (TwinCAT's is Windows').
 - **Separate frames.** EtherCrab sends each mailbox access as its own Ethernet frame; the
   simulator packs a cycle's write and read into one.
 - **Process data** in `run` and `transfer --op` is whatever EtherCrab maps (zeros are sent);
   distributed clocks are not configured.
 - **Master check** listens only for `--listen` seconds before starting; a master that is silent
   then is not seen.
+
+## Emulated slave
+
+- **Software, not an ESC.** `flowlab slave` answers frames once the host has received them, so
+  every time measured against it is the rig's. Results that involve it say so in their
+  assumptions; they are not lab inputs for the simulator.
+- **One port, no distributed clocks**, process data SyncManagers as plain memory (no
+  three-buffer mode), no watchdogs or events, three FMMUs ([Emulated slave](../guide/slave.md#the-esc-model)).
 
 ## ESI and ENI
 
@@ -50,7 +64,7 @@ What FlowLab does not do, or does only partly. Each item is a property of the cu
 ## Simulator
 
 - **EoE carries UDP-like datagrams**; TCP over EoE (acknowledgements, windows, retransmission)
-  is not modelled. VoE is not modelled.
+  is not modelled. VoE is FlowLab VoE only.
 - **Master policies are idealised** (fixed quota, round robin, opportunistic); none is a model
   of a particular product. Priority or weighted schedulers are not modelled.
 - **No operating system.** Master and slave scheduling latency appear only as cycle jitter
@@ -63,11 +77,28 @@ What FlowLab does not do, or does only partly. Each item is a property of the cu
 - **LAN9252 over SPI only**, through Linux spidev (`flowlab pdi-bench`); other ESCs, the
   LAN9252's host bus interface, dual/quad SPI and kernel drivers are not covered. On macOS and
   Windows only `--sim` runs.
-- **Untested on hardware.** The protocol follows the data sheet, Microchip's application notes
-  and the SOES hardware layer, and is tested against FlowLab's own simulated LAN9252, not against
-  a real one.
+- **One board.** The protocol follows the data sheet, Microchip's application notes and the
+  SOES hardware layer, and is tested against FlowLab's own simulated LAN9252. It has run on one
+  real board (a Verdin iMX8MP with a LAN9252 on SPI), reads and writes, up to 25 MHz
+  ([measured results](../studies/bulk-transfer/lab-results.md)).
 - **Its own access pattern.** It times one access at a fixed address per size; a stack that
-  splits or merges accesses differently can time differently.
+  splits or merges accesses differently, or spends time between accesses, can time
+  differently. The benchmark bounds what the SPI allows, not what a given stack does.
+
+## PDI slave
+
+- **Mailbox only.** `flowlab pdi-slave` serves AL Control and the mailbox (INIT, PRE-OP): no
+  process data (SAFE-OP, OP), distributed clocks, watchdogs or the SyncManager repeat request.
+  Its results show what the ESC, its SPI and the master carry, not what a product's
+  application delivers with all of those running.
+- **LAN9252 on Linux spidev, polled.** It polls the ESC in a loop that keeps one core busy;
+  the LAN9252's IRQ pin is not used. It has run on one board.
+- **EoE bridge on Linux**, to one end of a veth pair, with root rights.
+
+## PHY registers
+
+- `flowlab pdi-phy` reads the LAN9252's PHYs through the ESC's MII interface; registers 18, 27
+  and 31 are decoded as the LAN9252 data sheet defines them, which other PHYs may not share.
 
 ## Platforms
 

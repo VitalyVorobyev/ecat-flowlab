@@ -9,7 +9,7 @@ use std::collections::VecDeque;
 
 use ecat_wire::{CoeHeader, CoeService, FoeHeader, FoeOpcode, MailboxType, SdoCommand, SdoHeader, segment_data_len};
 use flowlab_mailbox::msg::{self, EOE_HEADERS, EoeAddresses, EoeReassembler};
-use flowlab_mailbox::payload_bytes;
+use flowlab_mailbox::{payload_bytes, voe};
 use sha2::{Digest, Sha256};
 
 use crate::spec::{PDO_ACK_BYTES, PDO_CHUNK_HEADER};
@@ -686,6 +686,209 @@ impl ChannelReceiver {
     }
 }
 
+// ---------------------------------------------------------------------------------------------
+// FlowLab VoE: DATA acknowledged once per window, the receiving slave's DONE ends a write
+// ---------------------------------------------------------------------------------------------
+
+fn voe_msg(body: Vec<u8>) -> (MailboxType, Vec<u8>) {
+    (MailboxType::Voe, body)
+}
+
+/// Sends the payload in FlowLab VoE DATA messages, at most `window` unacknowledged; goes back
+/// to the message an ACK names when it is behind what was sent (a gap at the receiver). The
+/// master side opens with OPEN and ends on the slave's DONE; the slave side answers OPEN with
+/// READY and ends on the master's ACK of the last message.
+pub(crate) struct VoeSender {
+    seed: u64,
+    total: u64,
+    capacity: usize,
+    window: u64,
+    initiator: bool,
+    opened: bool,
+    ready: bool,
+    ready_pending: bool,
+    sent: u64,
+    acked: u64,
+    messages: u64,
+    finished: bool,
+}
+
+impl VoeSender {
+    pub(crate) fn new(seed: u64, total: u64, window: u16, mailbox_len: usize, initiator: bool) -> Self {
+        let capacity = voe::capacity(mailbox_len).max(1);
+        Self {
+            seed,
+            total,
+            capacity,
+            window: window.max(1).into(),
+            initiator,
+            opened: false,
+            ready: false,
+            ready_pending: false,
+            sent: 0,
+            acked: 0,
+            messages: total.div_ceil(capacity as u64),
+            finished: false,
+        }
+    }
+}
+
+impl Endpoint for VoeSender {
+    fn next(&mut self) -> Option<(MailboxType, Vec<u8>)> {
+        if self.initiator && !self.opened {
+            self.opened = true;
+            return Some(voe_msg(voe::open(voe::Direction::ToSlave, self.window as u16, self.total)));
+        }
+        if self.ready_pending {
+            self.ready_pending = false;
+            return Some(voe_msg(voe::ready(self.window as u16, self.total)));
+        }
+        if !self.ready || self.finished || self.sent >= self.messages || self.sent >= self.acked + self.window {
+            return None;
+        }
+        let offset = self.sent * self.capacity as u64;
+        let mut data = vec![0u8; (self.total - offset).min(self.capacity as u64) as usize];
+        payload_bytes(self.seed, offset, &mut data);
+        let m = voe::encode(voe::Op::Data, self.sent as u32, &data);
+        self.sent += 1;
+        Some(voe_msg(m))
+    }
+    fn on(&mut self, t: MailboxType, body: &[u8], _: u64) {
+        let Some(m) = voe::parse(body).filter(|_| t == MailboxType::Voe) else { return };
+        match m.op {
+            voe::Op::Ready if self.initiator => {
+                if let Some((w, _)) = voe::parse_ready(m.tail) {
+                    self.window = self.window.min(w.max(1).into());
+                }
+                self.ready = true;
+            }
+            voe::Op::Open if !self.initiator => {
+                if let Some((_, w, _)) = voe::parse_open(m.tail) {
+                    self.window = u64::from(w.clamp(1, voe::MAX_WINDOW));
+                }
+                self.ready = true;
+                self.ready_pending = true;
+            }
+            voe::Op::Ack => {
+                let n = voe::unwrap_seq(self.acked, m.seq);
+                if n <= self.sent {
+                    // Behind what was sent: the receiver misses message n; send again from there.
+                    self.acked = n;
+                    self.sent = n;
+                }
+            }
+            voe::Op::Done if self.initiator => self.finished = true,
+            _ => {}
+        }
+    }
+    fn wants_input(&self) -> bool {
+        !self.done()
+    }
+    fn done(&self) -> bool {
+        if self.initiator { self.finished } else { self.ready && !self.ready_pending && self.acked >= self.messages }
+    }
+}
+
+/// Receives a FlowLab VoE payload: an ACK after every `window` DATA messages (and, on the
+/// master side, after the last); on the slave side DONE with length and SHA-256 after the
+/// last. The master side opens with OPEN; a gap in the numbers is acknowledged once.
+pub(crate) struct VoeReceiver {
+    sink: Sink,
+    window: u64,
+    initiator: bool,
+    open: bool,
+    count: u64,
+    pending: VecDeque<(MailboxType, Vec<u8>)>,
+    gap_reported: Option<u64>,
+    finished: bool,
+}
+
+impl VoeReceiver {
+    pub(crate) fn new(sink: Sink, window: u16, initiator: bool) -> Self {
+        let window = u64::from(window.max(1));
+        let mut pending = VecDeque::new();
+        if initiator {
+            pending.push_back(voe_msg(voe::open(voe::Direction::FromSlave, window as u16, 0)));
+        }
+        Self { sink, window, initiator, open: false, count: 0, pending, gap_reported: None, finished: false }
+    }
+
+    fn ack(&mut self) {
+        self.pending.push_back(voe_msg(voe::encode(voe::Op::Ack, self.count as u32, &[])));
+    }
+
+    fn finish(&mut self) {
+        self.finished = true;
+        if self.initiator {
+            self.ack();
+        } else {
+            let hex = self.sink.sha256();
+            let digest: Vec<u8> =
+                (0..32).map(|i| u8::from_str_radix(&hex[2 * i..2 * i + 2], 16).unwrap_or(0)).collect();
+            let digest: [u8; 32] = digest.try_into().unwrap_or([0; 32]);
+            self.pending.push_back(voe_msg(voe::done(self.sink.got, &digest)));
+        }
+    }
+}
+
+impl Endpoint for VoeReceiver {
+    fn next(&mut self) -> Option<(MailboxType, Vec<u8>)> {
+        self.pending.pop_front()
+    }
+    fn on(&mut self, t: MailboxType, body: &[u8], now: u64) {
+        let Some(m) = voe::parse(body).filter(|_| t == MailboxType::Voe) else { return };
+        match m.op {
+            voe::Op::Open if !self.initiator => {
+                if let Some((_, w, _)) = voe::parse_open(m.tail) {
+                    self.window = u64::from(w.clamp(1, voe::MAX_WINDOW));
+                }
+                self.open = true;
+                self.pending.push_back(voe_msg(voe::ready(self.window as u16, self.sink.total)));
+                if self.sink.total == 0 {
+                    self.finish();
+                }
+            }
+            voe::Op::Ready if self.initiator => {
+                if let Some((w, _)) = voe::parse_ready(m.tail) {
+                    self.window = self.window.min(w.max(1).into());
+                }
+                self.open = true;
+                if self.sink.total == 0 {
+                    self.finished = true;
+                }
+            }
+            voe::Op::Data if self.open && !self.finished => match voe::classify(self.count, m.seq) {
+                voe::Arrival::Next => {
+                    self.gap_reported = None;
+                    let room = (self.sink.total - self.sink.got) as usize;
+                    self.sink.deliver(&m.tail[..m.tail.len().min(room)], now);
+                    self.count += 1;
+                    if self.sink.complete() {
+                        self.finish();
+                    } else if self.count.is_multiple_of(self.window) {
+                        self.ack();
+                    }
+                }
+                voe::Arrival::Ahead if self.gap_reported != Some(self.count) => {
+                    self.gap_reported = Some(self.count);
+                    self.ack();
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+    fn wants_input(&self) -> bool {
+        !self.finished
+    }
+    fn done(&self) -> bool {
+        self.finished && self.pending.is_empty()
+    }
+    fn sink(&self) -> Option<&Sink> {
+        Some(&self.sink)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -728,6 +931,16 @@ mod tests {
                 ("foe read", Box::new(FoeReceiver::new(k(), mbx, true)), Box::new(FoeSender::new(s(), mbx, false))),
                 ("sdo download", Box::new(SdoSender::new(s(), len, mbx, true)), Box::new(SdoReceiver::new(k(), false))),
                 ("sdo upload", Box::new(SdoReceiver::new(k(), true)), Box::new(SdoSender::new(s(), len, mbx, false))),
+                (
+                    "voe write",
+                    Box::new(VoeSender::new(seed, len, 4, mbx, true)),
+                    Box::new(VoeReceiver::new(k(), 4, false)),
+                ),
+                (
+                    "voe read",
+                    Box::new(VoeReceiver::new(k(), 4, true)),
+                    Box::new(VoeSender::new(seed, len, 4, mbx, false)),
+                ),
             ];
             for (name, mut a, mut b) in cases {
                 pump(a.as_mut(), b.as_mut());

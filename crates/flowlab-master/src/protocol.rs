@@ -13,6 +13,7 @@ use ecat_wire::{
     segment_data_len,
 };
 use flowlab_mailbox::msg::{self, EoeAddresses, EoeReassembler, eoe_fragments, foe, udp_frame, udp_payload};
+use flowlab_mailbox::voe;
 
 /// One message for the slave.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,6 +40,12 @@ pub(crate) trait Endpoint {
     fn on(&mut self, kind: MailboxType, body: &[u8]) -> Result<bool, String>;
     /// The slave may have messages for the master (the master reads only then).
     fn wants_input(&self) -> bool;
+    /// The slave may send messages the transfer does not wait for (EoE: its network stack's
+    /// ARP requests and ICMP replies). The master reads them, so that a full "mailbox in" does
+    /// not stop the slave from taking the next message, but expects no reply.
+    fn reads_unsolicited(&self) -> bool {
+        false
+    }
     /// The master's part is finished.
     fn done(&self) -> bool;
     /// The slave asked for the last message again (FoE busy): resend it.
@@ -51,6 +58,11 @@ pub(crate) trait Endpoint {
     }
     /// Payload size, once known (from the master's payload or the slave's announcement).
     fn total(&self) -> Option<u64>;
+    /// Whether the slave confirmed the payload it received (master → slave), if the protocol
+    /// says.
+    fn verified(&self) -> Option<bool> {
+        None
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -452,6 +464,8 @@ impl Endpoint for SdoUpload {
 
 /// EoE send: the payload in UDP datagrams of `mtu` bytes (IP MTU), each frame fragmented to
 /// fit "mailbox out". No acknowledgements: the transfer ends when the last fragment is written.
+/// Meanwhile the master reads what the slave's network stack sends (ARP, ICMP): a stack that
+/// waits for "mailbox in" to be read takes no further fragments otherwise.
 pub(crate) struct EoeSend {
     data: Vec<u8>,
     addresses: EoeAddresses,
@@ -496,6 +510,10 @@ impl Endpoint for EoeSend {
 
     fn wants_input(&self) -> bool {
         false
+    }
+
+    fn reads_unsolicited(&self) -> bool {
+        !self.done()
     }
 
     fn done(&self) -> bool {
@@ -555,5 +573,203 @@ impl Endpoint for EoeReceive {
 
     fn total(&self) -> Option<u64> {
         Some(self.expected)
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// FlowLab VoE
+// ---------------------------------------------------------------------------------------------
+
+fn voe_message(kind: MailboxType, body: &[u8]) -> Result<Option<voe::Message<'_>>, String> {
+    if kind != MailboxType::Voe {
+        return Ok(None);
+    }
+    let m = voe::parse(body).ok_or("a VoE message from the slave that is not FlowLab VoE")?;
+    if m.op == voe::Op::Abort {
+        return Err(voe::abort_text(m.tail));
+    }
+    Ok(Some(m))
+}
+
+/// FlowLab VoE to the slave: OPEN, READY, then DATA whenever "mailbox out" is free while fewer
+/// than a window are unacknowledged; the slave's DONE (length and SHA-256) ends and verifies it.
+pub(crate) struct VoeSend {
+    data: Vec<u8>,
+    capacity: usize,
+    window: u64,
+    opened: bool,
+    ready: bool,
+    sent: u64,
+    acked: u64,
+    messages: u64,
+    verified: Option<bool>,
+}
+
+impl VoeSend {
+    pub(crate) fn new(data: Vec<u8>, window: u16, out_len: usize) -> Self {
+        let capacity = voe::capacity(out_len).max(1);
+        let messages = (data.len() as u64).div_ceil(capacity as u64);
+        Self {
+            data,
+            capacity,
+            window: window.into(),
+            opened: false,
+            ready: false,
+            sent: 0,
+            acked: 0,
+            messages,
+            verified: None,
+        }
+    }
+}
+
+impl Endpoint for VoeSend {
+    fn next(&mut self) -> Option<Outgoing> {
+        if !self.opened {
+            self.opened = true;
+            let open = voe::open(voe::Direction::ToSlave, self.window as u16, self.data.len() as u64);
+            return Some(Outgoing::control(MailboxType::Voe, open));
+        }
+        if !self.ready || self.sent >= self.messages || self.sent >= self.acked + self.window {
+            return None;
+        }
+        let start = self.sent as usize * self.capacity;
+        let end = (start + self.capacity).min(self.data.len());
+        let body = voe::encode(voe::Op::Data, self.sent as u32, &self.data[start..end]);
+        self.sent += 1;
+        Some(Outgoing { kind: MailboxType::Voe, body, payload_end: Some(end as u64) })
+    }
+
+    fn on(&mut self, kind: MailboxType, body: &[u8]) -> Result<bool, String> {
+        let Some(m) = voe_message(kind, body)? else { return Ok(false) };
+        match m.op {
+            voe::Op::Ready => {
+                let (window, _) = voe::parse_ready(m.tail).ok_or("malformed VoE READY")?;
+                self.window = u64::from(window.max(1)).min(self.window);
+                self.ready = true;
+            }
+            voe::Op::Ack => self.acked = self.acked.max(voe::unwrap_seq(self.acked, m.seq).min(self.sent)),
+            voe::Op::Done => {
+                let (len, digest) = voe::parse_done(m.tail).ok_or("malformed VoE DONE")?;
+                self.acked = self.sent;
+                self.verified = Some(len == self.data.len() as u64 && digest == voe::sha256(&self.data));
+            }
+            _ => {}
+        }
+        Ok(true)
+    }
+
+    fn wants_input(&self) -> bool {
+        self.opened && self.verified.is_none()
+    }
+
+    fn done(&self) -> bool {
+        self.verified.is_some()
+    }
+
+    fn verified(&self) -> Option<bool> {
+        self.verified
+    }
+
+    fn total(&self) -> Option<u64> {
+        Some(self.data.len() as u64)
+    }
+}
+
+/// FlowLab VoE from the slave: OPEN, then the slave's READY (with the length) and DATA
+/// messages; an ACK after every window and after the last one.
+pub(crate) struct VoeReceive {
+    window: u64,
+    opened: bool,
+    length: Option<u64>,
+    count: u64,
+    data: Vec<u8>,
+    acks: VecDeque<Outgoing>,
+    /// The message count a gap was reported at (one ACK per gap, or the slave goes back once
+    /// per message after it).
+    gap_reported: Option<u64>,
+}
+
+impl VoeReceive {
+    pub(crate) fn new(window: u16) -> Self {
+        Self {
+            window: window.into(),
+            opened: false,
+            length: None,
+            count: 0,
+            data: Vec::new(),
+            acks: VecDeque::new(),
+            gap_reported: None,
+        }
+    }
+
+    fn ack(&mut self) {
+        // A newer ACK replaces one not yet sent: it says the same and more.
+        self.acks.clear();
+        let body = voe::encode(voe::Op::Ack, self.count as u32, &[]);
+        self.acks.push_back(Outgoing::control(MailboxType::Voe, body));
+    }
+
+    fn complete(&self) -> bool {
+        self.length.is_some_and(|n| self.data.len() as u64 >= n)
+    }
+}
+
+impl Endpoint for VoeReceive {
+    fn next(&mut self) -> Option<Outgoing> {
+        if !self.opened {
+            self.opened = true;
+            let open = voe::open(voe::Direction::FromSlave, self.window as u16, 0);
+            return Some(Outgoing::control(MailboxType::Voe, open));
+        }
+        self.acks.pop_front()
+    }
+
+    fn on(&mut self, kind: MailboxType, body: &[u8]) -> Result<bool, String> {
+        let Some(m) = voe_message(kind, body)? else { return Ok(false) };
+        match m.op {
+            voe::Op::Ready => {
+                let (window, length) = voe::parse_ready(m.tail).ok_or("malformed VoE READY")?;
+                self.window = u64::from(window.max(1)).min(self.window);
+                self.length = Some(length);
+            }
+            voe::Op::Data if self.length.is_some() => {
+                match voe::classify(self.count, m.seq) {
+                    voe::Arrival::Next => self.gap_reported = None,
+                    voe::Arrival::Ahead => {
+                        if self.gap_reported != Some(self.count) {
+                            self.gap_reported = Some(self.count);
+                            self.ack();
+                        }
+                        return Ok(true);
+                    }
+                    voe::Arrival::Behind => return Ok(true),
+                }
+                let room = (self.length.unwrap_or(0) - self.data.len() as u64) as usize;
+                self.data.extend_from_slice(&m.tail[..m.tail.len().min(room)]);
+                self.count += 1;
+                if self.complete() || self.count.is_multiple_of(self.window) {
+                    self.ack();
+                }
+            }
+            _ => {}
+        }
+        Ok(true)
+    }
+
+    fn wants_input(&self) -> bool {
+        self.opened && !self.complete()
+    }
+
+    fn done(&self) -> bool {
+        self.complete() && self.acks.is_empty()
+    }
+
+    fn received(&self) -> Option<&[u8]> {
+        Some(&self.data)
+    }
+
+    fn total(&self) -> Option<u64> {
+        self.length
     }
 }

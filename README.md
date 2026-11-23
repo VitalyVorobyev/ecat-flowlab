@@ -39,6 +39,12 @@ flowlab study configs/studies/bulk-transfer/foe-sweep.json
 flowlab plan
 ```
 
+The [lab toolbox](book/src/guide/toolbox.md) reaches hardware, each tool opt-in: FlowLab's own
+master (`flowlab master scan|run|transfer|gateway`), an emulated slave (`flowlab slave`),
+FlowLab's slave application on a real LAN9252 (`flowlab pdi-slave`, for example on a Toradex
+Verdin), and instruments for the SPI (`pdi-bench`), the PHYs (`pdi-phy`) and TCP over EoE
+(`tcp-bench`).
+
 (`cargo install --path crates/flowlab-cli` installs `flowlab`.)
 
 ## Provenance
@@ -53,17 +59,23 @@ A default build reads files and the output of capture tools, and never sends fra
 capture (`flowlab capture`, or the Live view after `cargo ui -- --live`) runs Wireshark's dumpcap
 or tcpdump, which only listen. `flowlab pdi-bench` talks to a LAN9252 over SPI on the slave's
 host: it refuses unless the ESC is in INIT, never touches AL Control or SyncManager registers,
-and writes only with `--allow-writes` into a named area of process RAM. The lab master
+and writes only with `--allow-writes` into a named area of process RAM; `flowlab pdi-phy` writes
+the PHYs only with `--allow-phy-writes`. The lab master
 (`flowlab master`, EtherCrab) sends frames: it is only in a build with `--features master`, and
 each command needs an interface name, `--isolated-lab-network` and a segment where no other
-master is heard ([Lab master](book/src/guide/master.md)). `flowlab serve` has no
+master is heard ([Lab master](book/src/guide/master.md)). The emulated slave (`flowlab slave`)
+answers EtherCAT frames on an ordinary Ethernet port: it is only in a build with
+`--features slave` and needs an interface name and `--isolated-lab-network`
+([Emulated slave](book/src/guide/slave.md)). The PDI slave (`flowlab pdi-slave`) serves a real
+ESC in place of the slave's own application: only in a build with `--features slave` and with
+`--replace-slave-application` ([PDI slave](book/src/guide/pdi-slave.md)). `flowlab serve` has no
 authentication and can read any file you can, so keep it on loopback.
 
 ## Repository
 
 | Path | Content |
 |---|---|
-| `crates/` | `ecat-wire` (codec), `flowlab-core`, `-capture`, `-analysis`, `-synth`, `-mailbox` (policies, payload), `-sim`, `-devices`, `-study`, `-live`, `-pdi` (LAN9252 SPI timing), `-master` (lab master, opt-in), `-server`, `-cli` |
+| `crates/` | `ecat-wire` (codec), `flowlab-core`, `-capture`, `-analysis`, `-synth`, `-mailbox` (policies, payload), `-sim`, `-devices`, `-study`, `-live`, `-pdi` (LAN9252 SPI access, timing, PHYs), `-master` (lab master and EoE gateway, opt-in), `-slave` (emulated ESC, PDI slave, EoE bridge, opt-in), `-server`, `-cli` |
 | `ui/` | React UI on the `@vitavision` lab-ui packages |
 | `configs/` | Example generator, simulator and study specs |
 | `book/` | The documentation (mdBook) |

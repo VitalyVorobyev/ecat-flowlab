@@ -36,7 +36,7 @@ mod imp {
         EoeAddresses, MeasuredTransfer, Payload, PollMode, TransferJob, TransferOptions, TransferProtocol, setup_like,
     };
 
-    use crate::{Result, ensure_parent, ns, parse_station};
+    use crate::{Result, ensure_parent, ns, parse_object, parse_station};
 
     /// Arguments of `flowlab master`.
     #[derive(clap::Args)]
@@ -104,9 +104,79 @@ mod imp {
             #[arg(short, long)]
             out: Option<PathBuf>,
         },
-        /// Move a payload to or from a slave with FoE, CoE or EoE, under a mailbox policy and
-        /// cycle time, and measure it like the simulator does.
+        /// Move a payload to or from a slave with FoE, CoE, EoE or FlowLab VoE, under a mailbox
+        /// policy and cycle time, and measure it like the simulator does.
         Transfer(Box<TransferArgs>),
+        /// The master's own TCP/IP stack on a slave's EoE link: optionally configure the slave's
+        /// interface (EoE Set IP Parameter), then forward local TCP ports (127.0.0.1) to the
+        /// slave's ports until Ctrl-C or `--duration`. No host interface, no root.
+        Gateway(Box<GatewayArgs>),
+    }
+
+    #[derive(clap::Args)]
+    struct GatewayArgs {
+        #[command(flatten)]
+        safety: Safety,
+        /// Station address of the slave.
+        #[arg(long, value_parser = parse_station)]
+        station: u16,
+        /// The slave's IPv4 address.
+        #[arg(long, value_parser = parse_ip)]
+        slave_ip: [u8; 4],
+        /// The master's IPv4 address on the EoE link (same subnet).
+        #[arg(long, value_parser = parse_ip)]
+        master_ip: [u8; 4],
+        /// Prefix length of the subnet.
+        #[arg(long, default_value_t = 24)]
+        prefix: u8,
+        /// Send an EoE Set IP Parameter request first: the slave's IP, the subnet mask, and
+        /// `--slave-mac` / `--slave-gateway` if given.
+        #[arg(long)]
+        set_ip: bool,
+        /// With --set-ip: the MAC address the slave's interface gets.
+        #[arg(long, value_parser = parse_mac, requires = "set_ip")]
+        slave_mac: Option<[u8; 6]>,
+        /// With --set-ip: the slave's default gateway.
+        #[arg(long, value_parser = parse_ip, requires = "set_ip")]
+        slave_gateway: Option<[u8; 4]>,
+        /// The master's MAC address on the EoE link.
+        #[arg(long, value_parser = parse_mac, default_value = "02:46:4c:00:00:01")]
+        master_mac: [u8; 6],
+        /// IP MTU of the master's side, bytes: its TCP segments and the segment size it
+        /// announces carry up to MTU − 40.
+        #[arg(long, default_value_t = 1500)]
+        mtu: u16,
+        /// Forward LOCAL:REMOTE: 127.0.0.1:LOCAL to the slave's port REMOTE (repeatable).
+        #[arg(long, value_parser = parse_forward)]
+        forward: Vec<flowlab_master::PortForward>,
+        /// TCP receive and send buffer per connection, bytes (the receive window).
+        #[arg(long, default_value_t = 65536)]
+        tcp_buffer: usize,
+        /// Delay of the master's TCP acknowledgements, ms (0: acknowledge every segment at
+        /// once).
+        #[arg(long, default_value_t = 10)]
+        ack_delay_ms: u64,
+        /// One mailbox pass (a write if a message waits, and a read) per cycle of this length,
+        /// µs, as a cyclic master serves the mailbox; 0: passes back to back.
+        #[arg(long, default_value_t = 0, value_name = "US")]
+        cycle_us: u64,
+        /// Set the mailbox SyncManagers to this many bytes each (INIT, reconfigure, PRE-OP)
+        /// instead of the EEPROM's sizes. Nothing is written to the EEPROM; a stack that does
+        /// not allow the size refuses PRE-OP, and the original SyncManagers are restored.
+        #[arg(long, value_name = "BYTES")]
+        mailbox_bytes: Option<u16>,
+        /// Stop after this long, seconds.
+        #[arg(long, default_value_t = 3600.0, value_name = "SECONDS")]
+        duration: f64,
+        /// Write the result as JSON (default: results/master/gateway-UNIXTIME.json).
+        #[arg(short, long)]
+        out: Option<PathBuf>,
+    }
+
+    fn parse_forward(s: &str) -> std::result::Result<flowlab_master::PortForward, String> {
+        let (l, r) = s.split_once(':').ok_or_else(|| format!("`{s}` is not LOCAL:REMOTE"))?;
+        let port = |p: &str| p.parse::<u16>().map_err(|_| format!("`{p}` is not a port"));
+        Ok(flowlab_master::PortForward { local_port: port(l)?, remote_port: port(r)? })
     }
 
     #[derive(clap::Args)]
@@ -125,7 +195,7 @@ mod imp {
         #[arg(long, default_value_t = 0, requires = "like")]
         transfer: usize,
         /// Protocol.
-        #[arg(long, value_parser = ["foe", "coe", "eoe"], required_unless_present = "like")]
+        #[arg(long, value_parser = ["foe", "coe", "eoe", "voe"], required_unless_present = "like")]
         protocol: Option<String>,
         /// Direction.
         #[arg(long, value_parser = ["to-slave", "from-slave"], default_value = "to-slave")]
@@ -134,7 +204,7 @@ mod imp {
         #[arg(long, conflicts_with = "bytes")]
         file: Option<PathBuf>,
         /// To the slave: send this many bytes of the simulator's payload for `--seed`. From
-        /// the slave: wait for this many bytes (required for EoE).
+        /// the slave: wait for this many bytes (required for EoE; FlowLab VoE announces it).
         #[arg(long)]
         bytes: Option<u64>,
         /// Seed of the generated payload (`--bytes`); the expected SHA-256 for a receive.
@@ -162,6 +232,11 @@ mod imp {
         /// simulator does); otherwise stay in PRE-OP.
         #[arg(long)]
         op: bool,
+        /// Set the mailbox SyncManagers to this many bytes each (INIT, reconfigure, PRE-OP)
+        /// instead of the EEPROM's sizes. Nothing is written to the EEPROM; a stack that does
+        /// not allow the size refuses PRE-OP, and the original SyncManagers are restored.
+        #[arg(long, value_name = "BYTES")]
+        mailbox_bytes: Option<u16>,
         /// FoE file name.
         #[arg(long, default_value = "flowlab.bin")]
         foe_file: String,
@@ -189,6 +264,9 @@ mod imp {
         /// EoE: UDP destination port.
         #[arg(long)]
         eoe_port: Option<u16>,
+        /// FlowLab VoE: DATA messages per acknowledgement (the slave may grant fewer).
+        #[arg(long, default_value_t = flowlab_mailbox::voe::DEFAULT_WINDOW)]
+        voe_window: u16,
         /// Without a reply for this long, send the last message again with a new counter, ms.
         #[arg(long, default_value_t = 1000, value_name = "MS")]
         reply_timeout_ms: u64,
@@ -198,27 +276,17 @@ mod imp {
         /// Give up after this long, seconds.
         #[arg(long, default_value_t = 600.0, value_name = "SECONDS")]
         max_duration: f64,
-        /// Counter of the first mailbox message (1–7).
-        #[arg(long, default_value_t = 1)]
-        first_counter: u8,
+        /// Counter of the first mailbox message, 0–7 (default: 1; with --op 0, the start
+        /// value: EtherCrab used the mailbox to map the process data, so the slave's last
+        /// counter is unknown).
+        #[arg(long, value_parser = clap::value_parser!(u8).range(0..=7))]
+        first_counter: Option<u8>,
         /// Keep at most this many per-cycle records in the JSON.
         #[arg(long, default_value_t = 100_000)]
         records: usize,
         /// Write the result as JSON (default: results/master/transfer-UNIXTIME.json).
         #[arg(short, long)]
         out: Option<PathBuf>,
-    }
-
-    fn parse_object(s: &str) -> std::result::Result<(u16, u8), String> {
-        let bad = || format!("`{s}`: expected INDEX:SUBINDEX, e.g. 0x2000:0");
-        let (i, sub) = s.split_once(':').ok_or_else(bad)?;
-        let num = |v: &str| match v.strip_prefix("0x").or_else(|| v.strip_prefix("0X")) {
-            Some(h) => u32::from_str_radix(h, 16).ok(),
-            None => v.parse().ok(),
-        };
-        let index = num(i).and_then(|v| u16::try_from(v).ok()).ok_or_else(bad)?;
-        let sub = num(sub).and_then(|v| u8::try_from(v).ok()).ok_or_else(bad)?;
-        Ok((index, sub))
     }
 
     fn parse_mac(s: &str) -> std::result::Result<[u8; 6], String> {
@@ -351,7 +419,105 @@ mod imp {
                 write_json(&out_path(out, "run"), serde_json::to_value(&r)?)
             }
             MasterCmd::Transfer(t) => transfer(*t),
+            MasterCmd::Gateway(g) => gateway(*g),
         }
+    }
+
+    fn gateway(a: GatewayArgs) -> Result<()> {
+        if a.duration.is_nan() || a.duration <= 0.0 {
+            return Err("--duration must be positive".into());
+        }
+        let mask = |p: u8| (u32::MAX << (32 - u32::from(p.min(32)))).to_be_bytes();
+        let set_ip = a.set_ip.then(|| flowlab_master::EoeIpParameters {
+            mac: a.slave_mac,
+            ip: Some(a.slave_ip),
+            subnet_mask: Some(mask(a.prefix)),
+            gateway: a.slave_gateway,
+        });
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag = stop.clone();
+        std::thread::spawn(move || {
+            if let Ok(rt) = tokio::runtime::Builder::new_current_thread().enable_all().build() {
+                rt.block_on(async {
+                    let _ = tokio::signal::ctrl_c().await;
+                });
+                flag.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+        });
+        let cfg = flowlab_master::GatewayConfig {
+            mailbox: flowlab_master::MailboxLayout {
+                station: a.station,
+                out_start: 0,
+                out_len: 0,
+                in_start: 0,
+                in_len: 0,
+            },
+            set_ip,
+            slave_ip: a.slave_ip,
+            master_mac: a.master_mac,
+            master_ip: a.master_ip,
+            prefix_len: a.prefix,
+            mtu: a.mtu,
+            forwards: a.forward.clone(),
+            tcp_buffer_bytes: a.tcp_buffer,
+            ack_delay_ms: (a.ack_delay_ms > 0).then_some(a.ack_delay_ms),
+            cycle_ns: a.cycle_us * 1000,
+            max_duration_ns: (a.duration * 1e9) as u64,
+            stop,
+            assumptions: Vec::new(),
+        };
+        let session = open(&a.safety)?;
+        let ip = |o: [u8; 4]| std::net::Ipv4Addr::from(o).to_string();
+        eprintln!(
+            "EoE gateway to {:#06x}: master {} ↔ slave {} (MTU {}); Ctrl-C stops",
+            a.station,
+            ip(a.master_ip),
+            ip(a.slave_ip),
+            a.mtu
+        );
+        for f in &a.forward {
+            eprintln!("  127.0.0.1:{} → {}:{}", f.local_port, ip(a.slave_ip), f.remote_port);
+        }
+        let r = session.gateway(a.station, cfg, a.mailbox_bytes, &mut |line| eprintln!("{line}"))?;
+        let secs = r.duration_ns / 1e9;
+        println!(
+            "EoE gateway {:#06x} \"{}\"  [MEASURED, host timing]  {:.1} s, mailbox {}/{} B",
+            r.station, r.slave, secs, r.mailbox_out_bytes, r.mailbox_in_bytes
+        );
+        println!(
+            "  messages {} to / {} from the slave ({:.0} / {:.0} per s), {} rejected writes, {} empty reads, {} lost, {} duplicates, {} other",
+            r.messages_to_slave,
+            r.messages_from_slave,
+            r.messages_to_slave as f64 / secs,
+            r.messages_from_slave as f64 / secs,
+            r.rejected_writes,
+            r.empty_reads,
+            r.lost_frames,
+            r.duplicate_messages,
+            r.other_messages
+        );
+        println!(
+            "  frames {} to ({} B) / {} from ({} B) the slave, {} broken fragments; access round trip p50 write {} read {}",
+            r.frames_to_slave,
+            r.frame_bytes_to_slave,
+            r.frames_from_slave,
+            r.frame_bytes_from_slave,
+            r.broken_fragments,
+            ns(r.write_access.p50_ns),
+            ns(r.read_access.p50_ns)
+        );
+        for c in &r.connections {
+            println!(
+                "  :{} → :{}  {} B up, {} B down{}{}",
+                c.local_port,
+                c.remote_port,
+                c.bytes_to_slave,
+                c.bytes_from_slave,
+                c.goodput_from_slave_bps.map_or(String::new(), |g| format!(", {:.1} kB/s down", g / 8e3)),
+                c.error.as_ref().map_or(String::new(), |e| format!(" ({e})"))
+            );
+        }
+        write_json(&out_path(a.out, "gateway"), serde_json::to_value(&r)?)
     }
 
     fn transfer(a: TransferArgs) -> Result<()> {
@@ -393,6 +559,7 @@ mod imp {
                 let protocol = match a.protocol.as_deref() {
                     Some("foe") => TransferProtocol::Foe { file_name: a.foe_file.clone(), password: a.foe_password },
                     Some("coe") => TransferProtocol::Coe { index: a.sdo.0, subindex: a.sdo.1 },
+                    Some("voe") => TransferProtocol::Voe { window: a.voe_window },
                     _ => TransferProtocol::Eoe { mtu_bytes: a.eoe_mtu, addresses },
                 };
                 let generated = |n: u64, seed: u64| flowlab_mailbox::payload(seed, n as usize);
@@ -435,7 +602,7 @@ mod imp {
             reply_timeout_ns: a.reply_timeout_ms * 1_000_000,
             max_resends: a.max_resends,
             max_duration_ns: (a.max_duration * 1e9) as u64,
-            first_counter: a.first_counter,
+            first_counter: a.first_counter.unwrap_or(if a.op { 0 } else { 1 }),
             max_cycle_records: a.records,
             ..TransferOptions::default()
         };
@@ -454,7 +621,7 @@ mod imp {
         };
         let session = open(&a.safety)?;
         eprintln!("transfer to/from {:#06x}: {}, cycle {}", a.station, options.policy, ns(cycle_ns as f64));
-        let r = session.transfer(a.station, job, &options, a.op)?;
+        let r = session.transfer(a.station, job, &options, a.op, a.mailbox_bytes, &mut |line| eprintln!("{line}"))?;
         print_transfer(&r);
         if let (Some(p), Some(data)) = (&a.save_received, &r.received) {
             ensure_parent(p)?;
@@ -526,6 +693,11 @@ mod imp {
             assert_eq!(parse_object("0x2000:1"), Ok((0x2000, 1)));
             assert_eq!(parse_mac("02:00:00:00:00:01"), Ok([2, 0, 0, 0, 0, 1]));
             assert_eq!(parse_ip("192.0.2.2"), Ok([192, 0, 2, 2]));
+            assert_eq!(
+                parse_forward("18080:8080"),
+                Ok(flowlab_master::PortForward { local_port: 18080, remote_port: 8080 })
+            );
+            assert!(parse_forward("8080").is_err());
         }
 
         #[test]

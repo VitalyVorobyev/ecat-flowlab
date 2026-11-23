@@ -11,6 +11,10 @@ use std::process::ExitCode;
 mod capture;
 mod master;
 mod pdi_bench;
+mod pdi_phy;
+mod pdi_slave;
+mod slave;
+mod tcp_bench;
 
 use clap::{Parser, Subcommand};
 use flowlab_analysis::mailbox::{MailboxHint, write_eoe_pcapng};
@@ -209,9 +213,13 @@ enum Cmd {
         link_mbps: u64,
     },
     /// FlowLab's own EtherCAT master on an isolated lab segment: scan, a cyclic run, mailbox
-    /// transfers measured like the simulator's. Sends frames; needs a build with
-    /// `--features master`.
+    /// transfers measured like the simulator's, and a gateway to a slave's TCP services over
+    /// EoE. Sends frames; needs a build with `--features master`.
     Master(master::MasterArgs),
+    /// An emulated EtherCAT slave on a network interface: answers a master's frames like an
+    /// ESC with FoE, CoE and EoE behind its mailbox, for testing without EtherCAT hardware.
+    /// Sends frames; needs a build with `--features slave`.
+    Slave(slave::SlaveArgs),
     /// Print a JSON Schema.
     Schema {
         /// Which schema.
@@ -237,6 +245,22 @@ enum Cmd {
     /// --allow-writes into an --area of process RAM that nothing uses. --sim times a simulated
     /// LAN9252 instead and marks the samples simulated.
     PdiBench(pdi_bench::PdiBenchArgs),
+    /// Show the LAN9252's PHY registers (link, speed, duplex, auto-negotiation, MDI/MDI-X)
+    /// through the ESC's MII management interface; with --allow-phy-writes, --set a register
+    /// or turn on --autoneg.
+    ///
+    /// Stop the slave's own application first: it shares the SPI. Checks the link first; writes
+    /// only the MII management registers (0x0510–0x0517).
+    PdiPhy(pdi_phy::PdiPhyArgs),
+    /// TCP throughput with SHA-256 checks, for TCP over EoE: `serve` on the slave's side,
+    /// `run` against it (a gateway's forwarded port). Plain TCP; no EtherCAT frames.
+    TcpBench(tcp_bench::TcpBenchArgs),
+    /// FlowLab's slave application on a real ESC (a LAN9252 over Linux spidev), in place of the
+    /// slave's own application: AL Control and the mailbox (FoE, CoE, EoE, FlowLab VoE) served
+    /// through the PDI, with mailboxes up to --max-mailbox-bytes. Writes AL Status and the
+    /// mailbox buffers: stop the slave's own application first and pass
+    /// --replace-slave-application. Needs a build with `--features slave`.
+    PdiSlave(pdi_slave::PdiSlaveArgs),
     /// Read the master's mailbox service pattern from a capture, as a simulator policy.
     Policy {
         /// Capture of the real master serving the mailbox (e.g. during an FoE transfer).
@@ -274,6 +298,20 @@ enum Cmd {
         #[arg(short, long)]
         out: Option<PathBuf>,
     },
+}
+
+/// `INDEX:SUBINDEX` of a CoE object, decimal or `0x` hex.
+#[cfg(any(feature = "master", feature = "slave"))]
+fn parse_object(s: &str) -> std::result::Result<(u16, u8), String> {
+    let bad = || format!("`{s}`: expected INDEX:SUBINDEX, e.g. 0x2000:0");
+    let (i, sub) = s.split_once(':').ok_or_else(bad)?;
+    let num = |v: &str| match v.strip_prefix("0x").or_else(|| v.strip_prefix("0X")) {
+        Some(h) => u32::from_str_radix(h, 16).ok(),
+        None => v.parse().ok(),
+    };
+    let index = num(i).and_then(|v| u16::try_from(v).ok()).ok_or_else(bad)?;
+    let sub = num(sub).and_then(|v| u8::try_from(v).ok()).ok_or_else(bad)?;
+    Ok((index, sub))
 }
 
 fn parse_station(s: &str) -> std::result::Result<u16, String> {
@@ -418,6 +456,7 @@ fn run(cli: Cli) -> Result<()> {
             },
         })?,
         Cmd::Master(m) => master::run(m)?,
+        Cmd::Slave(a) => slave::run(a)?,
         Cmd::Schema { which } => {
             let schema = match which.as_str() {
                 "sim" => flowlab_sim::spec_schema(),
@@ -483,6 +522,9 @@ fn run(cli: Cli) -> Result<()> {
             pdi_bench::fit_samples(&bytes, &samples.display().to_string(), &file_name(&samples), result, lab)?;
         }
         Cmd::PdiBench(args) => pdi_bench::run(args)?,
+        Cmd::PdiPhy(args) => pdi_phy::run(args)?,
+        Cmd::TcpBench(args) => tcp_bench::run(args)?,
+        Cmd::PdiSlave(args) => pdi_slave::run(args)?,
         Cmd::Policy { capture, station, mailbox_hints, eni, lab } => {
             let trace = Trace::read(&capture).map_err(|e| format!("{}: {e}", capture.display()))?;
             let name = trace.input.name.clone();
@@ -765,7 +807,7 @@ fn print_plan(r: &flowlab_devices::PlanResult) {
     }
 }
 
-fn ensure_parent(p: &Path) -> Result<()> {
+pub(crate) fn ensure_parent(p: &Path) -> Result<()> {
     if let Some(d) = p.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(d)?;
     }
@@ -863,6 +905,28 @@ fn print_summary(r: &CaptureReport) {
                 t.packets,
                 t.outcome,
                 t.goodput_bps.map_or(String::new(), |b| format!(", {:.1} kbit/s", b / 1e3))
+            );
+        }
+        for t in &m.voe {
+            println!(
+                "    FlowLab VoE {} station 0x{:04X}: {} B in {} DATA, window {}, {} ACKs, {} gaps, {}{}{}",
+                match t.direction {
+                    flowlab_analysis::MailboxDirection::ToSlave => "to slave",
+                    flowlab_analysis::MailboxDirection::FromSlave => "from slave",
+                },
+                t.station,
+                t.bytes,
+                t.data_messages,
+                t.window,
+                t.acks,
+                t.gaps,
+                t.outcome,
+                t.goodput_bps.map_or(String::new(), |b| format!(", {:.1} kbit/s", b / 1e3)),
+                match t.digest_matches {
+                    Some(true) => ", slave's SHA-256 matches",
+                    Some(false) => ", slave's SHA-256 DIFFERS",
+                    None => "",
+                }
             );
         }
         for c in &m.channels {

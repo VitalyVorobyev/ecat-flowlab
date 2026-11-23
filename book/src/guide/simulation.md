@@ -20,9 +20,10 @@ is the setup, in the units people use:
 - **Slaves**, in ring order: cyclic outputs and inputs, mailbox sizes, ESC RAM, forwarding
   delay, and the PDI (read and write rate in Mbit/s, overhead per access in µs, whole-buffer or
   message-only mailbox access) and the application's time per message.
-- **Transfers**: protocol (EoE, FoE, CoE SDO, PDO channel), direction, slave, payload (B, kB,
-  MB, KiB or MiB), start time, and the protocol's own parameters (EoE MTU; PDO channel bytes
-  per cycle, window, resend timeout). TCP over EoE and VoE are listed but not modelled.
+- **Transfers**: protocol (EoE, FoE, CoE SDO, [FlowLab VoE](../reference/voe.md), PDO channel),
+  direction, slave, payload (B, kB, MB, KiB or MiB), start time, and the protocol's own
+  parameters (EoE MTU; VoE window; PDO channel bytes per cycle, window, resend timeout). TCP
+  over EoE is listed but not modelled.
 - **Run**: time limit, seed, frame loss.
 
 Start from a preset (the bulk-transfer study's scenarios), or open and save the setup as a

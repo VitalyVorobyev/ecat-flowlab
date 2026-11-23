@@ -21,11 +21,25 @@ pub enum Segment<'a> {
 pub trait SpiBus {
     /// Assert chip select, run the segments in order, release chip select.
     fn transaction(&mut self, segments: &mut [Segment<'_>]) -> io::Result<()>;
+
+    /// Run several transactions in order, chip select released between them. A bus that can
+    /// queue them in one call does (Linux spidev: one ioctl, `cs_change` between them); the
+    /// default runs them one by one.
+    fn transactions(&mut self, transactions: &mut [&mut [Segment<'_>]]) -> io::Result<()> {
+        for t in transactions.iter_mut() {
+            self.transaction(t)?;
+        }
+        Ok(())
+    }
 }
 
 impl<T: SpiBus + ?Sized> SpiBus for Box<T> {
     fn transaction(&mut self, segments: &mut [Segment<'_>]) -> io::Result<()> {
         (**self).transaction(segments)
+    }
+
+    fn transactions(&mut self, transactions: &mut [&mut [Segment<'_>]]) -> io::Result<()> {
+        (**self).transactions(transactions)
     }
 }
 

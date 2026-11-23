@@ -19,7 +19,13 @@ allow = [
 ]
 # ISC (permissive, MIT-like) for one crate only: libloading, a build dependency of `pcap`,
 # which EtherCrab uses on Windows (flowlab-master's `hardware` feature).
-exceptions = [{ allow = ["ISC"], crate = "libloading" }]
+# 0BSD (public-domain-like, no conditions) for smoltcp, the TCP/IP stack of the lab master's EoE
+# gateway (flowlab-master), and its buffer crate `managed`.
+exceptions = [
+  { allow = ["ISC"], crate = "libloading" },
+  { allow = ["0BSD"], crate = "smoltcp" },
+  { allow = ["0BSD"], crate = "managed" },
+]
 
 [bans]
 multiple-versions = "allow"

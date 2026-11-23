@@ -12,7 +12,7 @@ source: [`crates/flowlab-mailbox`](https://github.com/VitalyVorobyev/ecat-flowla
 | | |
 |---|---|
 | Depends on | `ecat-wire` (the headers), `serde`, `schemars`, `ts-rs`, `sha2` |
-| Used by | `flowlab-sim` (re-exports its types as part of `SimSpec`), `flowlab-master` (engine and virtual slave), `flowlab-synth`, `flowlab-cli` |
+| Used by | `flowlab-sim` (re-exports its types as part of `SimSpec`), `flowlab-master` (engine and virtual slave), `flowlab-slave` (the responder), `flowlab-synth`, `flowlab-cli` |
 
 ## Items
 
@@ -39,9 +39,36 @@ its virtual slave, and the capture generator's conversations build every message
 | `FOE_FILE_NAME` (`flowlab.bin`), `SDO_INDEX`, `SDO_SUBINDEX` (`0x2000:00`) | the request defaults |
 | `EoeAddresses`, `udp_frame`, `udp_payload`, `EOE_HEADERS` | Ethernet II / IPv4 / UDP frames for EoE, with documentation addresses as defaults |
 | `eoe_capacity(len)`, `eoe_fragments(frame, capacity, frame_no)`, `EoeReassembler` | EoE fragments (all but the last a multiple of 32 bytes) and their reassembly, counting broken frames |
+| `eoe_set_ip_parse(body)`, `eoe_set_ip_response(result)` | the parameters of a Set IP Parameter request; a response with its result code |
+
+FlowLab VoE has its own module, `voe` ([reference](../reference/voe.md)):
+
+| Item | What it is |
+|---|---|
+| `encode(op, seq, tail)`, `parse(body)` → `Message { op, seq, tail }` | a message: VoE header (vendor `VENDOR_ID`, type `VENDOR_TYPE`), the operation/sequence word, the rest; `parse` returns `None` for another vendor's VoE |
+| `open`, `ready`, `done`, `abort` and their `parse_*` | the control messages and their fields |
+| `capacity(len)`, `HEADER`, `MIN_MAILBOX`, `DEFAULT_WINDOW`, `MAX_WINDOW`, `SEQ_MOD` | payload bytes per DATA message and the protocol's limits |
+| `unwrap_seq(base, seq)`, `classify(expected, seq)` → `Arrival` | 13-bit sequence numbers as message counts; whether a DATA message is the next, a later one (a gap) or a repeat |
 
 The analysis does not use `msg`: its trackers read messages on their own, so that a misreading
 here cannot hide behind the same misreading there.
+
+## The slave application (`responder`)
+
+`Responder` is a slave's side of the mailbox at message level: it takes each "mailbox out"
+buffer and returns the messages the slave answers with, knowing nothing of time or
+SyncManagers. The lab master's virtual slave runs it in virtual time; the emulated ESC
+(`flowlab-slave`) runs it as soon as a message arrives.
+
+| Item | What it is |
+|---|---|
+| `Responder::new(ResponderConfig, out_len, in_len)`, `take_message(buf)` → `Vec<Message>` | FoE write and read, CoE SDO download (normal, segmented) into the transfer object and upload (expedited, normal, segmented) from it, writes and reads of settings, EoE reassembly, FlowLab VoE both ways (ACK per window, DONE with SHA-256, go-back-N after a gap); mailbox error reply for other protocols; a repeated counter (not 0) is dropped |
+| `eoe_pending()`, `next_eoe_frame()` | an EoE send of `upload` in UDP frames, one frame's fragments at a time |
+| `take_eoe_frames()`, `eoe_messages(frame)` | the reassembled frames, taken out of the log; the fragments of a frame to send |
+| `restart()` | back to INIT: open transfers abandoned, the counter forgotten, the EoE send from its start |
+| `reconfigure(out_len, in_len, eoe_send)`, `setting(index, sub)`, `put_setting` | new mailbox sizes and EoE send for a reconfigured slave (log and settings kept); a setting's value |
+| `ResponderConfig` | BUSY every n-th FoE packet, counter handling, the transfer object, read-only `objects`, writable `settings`, `upload`, EoE send, MTU and addresses, the largest VoE window |
+| `ResponderLog` | files, downloaded objects, EoE frames, broken fragments, VoE payloads received and uploads sent, settings written, messages taken and dropped |
 
 The JSON forms of `MailboxPolicy` and `TransferDirection` are those of `SimSpec`, and their
 TypeScript types are exported to the UI like the simulator's.

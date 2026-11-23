@@ -150,6 +150,7 @@ capture views read the same object.
 | `coe` | `transactions[]` (`SdoTransaction`: station, `kind` upload/download, index, subindex, `transfer` expedited/normal/segmented, `bytes`, `start_ns`, `end_ns`, `outcome` `ok`/`aborted`/`superseded`/`incomplete`/`protocol_error`, abort code and text), counts (`transactions_total`, `ok`, `aborted`, `unfinished`, `protocol_errors`), `duration`, `emergencies[]`, `sdo_info_messages` |
 | `foe[]` | `FoeTransfer`: station, `kind` (`"write"`/`"read"`), `file_name`, `bytes`, `packets`, `busy`, `start_ns`, `end_ns`, `goodput_bps`, `outcome` (`"ok"`, `"error"`, `"incomplete"`, `"protocol_error"`), error code and text |
 | `eoe` | `frames[]` (station, direction `to_slave`/`from_slave`, `start_ns`, `end_ns`, fragments, `bytes`, MACs, EtherType), `frames_total`, `bytes_to_slaves`, `bytes_from_slaves`, `reassembly_errors`, `service_messages` |
+| `voe[]` | `VoeTransfer` ([FlowLab VoE](voe.md)): station, `direction`, `window`, `length`, `bytes`, `data_messages`, `acks`, `repeats`, `gaps`, `start_ns`, `end_ns`, `goodput_bps`, `outcome` (`"ok"`, `"aborted"`, `"incomplete"`, `"protocol_error"`), `digest_matches` (the slave's DONE against the payload in the capture), `abort_text` |
 | `soe_errors`, `errors[]`, `malformed` | SoE error responses; mailbox error replies; data at a mailbox address that is not a valid mailbox header |
 
 Durations of mailbox transfers are measured at the capture point, between the frames carrying
@@ -349,6 +350,17 @@ field means the same:
 
 `RunResult`: `interface`, `slaves`, `cycle_time_ns`, `process_image_bytes`, `expected_wkc`,
 `wkc_mismatches`, `lost_frames`, `final_states`, `timing` and `cycle_records[]` as above.
+
+`GatewayResult` ([gateway](../guide/master.md#gateway)): `station`, `slave`, `mailbox_out_bytes`,
+`mailbox_in_bytes`, the addresses, `mtu_bytes`, `cycle_ns`, `ack_delay_ms` and `tcp_buffer_bytes`
+it ran with; `set_ip_result` (0: success) and `set_ip_reply_ns`; `duration_ns`; the mailbox
+counters `messages_to_slave`, `messages_from_slave`, `rejected_writes`, `empty_reads`,
+`lost_frames`, `duplicate_messages`, `other_messages`; Ethernet frames and their bytes each way
+(`frames_to_slave`, `frame_bytes_to_slave`, …) and `broken_fragments`; `write_access` and
+`read_access` round-trip summaries; `connections[]` (`local_port`, `remote_port`, `opened_ns`,
+`established_ns`, `closed_ns`, bytes each way, first and last byte from the slave,
+`goodput_from_slave_bps`, `error`); and `timeline[]`, the messages and frame bytes each way per
+`timeline_bucket_ns` (100 ms).
 
 `ScanResult`: `interface` and `slaves[]` with `position`, `station`, `alias`, `name`,
 `vendor_id`, `product_code`, `revision`, `serial`, `al_state`, `al_status_code`,

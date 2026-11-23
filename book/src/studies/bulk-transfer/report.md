@@ -186,8 +186,9 @@ FoE and CoE segmented transfers behave almost identically: both are stop-and-wai
 granularity. EoE looks faster because the model carries UDP-like datagrams with no
 acknowledgement traffic. EoE carrying TCP adds TCP's ACKs and window in the opposite direction,
 through the same mailboxes. The model's EoE numbers are therefore optimistic for TCP
-applications. VoE is not modelled. It would behave like EoE without the IP and Ethernet headers,
-plus whatever acknowledgement scheme the application adds.
+applications. VoE in the model is [FlowLab VoE](../../reference/voe.md): EoE's lack of a reply per
+message without the IP and Ethernet headers, plus one acknowledgement per window. The studies of
+this report do not include it; `flowlab what-if` tries it as an alternative protocol.
 
 ## Recommendations
 

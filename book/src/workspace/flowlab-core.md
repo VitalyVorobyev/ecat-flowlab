@@ -14,7 +14,7 @@ source: [`crates/flowlab-core`](https://github.com/VitalyVorobyev/ecat-flowlab/b
 | | |
 |---|---|
 | Depends on | `serde`, `ts-rs` (TypeScript export), `sha2` |
-| Used by | `flowlab-capture`, `flowlab-analysis`, `flowlab-synth`, `flowlab-sim`, `flowlab-study`, `flowlab-live`, `flowlab-pdi`, `flowlab-master`, `flowlab-server`, `flowlab-cli` |
+| Used by | `flowlab-capture`, `flowlab-analysis`, `flowlab-synth`, `flowlab-sim`, `flowlab-study`, `flowlab-live`, `flowlab-pdi`, `flowlab-master`, `flowlab-slave`, `flowlab-server`, `flowlab-cli` |
 
 It must not depend on anything heavier than serialization and hashing.
 
@@ -27,6 +27,7 @@ It must not depend on anything heavier than serialization and hashing.
 | `Provenance::as_str()` / `from_comment()` | the lower-case name, and parsing the marker out of free text |
 | `InputRef` | file name (no directories), size in bytes, SHA-256 of the contents (lower-case hex); `InputRef::of(name, bytes)` computes the last two |
 | `hex(bytes)`, `sha256_hex(bytes)` | lower-case hex, and the SHA-256 in it |
+| `EMULATED_ESC_NAME`, `EMULATED_ESC_ASSUMPTION` | the device name in the emulated ESC's EEPROM (`flowlab-slave`), and the assumption a master adds to results that involve it |
 | `rng::SplitMix64`, `rng::mix64` | the deterministic generator of the simulator, the studies and the PDI benchmark (`next_u64`, `unit`, `chance`, `normal`, `below`), and its mix function, which the generated payload uses too; implemented here so a seed gives the same numbers across dependency upgrades |
 | `ReportMeta` | `schema_version`, `tool` (`"ecat-flowlab"`), `tool_version`, `source: Provenance`, `input: InputRef`, `assumptions: Vec<String>` |
 | `ReportMeta::new(source, input, assumptions)` | fills in the schema and tool version |

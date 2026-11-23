@@ -15,6 +15,11 @@
 //! * Safety: [`run`] checks the link (`BYTE_TEST`, `HW_CFG`, `ID_REV`), refuses unless the ESC
 //!   is in INIT, never touches the AL Control or SyncManager registers ([`PROTECTED`]), and
 //!   writes only into an explicitly given area of process RAM.
+//! * [`SlaveAccess`] is the access of a slave application that replaces the ESC's own one
+//!   (FlowLab's PDI slave): it also reads AL Control and the SyncManagers and writes AL Status,
+//!   AL Status Code and process RAM, nothing else.
+//! * [`PhyAccess`] reads (and on request writes) the LAN9252's PHY registers through the ESC's
+//!   MII management interface, the only ESC registers it writes.
 //!
 //! ```
 //! use flowlab_core::Provenance;
@@ -32,7 +37,9 @@
 mod bench;
 mod hardware;
 mod lan9252;
+mod mii;
 mod sim;
+mod slave;
 mod spi;
 
 #[cfg(test)]
@@ -43,8 +50,10 @@ use std::io;
 pub use bench::{Area, BenchOptions, BenchRun, DEFAULT_SIZES, Plan, SizeSummary, plan, run, summarise};
 pub use flowlab_core::pdi_samples::{Direction, Sample, to_csv};
 pub use hardware::open_spidev;
-pub use lan9252::{Lan9252, LinkInfo, PROTECTED, ReadInstruction, check_range, csr_chunk, reg};
+pub use lan9252::{Lan9252, LinkInfo, PROTECTED, ReadInstruction, SpiTuning, check_range, csr_chunk, reg};
+pub use mii::{PhyAccess, PhyStatus, STATUS_REGISTERS, mii_reg};
 pub use sim::{EscAccess, SimLan9252, SimTiming};
+pub use slave::{ESC_AL_STATUS_CODE, SlaveAccess};
 pub use spi::{Clock, MonotonicClock, Segment, SimClock, SpiBus};
 
 /// Why an ESC access or a benchmark failed or was refused.

@@ -20,6 +20,7 @@ mod eoe;
 mod export;
 mod findings;
 mod foe;
+mod voe;
 
 use channels::*;
 pub use channels::{Access, Channels, MailboxHint};
@@ -29,6 +30,7 @@ use eoe::*;
 pub use export::write_eoe_pcapng;
 pub(crate) use findings::{assumptions, findings};
 use foe::*;
+use voe::VoeTracker;
 
 const MAX_LIST: usize = 2000;
 
@@ -113,6 +115,7 @@ pub(crate) fn analyze(
     let mut coe = CoeTracker::default();
     let mut foe = FoeTracker::default();
     let mut eoe = EoeTracker::default();
+    let mut voe = VoeTracker::default();
     let mut soe_errors = 0u64;
     let mut errors = Vec::new();
     let mut malformed = 0u64;
@@ -223,6 +226,7 @@ pub(crate) fn analyze(
                         MailboxType::Coe => coe.on(&ctx, &h, body),
                         MailboxType::Foe => foe.on(&ctx, &h, body),
                         MailboxType::Eoe => eoe.on(&ctx, body, &mut out.eoe_packets),
+                        MailboxType::Voe => voe.on(&ctx, body),
                         MailboxType::Soe => {
                             if SoeHeader::parse(body).is_ok_and(|s| s.error) {
                                 soe_errors += 1;
@@ -293,6 +297,7 @@ pub(crate) fn analyze(
         coe: coe.finish(bins),
         foe: foe.finish(),
         eoe: eoe.finish(),
+        voe: voe.finish(),
         soe_errors,
         errors,
         malformed,

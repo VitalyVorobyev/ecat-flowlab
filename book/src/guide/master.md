@@ -10,6 +10,8 @@ labelled **measured**.
 flowlab master scan     -i enp3s0 --isolated-lab-network --eni results/master/lab.eni.xml
 flowlab master run      -i enp3s0 --isolated-lab-network --cycle-us 1000 --duration 10
 flowlab master transfer -i enp3s0 --isolated-lab-network --station 0x1000 --protocol foe --file firmware.bin
+flowlab master gateway  -i enp3s0 --isolated-lab-network --station 0x1002 --slave-ip 10.0.0.2 \
+  --master-ip 10.0.0.1 --set-ip --forward 18080:8080
 ```
 
 > **This sends EtherCAT frames.** Use it only on an isolated lab segment, on a network card
@@ -18,8 +20,11 @@ flowlab master transfer -i enp3s0 --isolated-lab-network --station 0x1000 --prot
 > use.
 
 Its status on hardware is listed under [Limitations](../reference/limitations.md#lab-master): the
-protocol engine is tested end to end against a simulated ESC
-([flowlab-master](../workspace/flowlab-master.md#tests)), and the EtherCrab layer compiles in CI.
+protocol engine is tested end to end against a simulated ESC, and the EtherCrab layer against
+the [emulated slave](slave.md), in one process in CI and over a cable between two computers
+([flowlab-master](../workspace/flowlab-master.md#tests)). Without EtherCAT hardware, the emulated
+slave on a second computer is a complete rig; a slave that names itself `FlowLab emulated ESC`
+in its EEPROM puts an assumption into every result saying that its timing is the host's.
 
 ## Building
 
@@ -30,15 +35,16 @@ code that sends frames, and only the master needs the Npcap SDK on Windows.
 cargo build --release -p flowlab-cli --features master
 ```
 
-The Linux [release binaries](../getting-started.md#install-a-release-binary) (x86-64 and aarch64,
-static musl) are built with it; the Windows and macOS ones are not. A build without the feature
+The Linux (x86-64 and aarch64, static musl) and macOS
+[release binaries](../getting-started.md#install-a-release-binary) are built with it; the Windows
+one is not. A build without the feature
 answers `flowlab master` with these instructions.
 
 | System | Setup |
 |---|---|
 | **Linux** (the lab PC) | EtherCrab opens a raw socket, which needs `CAP_NET_RAW`: run as root, or `sudo setcap cap_net_raw,cap_net_admin=eip target/release/flowlab` once per build. Take the card out of NetworkManager's hands (`nmcli device set enp3s0 managed no`) and bring the link up (`ip link set enp3s0 up`), so the host sends nothing of its own on the segment. |
 | **Windows** | Install [Npcap](https://npcap.com/#download), download the Npcap SDK and add its `Lib\x64` folder to the `LIB` environment variable before building (the `pcap` crate links against `wpcap.lib`). Interfaces are named `\Device\NPF_{…}`; `flowlab capture --list` shows them. Windows networking is not deterministic; expect wider timing distributions than on Linux. |
-| **macOS** | Builds (EtherCrab uses BPF), but the development Mac is not a lab master ([lab plan](../studies/bulk-transfer/lab.md#master)). |
+| **macOS** | BPF: read and write access to `/dev/bpf*` (Wireshark's ChmodBPF, or `sudo chgrp admin /dev/bpf* && sudo chmod g+rw /dev/bpf*` until the next reboot). FlowLab passes EtherCrab's frames through its own BPF socket and hands EtherCrab only frames that passed an ESC (bit 1 of the source MAC set): EtherCrab's own macOS socket reads the adapter's MAC through `getifaddrs`, which for some USB adapters returns a wrong address, and then takes its own outgoing frame for the answer. A Mac is a good master for an [emulated-slave](slave.md) rig; for measurements that feed the simulator, the lab plan uses a Linux PC ([lab plan](../studies/bulk-transfer/lab.md#master)). |
 
 The listening check below runs Wireshark's `dumpcap` or `tcpdump`, as [live capture](live.md)
 does; install one of them and give it capture permissions.
@@ -104,7 +110,8 @@ is the comparison.
 ## transfer
 
 Moves a payload to (`--direction to-slave`, the default) or from (`from-slave`) the slave at
-`--station`, with FoE, CoE or EoE, at a cycle time and under a mailbox policy. The mailbox comes
+`--station`, with FoE, CoE, EoE or [FlowLab VoE](../reference/voe.md), at a cycle time and under
+a mailbox policy. The mailbox comes
 from the slave's SyncManager 0 and 1 registers.
 
 ```bash
@@ -123,9 +130,9 @@ flowlab master transfer -i enp3s0 --isolated-lab-network --station 0x1000 \
 
 | Option | Meaning |
 |---|---|
-| `--protocol foe\|coe\|eoe`, `--direction to-slave\|from-slave` | what moves where |
+| `--protocol foe\|coe\|eoe\|voe`, `--direction to-slave\|from-slave` | what moves where |
 | `--file FILE` or `--bytes N [--seed S]` | the payload to send: a file, or N bytes of the simulator's generated payload |
-| `--bytes N`, `--expect-sha256 HEX` or `--seed S`, `--save-received FILE` | from the slave: how much to wait for (required for EoE), what it should hash to, where to keep it |
+| `--bytes N`, `--expect-sha256 HEX` or `--seed S`, `--save-received FILE` | from the slave: how much to wait for (required for EoE; FlowLab VoE announces it), what it should hash to, where to keep it |
 | `--like SIM_JSON --transfer K` | everything from transfer K of a simulator spec (below) |
 | `--cycle-us US` (1000) | cycle time |
 | `--policy` (`fixed-quota:2`) | `fixed-quota:N`, `round-robin:N` or `opportunistic:PERCENT[,TURNAROUND_NS]`, the simulator's [policies](simulation.md#what-is-modelled) |
@@ -134,7 +141,9 @@ flowlab master transfer -i enp3s0 --isolated-lab-network --station 0x1000 \
 | `--foe-file NAME`, `--foe-password N` | FoE request (default `flowlab.bin`, 0) |
 | `--sdo INDEX:SUB` | CoE object (default `0x2000:0`) |
 | `--eoe-mtu`, `--eoe-slave-mac`, `--eoe-slave-ip`, `--eoe-master-mac`, `--eoe-master-ip`, `--eoe-port` | the UDP/IPv4 frames EoE carries |
-| `--reply-timeout-ms` (1000), `--max-resends` (3), `--max-duration` (600 s), `--first-counter` (1) | retries and limits |
+| `--mailbox-bytes N` | set SyncManagers 0 and 1 to N bytes each before the transfer, as for the [gateway](#gateway); the result's assumptions say so |
+| `--voe-window N` (16) | FlowLab VoE: DATA messages per acknowledgement the master asks for |
+| `--reply-timeout-ms` (1000), `--max-resends` (3), `--max-duration` (600 s), `--first-counter` (1; 0 with `--op`) | retries and limits |
 | `-o FILE` | result JSON (default `results/master/transfer-UNIXTIME.json`) |
 
 ### How a cycle runs
@@ -168,10 +177,12 @@ them into one).
 
 Mailbox counters run 1–7. Before a transfer, messages waiting in "mailbox in" are read and
 discarded (`drained_messages`), except for an EoE receive, whose stream may already have started.
-EtherCrab may have used the mailbox while it initialised the network (it reads the PDO mapping
-over CoE), so the slave's last counter is unknown: if it equals `--first-counter`, a slave that
-drops repeated counters ignores the first message, and the reply timeout resends it with the next
-counter.
+On the way to OP, EtherCrab reads the PDO mapping over CoE, so with `--op` the slave's last
+counter is unknown. If it equalled the first message's counter, a slave that drops repeated
+counters (SOES does) would ignore that message until the reply timeout resent it. With `--op`
+the first message therefore carries 0, the counter's start value (ETG.1000.6), which a slave does
+not compare with the previous one; without `--op`, EtherCrab has not used the mailbox and the
+first counter is 1.
 
 ### Protocols
 
@@ -187,9 +198,70 @@ counter.
   addresses; set `--eoe-slave-mac` and `--eoe-slave-ip` to what the slave's EoE interface accepts.
   From the slave, the master reassembles frames and keeps the payload of UDP datagrams to
   `--eoe-port`; something on the slave must send them (for example a UDP sender bound to its EoE
-  interface), and `--bytes` says when the transfer is complete.
+  interface), and `--bytes` says when the transfer is complete. While it sends, the master also
+  reads "mailbox in": the slave's network stack answers with ARP requests and ICMP messages the
+  transfer does not wait for, and a stack that waits for them to be read takes no further
+  fragments. For TCP, use the [gateway](#gateway).
+- **FlowLab VoE**: FlowLab's own protocol in VoE messages ([reference](../reference/voe.md)).
+  DATA messages fill the mailbox after an 8-byte header and are acknowledged once per
+  `--voe-window` messages, so the master writes whenever "mailbox out" is free and reads while
+  messages are unacknowledged. To the slave, the slave ends the transfer with DONE, carrying the
+  length and SHA-256 of what it received: `verified` is then true or false for a write as well.
+  From the slave, READY announces the length, and a gap in the DATA numbers (a lost read) makes
+  the slave send again from the missing message. The slave must implement it: the
+  [emulated slave](slave.md) does.
 
 The PDO channel of the simulator is not a mailbox protocol; the lab master does not run it.
+
+## gateway
+
+Gives the master its own network interface on a slave's EoE link and forwards local TCP ports
+to the slave, so ordinary tools (curl, a browser, gRPC clients) reach the slave's services
+through EtherCAT. It needs no host network interface and no root: the master's TCP/IP stack is
+[smoltcp](https://github.com/smoltcp-rs/smoltcp) (0BSD) inside FlowLab, with one IPv4 address
+on the slave's subnet.
+
+```bash
+flowlab master gateway -i en10 --isolated-lab-network --station 0x1002 \
+  --slave-ip 10.0.0.2 --master-ip 10.0.0.1 --prefix 24 \
+  --set-ip --slave-mac 02:00:00:00:00:02 --slave-gateway 10.0.0.1 \
+  --forward 18080:8080 --forward 40051:40051 -o results/master/gateway.json
+curl http://127.0.0.1:18080/            # in another terminal: the slave's port 8080
+```
+
+The slaves stay in PRE-OP. With `--set-ip`, the master first sends an EoE Set IP Parameter
+request with the slave's address, the subnet mask from `--prefix`, and `--slave-mac` and
+`--slave-gateway` if given, as TwinCAT does when it starts EoE; a slave whose stack configures
+its interface only on that request needs it. Then every pass writes the next EoE fragment for
+the slave, if one waits, and reads "mailbox in", the two in flight together. Ctrl-C (or
+`--duration`) stops it, and the result is written.
+
+| Option | Meaning |
+|---|---|
+| `--station`, `--slave-ip`, `--master-ip`, `--prefix` (24) | the slave and both addresses on its subnet |
+| `--set-ip`, `--slave-mac`, `--slave-gateway` | send the Set IP Parameter request first |
+| `--master-mac` (`02:46:4c:00:00:01`) | the master's MAC on the EoE link |
+| `--forward LOCAL:REMOTE` | 127.0.0.1:LOCAL to the slave's port REMOTE (repeatable) |
+| `--mtu` (1500) | the master's IP MTU: its segments, and the segment size it announces, carry up to MTU − 40 bytes |
+| `--ack-delay-ms` (10; 0 = every segment at once) | the master's delayed acknowledgements; with a delay, an acknowledgement still goes out once two segments are unacknowledged |
+| `--tcp-buffer` (65536) | receive and send buffer per connection (the receive window) |
+| `--cycle-us` (0) | one pass per cycle of this length, as a cyclic master serves the mailbox; 0: passes back to back |
+| `--mailbox-bytes N` | set SyncManagers 0 and 1 to N bytes each instead of the EEPROM's sizes (below) |
+| `--duration` (3600 s), `-o FILE` | time limit; result JSON (default `results/master/gateway-UNIXTIME.json`) |
+
+Each connection is logged when it opens and closes, with its bytes and its goodput from the
+slave (bytes between its first and last byte from the slave). If the slave sends nothing for
+3 s while a connection is open, the master reads SyncManager 0 and 1, AL status and the AL
+event request and logs them: a stack that stopped in the middle of writing "mailbox in" shows
+SyncManager 1's write buffer open (status bit 7) and the buffer never full.
+
+`--mailbox-bytes` tries a larger mailbox without changing the EEPROM: the slave goes back to
+INIT, both SyncManagers are disabled, get the new length (SM0 where it was, SM1 right after it)
+and are enabled again, read back, and the slave is asked for PRE-OP. A stack checks the sizes
+against its own limits on that transition: one that refuses (AL status code 0x0016, invalid
+mailbox configuration) gets its original SyncManagers back, and the gateway does not start.
+The next initialisation (any `flowlab master` command, or another master) configures the
+EEPROM's sizes again.
 
 ## Comparing with the simulator
 
@@ -225,7 +297,8 @@ host's timing against the capture tool's.
 
 ## Results
 
-`scan`, `run` and `transfer` write `ScanResult`, `RunResult` and `MeasuredTransfer` JSON with
+`scan`, `run`, `transfer` and `gateway` write `ScanResult`, `RunResult`, `MeasuredTransfer` and
+`GatewayResult` JSON with
 `meta.source = "measured"` and their assumptions (see [Report and result files](../reference/reports.md#lab-master-results)).
 The command prints a summary tagged `[MEASURED]`; a transfer that did not complete still writes
 its result and exits with an error.

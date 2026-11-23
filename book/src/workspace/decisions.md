@@ -153,6 +153,71 @@ experiment can answer them.
   read for protocol facts only; no code was copied.
   Consequence: the samples time user-space spidev, one driver variant; a kernel driver or
   another stack's access pattern needs its own measurement.
+- **ADR-038 An emulated ESC for a rig without EtherCAT hardware.** `flowlab slave` (crate
+  `flowlab-slave`) answers EtherCAT frames on an ordinary Ethernet port with a register model of
+  an ESC (SII, AL states, SyncManagers, FMMUs, working counters) and the mailbox responder the
+  virtual slave uses, moved to `flowlab-mailbox` so both run the same FoE, CoE and EoE code. The
+  model is pure (frame in, frame out), so `flowlab-master` runs EtherCrab against it in one
+  process (`Session::in_process`) and the hardware layer is tested in CI; on a port, it makes two
+  computers and a cable a rig for the master, live capture and the analysis. It identifies
+  itself in its EEPROM (`EMULATED_ESC_NAME`, vendor ID 0, no assigned vendor), and the master
+  adds `EMULATED_ESC_ASSUMPTION` to every result that involves it: provenance stays `measured`
+  (the frames are), the assumption says what answered them. Answering frames is sending them, so
+  the port server is behind the feature `slave` and needs an interface name and
+  `--isolated-lab-network`. The raw socket is `pnet_datalink` (MIT OR Apache-2.0) with a safe
+  API, so `unsafe_code = forbid` holds. Not modelled: distributed clocks, three-buffer process
+  data, watchdogs, events, more than one port. Consequences: its timing is the host's, so its
+  results are never lab inputs; it answers whole frames after receiving them, where an ESC
+  processes them on the fly; an EoE send starts a fixed time after PRE-OP, after the master's
+  CoE configuration, so a receive's duration includes that wait.
+- **ADR-039 On macOS, FlowLab moves EtherCrab's frames.** EtherCrab's macOS socket tells its own
+  frames (which BPF also delivers) from answers by the interface's MAC, read through
+  `getifaddrs`; for a USB adapter (AX88179B) that read returns `02:00:00:00:00:00`, so EtherCrab
+  took its own frame for the answer with WKC 0 and found no slaves. `Session::open` on macOS
+  therefore drives EtherCrab's `PduTx`/`PduRx` itself on a `pnet_datalink` BPF socket and passes
+  on only EtherCAT frames with bit 1 of the source MAC set, the bit an ESC sets (SOEM filters
+  the same way). Linux and Windows keep EtherCrab's own tasks. Consequence: on macOS a master
+  needs at least one slave between its frames and their return, as on any EtherCAT segment.
+
+- **ADR-040 EoE gateway with its own TCP/IP stack and port forwards.** `flowlab master
+  gateway` reaches a slave's TCP services over EoE through smoltcp (0BSD, pure Rust, no
+  `unsafe` needed here) inside the master, with local TCP ports on 127.0.0.1 forwarded to the
+  slave's, instead of a host network interface (utun on macOS, tap on Linux). It needs no root
+  and changes nothing in the host's network configuration (no interface, route or address),
+  binds only to loopback, and runs where the master runs, so curl, browsers and gRPC clients
+  work through it. The gateway's own TCP knobs (MTU, delayed acknowledgements, window) are
+  experiment parameters. The EoE Set IP Parameter request is encoded as SOEM writes it
+  (all fields at fixed places, IPv4 addresses least significant octet first); a slave on the
+  rig configured its interface from it as from TwinCAT's. Consequences: the master's TCP is
+  smoltcp's, not the operating system's, so a result says so in its assumptions; services that
+  need the slave to open connections to the master, or UDP, do not run through it.
+
+- **ADR-041 A PDI slave: FlowLab's application on a real ESC.** To see what an ESC, its SPI and
+  the master carry independent of the slave's own application (its compiled-in mailbox limit,
+  its access pattern), `flowlab pdi-slave` runs the emulated slave's responder behind a real LAN9252,
+  polled over spidev, in place of the slave's own application. It needs the explicit
+  `--replace-slave-application` (the slave's own application must be stopped, or both serve
+  the ESC) and goes through `flowlab_pdi::SlaveAccess`, which reads any ESC address but writes only
+  AL Status, AL Status Code, the SyncManagers' PDI Control bytes (a stopped application can leave
+  its mailboxes deactivated there) and process RAM: AL Control and the master's part of the
+  SyncManager registers stay the master's. It answers mailboxes only (PRE-OP); the master's `--mailbox-bytes` sets their size.
+  Consequences: a result against it is measured with FlowLab's application, not the product's,
+  and says so; the product's numbers come from runs with its own stack.
+  Its SPI access defaults to the measured-fastest shortcuts (`--spi-tuning fast`: split
+  writes, no abort before a command) and message-only buffer accesses, while `pdi-bench`
+  defaults to the stacks' access pattern (`stack`), because its samples model what a stack
+  pays; both take the other with an option.
+
+- **ADR-042 Rig instruments in the binary.** The checks a rig needs besides master and slave
+  are `flowlab` subcommands, not scripts: `tcp-bench` (TCP throughput with SHA-256 checks, a
+  minimal HTTP/1.0 server and client on std TCP, payload from `flowlab_mailbox`) and `pdi-phy`
+  (the LAN9252's PHYs through the ESC's MII interface). A Verdin image has no compiler and may
+  have no Python; the static binary is the one thing that is always copied over. `tcp-bench`
+  sends no EtherCAT frames and needs no opt-in. `pdi-phy` reads freely, writes only the MII
+  management registers, and changes a PHY only with `--allow-phy-writes`, because a PHY write
+  can take the EtherCAT link down until the next reset. Consequences: the binary grows by a
+  few hundred lines of std-only code; TCP results come from FlowLab's client and server, so a
+  result says which ones.
 
 ## Open questions
 
@@ -172,21 +237,27 @@ experiment can answer them.
   0x080D) instead of FPRD? Such polls are counted as process data today. *Test:* TwinCAT capture.
 - Is "counter equal to the previous" a reliable repeat test when a master resets counters
   after a state change? *Test:* captures across INIT → PREOP transitions on real slaves.
-- What are a LAN9252-class ESC's effective SPI read/write rates and per-access overhead from a
-  Linux userspace driver on the Verdin? The simulator's PDI-bound results hinge on them.
-  *Test:* `flowlab pdi-bench` on the rig, then `flowlab pdi-fit`; check the fit against a
-  capture of mailbox turnaround.
-- Does the LAN9252's `ID_REV` read 0x9252 in bits 31:16, and does it accept the `FAST READ`
-  dummy byte value 0x01 that SOES sends? `pdi-bench` assumes both (`--chip-id` overrides the
-  first). *Test:* the first `pdi-bench` run on the Verdin, with both read instructions.
+- Does the simulator's PDI model (a fixed cost per access plus bytes at a rate) fit a LAN9252
+  from a Linux userspace driver? Reads and writes are measured on the Verdin
+  ([LAN9252 on a Verdin iMX8MP](../studies/bulk-transfer/lab-results.md)): a 1 KiB access takes
+  about 2 ms with `--spi-tuning fast`, and each spidev transfer costs about 40 µs. The cost
+  depends on the number of transfers per access, which the model folds into the fixed cost.
+  *Test:* `pdi-bench --allow-writes` with all sizes, `pdi-fit`, and the residuals per size.
+- Does the LAN9252 accept the `FAST READ` dummy byte value 0x01 that SOES sends? On the Verdin
+  rig, `ID_REV` reads 0x9252 in bits 31:16 and READ works up to 25 MHz; FAST READ was tried only
+  at 30 MHz and above, where the link check fails with either instruction, so the board's SPI
+  is the limit there. *Test:* `pdi-bench --read-instruction fast-read` at 20 MHz.
 - Does the access pattern of `pdi-bench` (one access at a fixed address per size, polling the
   PRAM command register before each FIFO burst) time the same as the real stack's accesses?
   *Test:* compare its fit with timing logged inside SOES on the same board.
 - Does the SOES slave on the LAN9252 drop a mailbox message whose counter repeats the previous
-  one, and does it serve the mailbox repeat request? `flowlab master transfer` relies on both
-  after a lost frame, and starts its counters at 1 after EtherCrab's own CoE traffic.
-  *Test:* `transfer` right after `scan`, and with frames dropped on the link (unplug briefly);
-  check `resent_messages`, `repeat_requests` and the file on the slave.
+  one, accept the start value 0 after other traffic, and serve the mailbox repeat request?
+  `flowlab master transfer` relies on all three: after a lost frame, and with `--op`, where
+  EtherCrab has read the PDO mapping over CoE and the first message carries 0 (against the
+  emulated ESC, which drops repeats as SOES does, a first counter equal to EtherCrab's last cost
+  one reply timeout). *Test:* `transfer --op` and `transfer --op --first-counter 1`, and with
+  frames dropped on the link (unplug briefly); check `resent_messages`, `repeat_requests` and
+  the file on the slave.
 - How far is the host's timing (`flowlab master run`) from the wire's? *Test:* `run` with a
   capture on a tap or with NIC hardware timestamps; compare the round-trip distributions.
 - Which mailbox policy does each candidate master implement (EtherCrab, SOEM, IgH, TwinCAT), and

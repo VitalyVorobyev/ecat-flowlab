@@ -15,6 +15,13 @@ pub mod units;
 /// Version of the JSON report schemas. Bump on any breaking change.
 pub const SCHEMA_VERSION: u32 = 1;
 
+/// Device name in the EEPROM of FlowLab's emulated ESC (`flowlab-slave`). A master that finds
+/// it labels its results: the frames are real, the slave is software.
+pub const EMULATED_ESC_NAME: &str = "FlowLab emulated ESC";
+
+/// Assumption every measured result about the emulated ESC carries.
+pub const EMULATED_ESC_ASSUMPTION: &str = "The slave is FlowLab's emulated ESC (flowlab slave): software answering EtherCAT frames on an ordinary Ethernet port, not an ESC. Its turnaround is the host's (operating system, socket, emulator), not an ESC's: the timing describes the rig, not an EtherCAT slave.";
+
 /// Where the data behind a result came from. Every report and every UI view shows it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]

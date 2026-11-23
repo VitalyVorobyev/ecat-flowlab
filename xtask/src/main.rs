@@ -221,10 +221,35 @@ fn ci() -> Result {
     step("tests");
     run(cargo().args(["test", "--quiet"]))?;
     if cfg!(windows) {
-        eprintln!("xtask ci: lab master (feature `master`) skipped on Windows: linking needs the Npcap SDK");
+        eprintln!(
+            "xtask ci: lab master and emulated slave (features `master`, `slave`) skipped on Windows: linking needs the Npcap SDK"
+        );
     } else {
-        step("lab master (feature `master`): clippy and tests");
-        run(cargo().args(["clippy", "-p", "flowlab-cli", "--features", "master", "--quiet", "--", "-D", "warnings"]))?;
+        step("lab master and emulated slave (features `master`, `slave`): clippy and tests");
+        run(cargo().args([
+            "clippy",
+            "-p",
+            "flowlab-cli",
+            "--features",
+            "master,slave",
+            "--quiet",
+            "--",
+            "-D",
+            "warnings",
+        ]))?;
+        run(cargo().args([
+            "clippy",
+            "-p",
+            "flowlab-master",
+            "-p",
+            "flowlab-slave",
+            "--all-features",
+            "--all-targets",
+            "--quiet",
+            "--",
+            "-D",
+            "warnings",
+        ]))?;
         run(cargo().args(["test", "-p", "flowlab-master", "--features", "hardware", "--quiet"]))?;
     }
     step("generated UI types are committed");

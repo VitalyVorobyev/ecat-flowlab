@@ -7,7 +7,11 @@ export type TransferProtocol = { "kind": "eoe",
 /**
  * IP MTU of the tunnelled frames, bytes (≤ 1500).
  */
-mtu_bytes: number, } | { "kind": "foe" } | { "kind": "coe_segmented" } | { "kind": "pdo_channel", 
+mtu_bytes: number, } | { "kind": "foe" } | { "kind": "coe_segmented" } | { "kind": "voe", 
+/**
+ * DATA messages per acknowledgement (1–4096).
+ */
+window: number, } | { "kind": "pdo_channel", 
 /**
  * Bytes reserved per cycle for the channel, including its 8-byte chunk header.
  */

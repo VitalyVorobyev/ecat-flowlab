@@ -5,6 +5,7 @@ import type { FoeTransfer } from "./FoeTransfer";
 import type { MailboxChannel } from "./MailboxChannel";
 import type { MailboxErrorEvent } from "./MailboxErrorEvent";
 import type { ProtocolStats } from "./ProtocolStats";
+import type { VoeTransfer } from "./VoeTransfer";
 
 /**
  * Mailbox analysis.
@@ -30,6 +31,10 @@ foe: Array<FoeTransfer>,
  * EoE.
  */
 eoe: EoeReport, 
+/**
+ * FlowLab VoE transfers (first 2000).
+ */
+voe: Array<VoeTransfer>, 
 /**
  * SoE messages with the error flag.
  */

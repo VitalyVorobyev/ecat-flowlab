@@ -32,10 +32,11 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
-      - name: Lab master with EtherCrab (feature `master`)
-        if: runner.os == 'Linux'
+      - name: Lab master (EtherCrab) and emulated slave (features `master`, `slave`)
+        if: runner.os != 'Windows'
         run: |
-          cargo clippy -p flowlab-cli --features master -- -D warnings
+          cargo clippy -p flowlab-cli --features master,slave -- -D warnings
+          cargo clippy -p flowlab-master -p flowlab-slave --all-features --all-targets -- -D warnings
           cargo test -p flowlab-master --features hardware
       - name: Generated UI types are up to date
         run: git diff --exit-code -- ui/src/api/gen
@@ -79,8 +80,9 @@ jobs:
           tool: cargo-zigbuild
       - name: Stand-in UI to embed
         run: mkdir -p ui/dist && echo '<!doctype html><title>FlowLab stand-in</title>' > ui/dist/index.html
-      # With the lab master (EtherCrab, raw socket), as the release builds it for Linux.
-      - run: cargo zigbuild --locked --release -p flowlab-cli --features embed-ui,master --target ${{ matrix.target }}
+      # With the lab master (EtherCrab, raw socket) and the emulated slave, as the release builds
+      # them for Linux.
+      - run: cargo zigbuild --locked --release -p flowlab-cli --features embed-ui,master,slave --target ${{ matrix.target }}
       - name: The binary is static
         run: file target/${{ matrix.target }}/release/flowlab | tee /dev/stderr | grep -q 'statically linked'
       - name: The binary serves its embedded UI from any directory
