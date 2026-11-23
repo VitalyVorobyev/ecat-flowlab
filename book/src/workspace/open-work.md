@@ -29,7 +29,8 @@ questions that real captures should answer.
   several slaves and transfers at once (the policies' multi-slave behaviour); distributed
   clocks in `run`.
 - Gateway: a host network interface (utun on macOS, tap on Linux, needs root) next to the port
-  forwards, so the host's own TCP/IP stack talks to the slave; UDP forwards.
+  forwards, so the master's host's own TCP/IP stack talks to the slave; UDP forwards. (On the
+  slave's side, `pdi-slave --eoe-bridge` already hands EoE to the host's stack.)
 - FlowLab VoE in a slave stack (SOES on the LAN9252), so its fewer acknowledgements are
   measured against a real PDI; VoE conversations in `flowlab-synth`; VoE goodput in the
   Compare view.
@@ -40,9 +41,12 @@ questions that real captures should answer.
   polling (the LAN9252's IRQ pin). A full "mailbox out" message is read in two FIFO commands
   (the first 64 bytes, then the rest); reading the whole buffer when the last message was long
   would save one. Each spidev transfer costs about 40 µs on the Verdin iMX8MP, more than its
-  bytes at 20 MHz: a kernel driver (or SPI access from the M7 core) would remove most of it.
-- Run `flowlab pdi-bench` writes (`--allow-writes`) on the Verdin/LAN9252 and store the fit in a
-  `lab.json`; reads have run at 10–25 MHz.
+  bytes at 20 MHz: a kernel driver (or ESC access from the M7 core) would remove most of it,
+  and is the next lever for TCP over EoE beyond about 400 kB/s.
+- Run `flowlab pdi-bench` with all sizes on the Verdin/LAN9252 (`--allow-writes`, both
+  `--spi-tuning stack` and `fast`) and store the fits in a `lab.json`.
+- `pdi-phy` on a carrier whose firmware forces the PHYs: confirm that `--autoneg` lets a USB
+  adapter link on both ports, and whether the slave's application sets the PHYs again on start.
 - PDI profiling of the real stack: a converter from kernel SPI trace events (ftrace/`trace-cmd`
   `spi:spi_transfer_start`/`stop`) of the running slave application to PDI timing samples for
   `flowlab pdi-fit`, grouping the transfers of one ESC access.
@@ -67,8 +71,9 @@ questions that real captures should answer.
 ## Simulator and studies
 
 - TCP over EoE (acknowledgements, windows, retransmission) and VoE, with the slave stack's
-  time per mailbox message and per Ethernet frame as parameters; the gateway's results on the
-  LAN9252 rig (`results/lan9252/gw/`, not committed) give both.
+  time per mailbox message and per Ethernet frame as parameters; the
+  [measured TCP results](../studies/bulk-transfer/lab-results.md#tcp-over-eoe) give both for
+  FlowLab's slave application.
 - Priority and weighted mailbox policies.
 - The bulk-transfer study's application session protocol.
 - A `SimSpec` of an existing segment in one step: from the planner, an ENI, a `master scan` or a

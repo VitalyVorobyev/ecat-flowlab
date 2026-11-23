@@ -16,9 +16,9 @@ real Ethernet frames, and one analysis reads them all.
 
   flowlab-devices: ESI/ENI → expected WKCs, names, mailboxes (analysis) · bus budget (planner)
   flowlab-study:   many flowlab-sim runs → Pareto frontier, calibration against a CaptureReport
-  flowlab-pdi:     timed ESC accesses over a LAN9252's SPI → PDI timing samples (pdi-fit)
+  flowlab-pdi:     a LAN9252 over SPI: timed accesses → PDI samples (pdi-fit) · slave access · PHYs
   flowlab-master:  transfers on the lab rig (EtherCrab, opt-in) → MeasuredTransfer, set up like a sim run
-  flowlab-slave:   an emulated ESC answering a master's frames (in-process tests, or a port, opt-in)
+  flowlab-slave:   an emulated ESC (in-process tests, or a port, opt-in) · the PDI slave on a real ESC · EoE bridge
 ```
 
 Because the simulator and the generator write frames through the same codec the analysis
@@ -39,9 +39,9 @@ Only their provenance differs.
 | [`flowlab-sim`](flowlab-sim.md) | Discrete-event simulator emitting frames | ecat-wire, core, capture, mailbox |
 | [`flowlab-study`](flowlab-study.md) | Parameter studies, Pareto frontier, calibration, what-if, lab inputs | core, sim, analysis |
 | [`flowlab-live`](flowlab-live.md) | Live capture through dumpcap or tcpdump, analysed in a rolling window | core, capture, analysis |
-| [`flowlab-pdi`](flowlab-pdi.md) | Timed ESC accesses over a LAN9252's SPI (Linux spidev, or a simulated LAN9252) for `pdi-fit` | core |
+| [`flowlab-pdi`](flowlab-pdi.md) | A LAN9252 over SPI (Linux spidev, or a simulated LAN9252): timed accesses for `pdi-fit`, a slave application's access, the PHYs through MII | core |
 | [`flowlab-master`](flowlab-master.md) | Lab master: mailbox transfer engine with the simulator's policies, a virtual slave; the safety checks and EtherCrab behind the `hardware` feature | ecat-wire, core, devices, mailbox; live with `hardware` |
-| [`flowlab-slave`](flowlab-slave.md) | Emulated ESC: registers, SII, AL states, SyncManagers, FMMUs, with the mailbox responder; a raw-socket server behind the `wire` feature | ecat-wire, core, mailbox |
+| [`flowlab-slave`](flowlab-slave.md) | Emulated ESC: registers, SII, AL states, SyncManagers, FMMUs, with the mailbox responder; the same responder on a real ESC over its PDI; the EoE bridge; a raw-socket server behind the `wire` feature | ecat-wire, core, mailbox, pdi |
 | [`flowlab-server`](server-cli.md) | Local HTTP API and static UI (axum) | the above except pdi, master and slave: it never touches hardware |
 | [`flowlab-cli`](server-cli.md) | The `flowlab` binary | all of the above; master only with the feature `master`, slave only with `slave` |
 | `xtask` (not published) | Developer commands behind the cargo aliases `cargo ui`, `ui-dev`, `ci`, `site` ([Contributing](contributing.md)) | std only |

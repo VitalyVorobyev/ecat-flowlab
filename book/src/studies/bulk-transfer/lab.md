@@ -89,7 +89,7 @@ after every access), and times each one ([flowlab-pdi](../../workspace/flowlab-p
    (`--reps`) after 3 untimed ones (`--warmup`), in a shuffled order. By default the accesses
    use the bus as the slave stacks do; `--spi-tuning` times the
    [driver shortcuts](../../guide/pdi-slave.md#spi-options) instead (on the Verdin iMX8MP rig,
-   `split` halves a 1 KiB write). Above 30 MHz use
+   `split` more than halves a 1 KiB write; [measured results](lab-results.md)). Above 30 MHz use
    `--read-instruction fast-read`. (On the Verdin iMX8MP rig, the link check fails at 30 MHz and
    above with either instruction, and 25 MHz times like 20 MHz.) It prints the median and 95th percentile per size and writes
    the [PDI timing samples](../../reference/specs.md#pdi-timing-samples), with the setup in

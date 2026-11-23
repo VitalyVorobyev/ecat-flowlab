@@ -79,12 +79,26 @@ What FlowLab does not do, or does only partly. Each item is a property of the cu
   Windows only `--sim` runs.
 - **One board.** The protocol follows the data sheet, Microchip's application notes and the
   SOES hardware layer, and is tested against FlowLab's own simulated LAN9252. It has run on one
-  real board (a Verdin iMX8MP with a LAN9252 on SPI), reads only, up to 25 MHz.
+  real board (a Verdin iMX8MP with a LAN9252 on SPI), reads and writes, up to 25 MHz
+  ([measured results](../studies/bulk-transfer/lab-results.md)).
 - **Its own access pattern.** It times one access at a fixed address per size; a stack that
-  splits or merges accesses differently can time differently. On the Verdin rig, the slave
-  application took 1.3–2.3 ms per 128-byte mailbox message, where the benchmark reads 128 bytes
-  in 0.33–0.38 ms at 20 MHz: there, the benchmark bounds what the SPI allows, not what the stack
-  does.
+  splits or merges accesses differently, or spends time between accesses, can time
+  differently. The benchmark bounds what the SPI allows, not what a given stack does.
+
+## PDI slave
+
+- **Mailbox only.** `flowlab pdi-slave` serves AL Control and the mailbox (INIT, PRE-OP): no
+  process data (SAFE-OP, OP), distributed clocks, watchdogs or the SyncManager repeat request.
+  Its results show what the ESC, its SPI and the master carry, not what a product's
+  application delivers with all of those running.
+- **LAN9252 on Linux spidev, polled.** It polls the ESC in a loop that keeps one core busy;
+  the LAN9252's IRQ pin is not used. It has run on one board.
+- **EoE bridge on Linux**, to one end of a veth pair, with root rights.
+
+## PHY registers
+
+- `flowlab pdi-phy` reads the LAN9252's PHYs through the ESC's MII interface; registers 18, 27
+  and 31 are decoded as the LAN9252 data sheet defines them, which other PHYs may not share.
 
 ## Platforms
 

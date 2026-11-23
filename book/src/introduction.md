@@ -9,9 +9,10 @@ the same decoder and the same analysis, so they can be compared view for view.
 It runs on a laptop: a command-line tool (`flowlab`) and a local web UI (`flowlab serve`). Reading
 captures, simulating and planning need no EtherCAT hardware, no network adapter, no root and no
 libpcap. To watch a running segment, it reads what Wireshark's dumpcap or tcpdump captures, which
-only listen. Three opt-in tools reach hardware on a lab rig: a benchmark of a slave's SPI to its
-ESC, a lab master that sends frames on an isolated segment, and an emulated slave that answers
-them on an ordinary Ethernet port, for a rig without EtherCAT hardware
+only listen. The [lab toolbox](guide/toolbox.md) reaches hardware on a lab rig, each tool
+opt-in: a lab master that sends frames on an isolated segment, an emulated slave that answers
+them on an ordinary Ethernet port, FlowLab's slave application on a real ESC (a LAN9252 on a
+Verdin, for example), and instruments for the SPI, the PHYs and TCP over EoE
 ([Safety](getting-started.md#safety)).
 
 ## What it does
@@ -30,7 +31,10 @@ them on an ordinary Ethernet port, for a rig without EtherCAT hardware
 | Put measured values (PDI timing, policy) into a simulator spec | `flowlab apply-lab` | — |
 | Time a slave's SPI accesses to its ESC (LAN9252) and fit the simulator's PDI model | `flowlab pdi-bench`, `flowlab pdi-fit` | — |
 | Scan a lab network and measure transfers on it with FlowLab's own master (opt-in build) | `flowlab master scan\|run\|transfer` | — |
+| Reach a slave's TCP services over EoE and measure TCP throughput | `flowlab master gateway`, `flowlab tcp-bench` | — |
 | Answer a master's frames as an emulated ESC on an ordinary Ethernet port (opt-in build) | `flowlab slave` | — |
+| Run FlowLab's slave application on a real ESC (LAN9252 on SPI), with EoE to a network interface (opt-in build) | `flowlab pdi-slave` | — |
+| Read and set the LAN9252's PHYs (link, auto-negotiation, MDI-X) | `flowlab pdi-phy` | — |
 | Print the JSON Schema of an input file | `flowlab schema` | the spec forms |
 
 ## Three kinds of data, never mixed
@@ -52,11 +56,15 @@ assumptions; see [Provenance and assumptions](reference/provenance.md).
 - **User guide**: installing; [investigating your own network](guide/own-network.md), from the
   first capture to a model fitted to it and a change checked on the wire; the UI; and each task in
   the table above.
-- **Reference**: input and output file formats, the HTTP API, limitations, terms and sources.
+- **Lab toolbox**: the tools that reach hardware: lab master, emulated slave, PDI slave, PHY and
+  TCP instruments, and running them [on a Verdin board](guide/verdin.md).
+- **Reference**: input and output file formats, the HTTP API, the
+  [transfer protocols](reference/transfer-protocols.md), limitations, terms and sources.
 - **Workspace**: the crates, how they fit together, how they are tested, and the design
   decisions behind them, for anyone who wants to extend FlowLab.
 - **Studies**: investigations made with the tool. The first is
   [bulk transfer over EtherCAT](studies/bulk-transfer/index.md), with a
-  [report](studies/bulk-transfer/report.md) on optimising a 10 MB transfer through an ESC on SPI.
+  [report](studies/bulk-transfer/report.md) on optimising a 10 MB transfer through an ESC on SPI
+  and [measured results](studies/bulk-transfer/lab-results.md) from a LAN9252 on a Verdin.
 
 The Rust API documentation is published next to this book under [`api/`](api/ecat_wire/index.html).

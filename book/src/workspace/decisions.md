@@ -193,12 +193,12 @@ experiment can answer them.
   need the slave to open connections to the master, or UDP, do not run through it.
 
 - **ADR-041 A PDI slave: FlowLab's application on a real ESC.** To see what an ESC, its SPI and
-  the master carry independent of a vendor stack (its compiled-in mailbox limit, its access
-  pattern), `flowlab pdi-slave` runs the emulated slave's responder behind a real LAN9252,
+  the master carry independent of the slave's own application (its compiled-in mailbox limit,
+  its access pattern), `flowlab pdi-slave` runs the emulated slave's responder behind a real LAN9252,
   polled over spidev, in place of the slave's own application. It needs the explicit
-  `--replace-slave-application` (the vendor application must be stopped, or both serve the
-  ESC) and goes through `flowlab_pdi::SlaveAccess`, which reads any ESC address but writes only
-  AL Status, AL Status Code, the SyncManagers' PDI Control bytes (a stopped vendor stack leaves
+  `--replace-slave-application` (the slave's own application must be stopped, or both serve
+  the ESC) and goes through `flowlab_pdi::SlaveAccess`, which reads any ESC address but writes only
+  AL Status, AL Status Code, the SyncManagers' PDI Control bytes (a stopped application can leave
   its mailboxes deactivated there) and process RAM: AL Control and the master's part of the
   SyncManager registers stay the master's. It answers mailboxes only (PRE-OP); the master's `--mailbox-bytes` sets their size.
   Consequences: a result against it is measured with FlowLab's application, not the product's,
@@ -207,6 +207,17 @@ experiment can answer them.
   writes, no abort before a command) and message-only buffer accesses, while `pdi-bench`
   defaults to the stacks' access pattern (`stack`), because its samples model what a stack
   pays; both take the other with an option.
+
+- **ADR-042 Rig instruments in the binary.** The checks a rig needs besides master and slave
+  are `flowlab` subcommands, not scripts: `tcp-bench` (TCP throughput with SHA-256 checks, a
+  minimal HTTP/1.0 server and client on std TCP, payload from `flowlab_mailbox`) and `pdi-phy`
+  (the LAN9252's PHYs through the ESC's MII interface). A Verdin image has no compiler and may
+  have no Python; the static binary is the one thing that is always copied over. `tcp-bench`
+  sends no EtherCAT frames and needs no opt-in. `pdi-phy` reads freely, writes only the MII
+  management registers, and changes a PHY only with `--allow-phy-writes`, because a PHY write
+  can take the EtherCAT link down until the next reset. Consequences: the binary grows by a
+  few hundred lines of std-only code; TCP results come from FlowLab's client and server, so a
+  result says which ones.
 
 ## Open questions
 
@@ -226,12 +237,12 @@ experiment can answer them.
   0x080D) instead of FPRD? Such polls are counted as process data today. *Test:* TwinCAT capture.
 - Is "counter equal to the previous" a reliable repeat test when a master resets counters
   after a state change? *Test:* captures across INIT → PREOP transitions on real slaves.
-- What are a LAN9252-class ESC's effective SPI write rates and per-access overhead from a Linux
-  userspace driver on the Verdin? Reads are measured (`pdi-bench`, 10–25 MHz: about 115 µs per
-  access and 3.8 Mbit/s at 20 MHz); writes and a fit into `lab.json` are not. A capture of the
-  real stack's mailbox turnaround (1.3–2.3 ms per 128-byte message) shows that its stack, not the
-  SPI rate, sets its time, so a PDI-bound model with these inputs describes a stack that accesses
-  the ESC in bursts. *Test:* `pdi-bench --allow-writes`, then `pdi-fit`.
+- Does the simulator's PDI model (a fixed cost per access plus bytes at a rate) fit a LAN9252
+  from a Linux userspace driver? Reads and writes are measured on the Verdin
+  ([LAN9252 on a Verdin iMX8MP](../studies/bulk-transfer/lab-results.md)): a 1 KiB access takes
+  about 2 ms with `--spi-tuning fast`, and each spidev transfer costs about 40 µs. The cost
+  depends on the number of transfers per access, which the model folds into the fixed cost.
+  *Test:* `pdi-bench --allow-writes` with all sizes, `pdi-fit`, and the residuals per size.
 - Does the LAN9252 accept the `FAST READ` dummy byte value 0x01 that SOES sends? On the Verdin
   rig, `ID_REV` reads 0x9252 in bits 31:16 and READ works up to 25 MHz; FAST READ was tried only
   at 30 MHz and above, where the link check fails with either instruction, so the board's SPI

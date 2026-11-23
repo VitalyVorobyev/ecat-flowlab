@@ -178,7 +178,10 @@ What each part of FlowLab does to a network:
 | `analyze`, `serve`, `synth`, `simulate`, `what-if`, `study`, `plan`, `esi`, `policy`, `pdi-fit` | no: files only | — |
 | `capture` and the Live view | listens through dumpcap or tcpdump; sends nothing | the Live view only after `serve --live` |
 | `pdi-bench` | the slave's SPI to its ESC, on the slave's host | refuses unless the ESC answers and is in INIT; never touches AL Control or SyncManager registers; writes only with `--allow-writes` into an `--area` of process RAM ([Measuring the SPI](studies/bulk-transfer/lab.md#measuring-the-spi)) |
-| `master scan\|run\|transfer` | **sends EtherCAT frames** | only in a build with the feature `master` (the Linux and macOS release binaries); an interface name, `--isolated-lab-network`, and no other master heard first ([Lab master](guide/master.md#safety-checks)) |
+| `pdi-phy` | the slave's SPI to its ESC's MII interface | reads the PHY registers; writes them only with `--allow-phy-writes` ([PHY registers](guide/pdi-phy.md)) |
+| `pdi-slave` | **serves a real ESC** in place of the slave's application | only in a build with the feature `slave`; `--replace-slave-application`; writes only AL Status, AL Status Code, PDI Control and process RAM; the EoE bridge sends only on the interface given ([PDI slave](guide/pdi-slave.md)) |
+| `tcp-bench` | ordinary TCP connections | none needed: no EtherCAT frames |
+| `master scan\|run\|transfer\|gateway` | **sends EtherCAT frames** | only in a build with the feature `master` (the Linux and macOS release binaries); an interface name, `--isolated-lab-network`, and no other master heard first ([Lab master](guide/master.md#safety-checks)) |
 | `slave` | **answers EtherCAT frames** | only in a build with the feature `slave` (the Linux and macOS release binaries); an interface name and `--isolated-lab-network` ([Emulated slave](guide/slave.md)) |
 
 Capture on an isolated lab network where you can. Never connect production equipment to a lab

@@ -6,9 +6,11 @@ takes the place of the slave's own application behind it and serves AL Control a
 mailbox through the PDI, with the same responder as the [emulated slave](slave.md) (FoE, CoE,
 EoE, [FlowLab VoE](../reference/voe.md)).
 
-With it, the mailbox sizes and the PDI access pattern are FlowLab's, not the vendor stack's: a
-transfer measured against it shows what the ESC, its SPI and the master can carry, independent
-of the stack that normally runs there.
+With it, the mailbox sizes and the PDI access pattern are FlowLab's, not those of the slave's
+own application: a transfer measured against it shows what the ESC, its SPI and the master can
+carry, independent of the application that normally runs there. [On a Verdin
+board](verdin.md) walks through a whole run; [LAN9252 on a Verdin
+iMX8MP](../studies/bulk-transfer/lab-results.md) has the measured results.
 
 ```bash
 # On the slave's host: stop the slave's own application first (here a container).
@@ -80,7 +82,8 @@ messages wait for "mailbox in", no more frames are taken from `PEER`. A Set IP P
 is answered with success and applied to `HOST` (`ip link set … address`, `ip addr flush`, `ip
 addr add`, `ip link set … up`; the subnet mask gives the prefix, /24 without one). Without the
 bridge, EoE frames are counted and Set IP requests go to the responder, which does not answer
-them.
+them. [TCP over EoE](tcp-bench.md) measures the result with `flowlab tcp-bench`. The bridge loop
+is `flowlab_slave::bridge::EoeBridge` ([flowlab-slave](../workspace/flowlab-slave.md)).
 
 ## SPI options
 

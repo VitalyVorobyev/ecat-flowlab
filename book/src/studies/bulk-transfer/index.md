@@ -20,6 +20,7 @@ PC master ──[100BASE-TX EtherCAT]── LAN9252 ESC board ──SPI / IRQ / 
 | [Report](report.md) | Findings and recommendations from the simulator: what limits a 10 MB transfer, what helps, and what to measure first |
 | [Method](method.md) | Requirements, transport candidates, fairness rules, metrics, the search problem |
 | [Lab plan](lab.md) | Hardware gate, wiring checklist, master choice, lab sequence, stop/go decisions, risks |
+| [LAN9252 on a Verdin iMX8MP](lab-results.md) | Measured: SPI access costs, mailbox access, TCP over EoE and VoE throughput with FlowLab's slave application |
 
 ## How FlowLab serves the study
 
