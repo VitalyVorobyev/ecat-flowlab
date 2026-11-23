@@ -48,6 +48,30 @@ mod imp {
                 .collect();
             self.dev.transfer_multiple(&mut transfers)
         }
+
+        fn transactions(&mut self, transactions: &mut [&mut [Segment<'_>]]) -> io::Result<()> {
+            let count = transactions.len();
+            let mut transfers: Vec<SpidevTransfer<'_, '_>> = Vec::new();
+            for (i, t) in transactions.iter_mut().enumerate() {
+                let last = t.len().saturating_sub(1);
+                for (j, s) in t.iter_mut().enumerate() {
+                    let mut x = match s {
+                        Segment::Write(b) => SpidevTransfer::write(b),
+                        Segment::Read(b) => SpidevTransfer::read(b),
+                    };
+                    x.speed_hz = self.speed_hz;
+                    // Release chip select after each transaction but the last.
+                    if j == last && i + 1 < count {
+                        x.cs_change = 1;
+                    }
+                    transfers.push(x);
+                }
+            }
+            if transfers.is_empty() {
+                return Ok(());
+            }
+            self.dev.transfer_multiple(&mut transfers)
+        }
     }
 
     pub(super) fn open(path: &Path, clock_hz: u32, mode: u8) -> Result<Box<dyn SpiBus>, PdiError> {

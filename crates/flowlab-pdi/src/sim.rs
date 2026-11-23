@@ -138,6 +138,11 @@ impl SimLan9252 {
         &self.esc
     }
 
+    /// The ESC core's memory, to set up what the master side would have written.
+    pub fn esc_mut(&mut self) -> &mut [u8] {
+        &mut self.esc
+    }
+
     /// Every access of the ESC core's memory so far.
     pub fn accesses(&self) -> &[EscAccess] {
         &self.accesses

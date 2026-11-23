@@ -10,6 +10,7 @@ use clap::{Args, ValueEnum};
 use flowlab_core::Provenance;
 use flowlab_pdi::{
     Area, BenchOptions, Clock, DEFAULT_SIZES, Lan9252, MonotonicClock, ReadInstruction, SimLan9252, SimTiming, SpiBus,
+    SpiTuning,
 };
 
 use crate::{Result, ensure_parent, ns};
@@ -56,9 +57,17 @@ pub(crate) struct PdiBenchArgs {
     /// Also time writes, into --area (overwrites it).
     #[arg(long)]
     allow_writes: bool,
+    /// The slave application is stopped and no master runs: accept the AL state it left
+    /// instead of INIT. Reads only, from an explicit --area outside the SyncManagers' buffers.
+    #[arg(long, conflicts_with = "allow_writes")]
+    app_stopped: bool,
     /// Do not read AL Event Request after every access (the SOES hardware layer does).
     #[arg(long)]
     no_al_event: bool,
+    /// How the SPI bus is used: `stack` (as the slave stacks do), `fast` (split writes, no
+    /// abort) or a list of `split`, `batch`, `fifo`, `noabort`.
+    #[arg(long, default_value = "stack", value_parser = parse_tuning, value_name = "TUNING")]
+    spi_tuning: SpiTuning,
     /// Chip ID expected in ID_REV bits 31:16.
     #[arg(long, default_value = "0x9252", value_parser = parse_hex16, value_name = "HEX")]
     chip_id: u16,
@@ -82,6 +91,10 @@ pub(crate) struct PdiBenchArgs {
     sim_transaction_ns: u64,
 }
 
+fn parse_tuning(s: &str) -> std::result::Result<SpiTuning, String> {
+    SpiTuning::parse(s).map_err(|e| e.to_string())
+}
+
 fn parse_hex16(s: &str) -> std::result::Result<u16, String> {
     let h = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")).unwrap_or(s);
     u16::from_str_radix(h, 16).map_err(|_| format!("`{s}` is not a 16-bit hex number (e.g. 0x9252)"))
@@ -94,6 +107,7 @@ pub(crate) fn run(a: PdiBenchArgs) -> Result<()> {
         warmup: a.warmup,
         area: a.area,
         allow_writes: a.allow_writes,
+        app_stopped: a.app_stopped,
         seed: a.seed,
     };
     let plan = flowlab_pdi::plan(&options)?;
@@ -121,7 +135,10 @@ pub(crate) fn run(a: PdiBenchArgs) -> Result<()> {
     if matches!(instruction, ReadInstruction::Read) && a.clock_hz > 30_000_000 {
         eprintln!("warning: the LAN9252 specifies READ up to 30 MHz; use --read-instruction fast-read above it");
     }
-    let mut esc = Lan9252::new(bus).with_read_instruction(instruction).with_al_event_read(!a.no_al_event);
+    let mut esc = Lan9252::new(bus)
+        .with_read_instruction(instruction)
+        .with_al_event_read(!a.no_al_event)
+        .with_tuning(a.spi_tuning);
     eprintln!(
         "timing {} reads{} of {} sizes × {} on {target}",
         plan.read_area,
@@ -136,13 +153,14 @@ pub(crate) fn run(a: PdiBenchArgs) -> Result<()> {
     let comments = [
         format!("flowlab pdi-bench {}: {target}", env!("CARGO_PKG_VERSION")),
         format!(
-            "LAN9252 ID_REV 0x{:08X}, AL Status {}; SPI {} Hz, mode {}, {}; AL Event read after every access: {}",
+            "LAN9252 ID_REV 0x{:08X}, AL Status {}; SPI {} Hz, mode {}, {}; AL Event read after every access: {}; SPI tuning {}",
             bench.link.id_rev,
             bench.link.al_state(),
             a.clock_hz,
             a.mode,
             instruction.name(),
-            if a.no_al_event { "no" } else { "yes" }
+            if a.no_al_event { "no" } else { "yes" },
+            a.spi_tuning.name()
         ),
         format!(
             "reads at {}, writes {}; {} timed after {} warm-up per direction and size, shuffled (seed {}); unix time {unix_s}",

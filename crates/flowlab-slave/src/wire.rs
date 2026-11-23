@@ -124,3 +124,50 @@ pub fn serve(
         }
     }
 }
+
+/// An Ethernet interface opened for raw frames without blocking: the far end of a bridge
+/// (for example one end of a veth pair whose other end carries the IP address), for
+/// [`crate::pdi::PdiSlave`]'s EoE frames.
+pub struct EthernetPort {
+    tx: Box<dyn pnet_datalink::DataLinkSender>,
+    rx: Box<dyn pnet_datalink::DataLinkReceiver>,
+}
+
+impl std::fmt::Debug for EthernetPort {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EthernetPort").finish_non_exhaustive()
+    }
+}
+
+impl EthernetPort {
+    /// Open interface `name` (needs `CAP_NET_RAW` or root).
+    pub fn open(name: &str) -> Result<Self, SlaveError> {
+        let Some(iface) = pnet_datalink::interfaces().into_iter().find(|i| i.name == name) else {
+            return Err(SlaveError::Io(format!("{name}: no such interface")));
+        };
+        let cfg = Config { read_timeout: Some(Duration::ZERO), ..Config::default() };
+        match pnet_datalink::channel(&iface, cfg) {
+            Ok(Channel::Ethernet(tx, rx)) => Ok(Self { tx, rx }),
+            Ok(_) => Err(SlaveError::Io(format!("{name}: not an Ethernet channel"))),
+            Err(e) => Err(SlaveError::Io(format!("{name}: {e}"))),
+        }
+    }
+
+    /// A frame, if one is waiting (frames this port sent itself included).
+    pub fn try_recv(&mut self) -> Result<Option<Vec<u8>>, SlaveError> {
+        match self.rx.next() {
+            Ok(f) => Ok(Some(f.to_vec())),
+            Err(e) if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock) => Ok(None),
+            Err(e) => Err(SlaveError::Io(e.to_string())),
+        }
+    }
+
+    /// Send a frame.
+    pub fn send(&mut self, frame: &[u8]) -> Result<(), SlaveError> {
+        match self.tx.send_to(frame, None) {
+            Some(Ok(())) => Ok(()),
+            Some(Err(e)) => Err(SlaveError::Io(e.to_string())),
+            None => Err(SlaveError::Io("frame not sent".into())),
+        }
+    }
+}

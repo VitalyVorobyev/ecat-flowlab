@@ -167,12 +167,94 @@ pub fn csr_chunk(address: u16, left: usize) -> usize {
     }
 }
 
+/// How the driver uses the SPI bus. [`SpiTuning::STACK`] (the default) accesses the LAN9252
+/// the way the slave stacks' hardware layers do, one bus call per LAN9252 transaction;
+/// [`SpiTuning::FAST`] uses the shortcuts that paid off on the Verdin iMX8MP rig (split writes,
+/// no abort). The bytes on the wire per transaction are the same.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpiTuning {
+    /// Send a write's instruction and address as a transfer of their own ahead of the data, so
+    /// that no transfer is longer than 64 bytes: Linux SPI drivers such as the i.MX ECSPI's
+    /// move longer transfers by DMA, which costs more than it saves at these sizes.
+    pub split_writes: bool,
+    /// Several LAN9252 transactions per bus call ([`SpiBus::transactions`]): a CSR command
+    /// with the status and data reads after it, the start of a process RAM command with the
+    /// status read, a FIFO burst with the status read after it. A status that still shows busy
+    /// falls back to polling.
+    pub batch: bool,
+    /// Fill the write FIFO with as many DWORDs as it has room for, instead of waiting until it
+    /// has room for a whole burst.
+    pub partial_fifo: bool,
+    /// Skip the abort (and its poll) before a process RAM command when the previous command in
+    /// that direction finished.
+    pub skip_abort: bool,
+}
+
+impl SpiTuning {
+    /// One bus call per LAN9252 transaction, whole bursts, an abort before every command.
+    pub const STACK: Self = Self { split_writes: false, batch: false, partial_fifo: false, skip_abort: false };
+    /// Split writes and no abort before a command. Batching and partial FIFO fills gained
+    /// nothing on the Verdin iMX8MP rig (each `cs_change` costs the kernel's default 10 µs).
+    pub const FAST: Self = Self { split_writes: true, batch: false, partial_fifo: false, skip_abort: true };
+
+    /// Parse `stack`, `fast` or a comma-separated list of `split`, `batch`, `fifo`, `noabort`.
+    pub fn parse(s: &str) -> Result<Self, PdiError> {
+        match s {
+            "stack" => return Ok(Self::STACK),
+            "fast" => return Ok(Self::FAST),
+            _ => {}
+        }
+        let mut t = Self::STACK;
+        for part in s.split(',').map(str::trim) {
+            match part {
+                "split" => t.split_writes = true,
+                "batch" => t.batch = true,
+                "fifo" => t.partial_fifo = true,
+                "noabort" => t.skip_abort = true,
+                other => {
+                    return Err(PdiError::Options(format!(
+                        "SPI tuning {other:?}: expected stack, fast or a list of split, batch, fifo, noabort"
+                    )));
+                }
+            }
+        }
+        Ok(t)
+    }
+
+    /// `stack`, `fast` or the list of shortcuts.
+    pub fn name(&self) -> String {
+        if *self == Self::STACK {
+            return "stack".into();
+        }
+        if *self == Self::FAST {
+            return "fast".into();
+        }
+        let names = [
+            (self.split_writes, "split"),
+            (self.batch, "batch"),
+            (self.partial_fifo, "fifo"),
+            (self.skip_abort, "noabort"),
+        ];
+        names.iter().filter(|(on, _)| *on).map(|(_, n)| *n).collect::<Vec<_>>().join(",")
+    }
+}
+
+impl Default for SpiTuning {
+    fn default() -> Self {
+        Self::STACK
+    }
+}
+
 /// A LAN9252 on an SPI bus.
 #[derive(Debug)]
 pub struct Lan9252<S> {
     bus: S,
     read_instruction: ReadInstruction,
     al_event_read: bool,
+    tuning: SpiTuning,
+    /// The last process RAM read / write command finished (no abort needed before the next).
+    read_idle: bool,
+    write_idle: bool,
     max_polls: u32,
     tx: Vec<u8>,
 }
@@ -185,6 +267,9 @@ impl<S: SpiBus> Lan9252<S> {
             bus,
             read_instruction: ReadInstruction::Read,
             al_event_read: true,
+            tuning: SpiTuning::STACK,
+            read_idle: false,
+            write_idle: false,
             max_polls: 100_000,
             tx: Vec::with_capacity(3 + 4 * reg::FIFO_DWORDS),
         }
@@ -194,6 +279,17 @@ impl<S: SpiBus> Lan9252<S> {
     pub fn with_read_instruction(mut self, r: ReadInstruction) -> Self {
         self.read_instruction = r;
         self
+    }
+
+    /// Use the bus this way (see [`SpiTuning`]).
+    pub fn with_tuning(mut self, tuning: SpiTuning) -> Self {
+        self.tuning = tuning;
+        self
+    }
+
+    /// How the bus is used.
+    pub fn tuning(&self) -> SpiTuning {
+        self.tuning
     }
 
     /// Read AL Event Request (0x0220) after every [`read`](Self::read) and
@@ -294,30 +390,89 @@ impl<S: SpiBus> Lan9252<S> {
     }
 
     /// One CSR read of 1, 2 or 4 aligned bytes.
-    fn csr_read(&mut self, address: u16, out: &mut [u8]) -> Result<(), PdiError> {
+    pub(crate) fn csr_read(&mut self, address: u16, out: &mut [u8]) -> Result<(), PdiError> {
         let size = out.len() as u32;
         let cmd = reg::CSR_BUSY | reg::CSR_READ | (size << reg::CSR_SIZE_SHIFT) | u32::from(address);
-        self.write_register(reg::ECAT_CSR_CMD, cmd)?;
-        self.poll(reg::ECAT_CSR_CMD, "ECAT_CSR_CMD busy to clear", |v| v & reg::CSR_BUSY == 0)?;
-        let v = self.read_register(reg::ECAT_CSR_DATA)?.to_le_bytes();
+        let v = if self.tuning.batch {
+            let w = write_bytes(reg::ECAT_CSR_CMD, cmd);
+            let (h1, n1) = self.read_header(reg::ECAT_CSR_CMD);
+            let (h2, n2) = self.read_header(reg::ECAT_CSR_DATA);
+            let (mut status, mut data) = ([0u8; 4], [0u8; 4]);
+            self.bus.transactions(&mut [
+                &mut [Segment::Write(&w)][..],
+                &mut [Segment::Write(&h1[..n1]), Segment::Read(&mut status)][..],
+                &mut [Segment::Write(&h2[..n2]), Segment::Read(&mut data)][..],
+            ])?;
+            if u32::from_le_bytes(status) & reg::CSR_BUSY == 0 {
+                data
+            } else {
+                self.poll(reg::ECAT_CSR_CMD, "ECAT_CSR_CMD busy to clear", |v| v & reg::CSR_BUSY == 0)?;
+                self.read_register(reg::ECAT_CSR_DATA)?.to_le_bytes()
+            }
+        } else {
+            self.write_register(reg::ECAT_CSR_CMD, cmd)?;
+            self.poll(reg::ECAT_CSR_CMD, "ECAT_CSR_CMD busy to clear", |v| v & reg::CSR_BUSY == 0)?;
+            self.read_register(reg::ECAT_CSR_DATA)?.to_le_bytes()
+        };
         out.copy_from_slice(&v[..out.len()]);
         Ok(())
     }
 
-    fn pram_read(&mut self, address: u16, buf: &mut [u8]) -> Result<(), PdiError> {
-        self.pram_start(reg::ECAT_PRAM_RD_CMD, reg::ECAT_PRAM_RD_ADDR_LEN, address, buf.len())?;
+    /// One CSR write of 1, 2 or 4 aligned bytes: the data first, then the command, then wait
+    /// until it is done.
+    pub(crate) fn csr_write(&mut self, address: u16, data: &[u8]) -> Result<(), PdiError> {
+        let mut v = [0u8; 4];
+        v[..data.len()].copy_from_slice(data);
+        let cmd = reg::CSR_BUSY | ((data.len() as u32) << reg::CSR_SIZE_SHIFT) | u32::from(address);
+        if self.tuning.batch {
+            let d = write_bytes(reg::ECAT_CSR_DATA, u32::from_le_bytes(v));
+            let c = write_bytes(reg::ECAT_CSR_CMD, cmd);
+            let (h, n) = self.read_header(reg::ECAT_CSR_CMD);
+            let mut status = [0u8; 4];
+            self.bus.transactions(&mut [
+                &mut [Segment::Write(&d)][..],
+                &mut [Segment::Write(&c)][..],
+                &mut [Segment::Write(&h[..n]), Segment::Read(&mut status)][..],
+            ])?;
+            if u32::from_le_bytes(status) & reg::CSR_BUSY == 0 {
+                return Ok(());
+            }
+        } else {
+            self.write_register(reg::ECAT_CSR_DATA, u32::from_le_bytes(v))?;
+            self.write_register(reg::ECAT_CSR_CMD, cmd)?;
+        }
+        self.poll(reg::ECAT_CSR_CMD, "ECAT_CSR_CMD busy to clear", |v| v & reg::CSR_BUSY == 0)?;
+        Ok(())
+    }
+
+    pub(crate) fn pram_read(&mut self, address: u16, buf: &mut [u8]) -> Result<(), PdiError> {
+        let mut status = self.pram_start(Way::Read, address, buf.len())?;
         let mut skip = usize::from(address & 3);
         let mut left = (skip + buf.len()).div_ceil(4);
         let mut done = 0;
         let mut chunk = [0u8; 4 * reg::FIFO_DWORDS];
         while left > 0 {
             let want = left.min(reg::FIFO_DWORDS);
-            let v = self.poll(reg::ECAT_PRAM_RD_CMD, "ECAT_PRAM_RD_CMD to have data", |v| {
-                v & reg::PRAM_AVAIL != 0 && fifo_count(v) >= want
-            })?;
+            let ready = |v: u32| v & reg::PRAM_AVAIL != 0 && fifo_count(v) >= want;
+            let v = match status {
+                Some(v) if ready(v) => v,
+                _ => self.poll(reg::ECAT_PRAM_RD_CMD, "ECAT_PRAM_RD_CMD to have data", ready)?,
+            };
             let n = fifo_count(v).min(left);
             let bytes = &mut chunk[..4 * n];
-            self.spi_read(reg::PRAM_RD_DATA, bytes)?;
+            if self.tuning.batch && n < left {
+                let (h, hn) = self.read_header(reg::PRAM_RD_DATA);
+                let (hs, hsn) = self.read_header(reg::ECAT_PRAM_RD_CMD);
+                let mut st = [0u8; 4];
+                self.bus.transactions(&mut [
+                    &mut [Segment::Write(&h[..hn]), Segment::Read(bytes)][..],
+                    &mut [Segment::Write(&hs[..hsn]), Segment::Read(&mut st)][..],
+                ])?;
+                status = Some(u32::from_le_bytes(st));
+            } else {
+                self.spi_read(reg::PRAM_RD_DATA, bytes)?;
+                status = None;
+            }
             for &b in bytes.iter() {
                 if skip > 0 {
                     skip -= 1;
@@ -328,39 +483,100 @@ impl<S: SpiBus> Lan9252<S> {
             }
             left -= n;
         }
+        self.read_idle = true;
         Ok(())
     }
 
-    fn pram_write(&mut self, address: u16, data: &[u8]) -> Result<(), PdiError> {
-        self.pram_start(reg::ECAT_PRAM_WR_CMD, reg::ECAT_PRAM_WR_ADDR_LEN, address, data.len())?;
+    pub(crate) fn pram_write(&mut self, address: u16, data: &[u8]) -> Result<(), PdiError> {
+        let mut status = self.pram_start(Way::Write, address, data.len())?;
         let offset = usize::from(address & 3);
         let total = (offset + data.len()).div_ceil(4);
         let mut sent = 0;
         let mut chunk = [0u8; 4 * reg::FIFO_DWORDS];
         while sent < total {
             let want = (total - sent).min(reg::FIFO_DWORDS);
-            let v = self.poll(reg::ECAT_PRAM_WR_CMD, "ECAT_PRAM_WR_CMD to have space", |v| {
-                v & reg::PRAM_AVAIL != 0 && fifo_count(v) >= want
-            })?;
+            let need = if self.tuning.partial_fifo { 1 } else { want };
+            let ready = |v: u32| v & reg::PRAM_AVAIL != 0 && fifo_count(v) >= need;
+            let v = match status {
+                Some(v) if ready(v) => v,
+                _ => self.poll(reg::ECAT_PRAM_WR_CMD, "ECAT_PRAM_WR_CMD to have space", ready)?,
+            };
             let n = fifo_count(v).min(total - sent);
             // Byte i of the DWORD stream is data[i - offset]; bytes outside the data are padding.
             for (k, b) in chunk[..4 * n].iter_mut().enumerate() {
                 let i = 4 * sent + k;
                 *b = i.checked_sub(offset).and_then(|j| data.get(j)).copied().unwrap_or(0);
             }
-            self.spi_write(reg::PRAM_WR_DATA, &chunk[..4 * n])?;
+            if self.tuning.batch {
+                let h = write_header(reg::PRAM_WR_DATA);
+                let (hs, hsn) = self.read_header(reg::ECAT_PRAM_WR_CMD);
+                let mut st = [0u8; 4];
+                let mut tx = std::mem::take(&mut self.tx);
+                let mut data_segments = if self.tuning.split_writes {
+                    vec![Segment::Write(&h), Segment::Write(&chunk[..4 * n])]
+                } else {
+                    tx.clear();
+                    tx.extend_from_slice(&h);
+                    tx.extend_from_slice(&chunk[..4 * n]);
+                    vec![Segment::Write(&tx)]
+                };
+                let r = self.bus.transactions(&mut [
+                    &mut data_segments[..],
+                    &mut [Segment::Write(&hs[..hsn]), Segment::Read(&mut st)][..],
+                ]);
+                drop(data_segments);
+                self.tx = tx;
+                r?;
+                status = Some(u32::from_le_bytes(st));
+            } else {
+                self.spi_write(reg::PRAM_WR_DATA, &chunk[..4 * n])?;
+                status = None;
+            }
             sent += n;
         }
-        self.poll(reg::ECAT_PRAM_WR_CMD, "ECAT_PRAM_WR_CMD to complete", |v| v & reg::PRAM_BUSY == 0)?;
+        match status {
+            Some(v) if v & reg::PRAM_BUSY == 0 => {}
+            _ => {
+                self.poll(reg::ECAT_PRAM_WR_CMD, "ECAT_PRAM_WR_CMD to complete", |v| v & reg::PRAM_BUSY == 0)?;
+            }
+        }
+        self.write_idle = true;
         Ok(())
     }
 
-    /// Abort a previous command, wait for it, then start a new one for `len` bytes at `address`.
-    fn pram_start(&mut self, cmd: u16, addr_len: u16, address: u16, len: usize) -> Result<(), PdiError> {
-        self.write_register(cmd, reg::PRAM_ABORT)?;
-        self.poll(cmd, "the PRAM command to abort", |v| v & reg::PRAM_BUSY == 0)?;
-        self.write_register(addr_len, ((len as u32) << 16) | u32::from(address))?;
-        self.write_register(cmd, reg::PRAM_BUSY)
+    /// Start a process RAM command for `len` bytes at `address`: abort a previous one and wait
+    /// for it (unless [`SpiTuning::skip_abort`] and the previous one finished), write the
+    /// address and length, set the busy bit. With [`SpiTuning::batch`], the command register
+    /// is read in the same bus call and returned.
+    fn pram_start(&mut self, way: Way, address: u16, len: usize) -> Result<Option<u32>, PdiError> {
+        let (cmd, addr_len) = match way {
+            Way::Read => (reg::ECAT_PRAM_RD_CMD, reg::ECAT_PRAM_RD_ADDR_LEN),
+            Way::Write => (reg::ECAT_PRAM_WR_CMD, reg::ECAT_PRAM_WR_ADDR_LEN),
+        };
+        let idle = match way {
+            Way::Read => std::mem::replace(&mut self.read_idle, false),
+            Way::Write => std::mem::replace(&mut self.write_idle, false),
+        };
+        if !(self.tuning.skip_abort && idle) {
+            self.write_register(cmd, reg::PRAM_ABORT)?;
+            self.poll(cmd, "the PRAM command to abort", |v| v & reg::PRAM_BUSY == 0)?;
+        }
+        let al = ((len as u32) << 16) | u32::from(address);
+        if self.tuning.batch {
+            let a = write_bytes(addr_len, al);
+            let c = write_bytes(cmd, reg::PRAM_BUSY);
+            let (h, n) = self.read_header(cmd);
+            let mut st = [0u8; 4];
+            self.bus.transactions(&mut [
+                &mut [Segment::Write(&a)][..],
+                &mut [Segment::Write(&c)][..],
+                &mut [Segment::Write(&h[..n]), Segment::Read(&mut st)][..],
+            ])?;
+            return Ok(Some(u32::from_le_bytes(st)));
+        }
+        self.write_register(addr_len, al)?;
+        self.write_register(cmd, reg::PRAM_BUSY)?;
+        Ok(None)
     }
 
     fn poll(&mut self, register: u16, what: &'static str, done: impl Fn(u32) -> bool) -> Result<u32, PdiError> {
@@ -379,20 +595,26 @@ impl<S: SpiBus> Lan9252<S> {
 
     /// One read transaction of whole DWORDs at a fixed address.
     fn spi_read(&mut self, address: u16, out: &mut [u8]) -> io::Result<()> {
-        let a = address & reg::ADDRESS_MASK;
-        let [hi, lo] = a.to_be_bytes();
-        let header_read = [reg::SPI_READ, hi, lo];
-        let header_fast = [reg::SPI_FAST_READ, hi, lo, reg::FAST_READ_DUMMY];
-        let header: &[u8] = match self.read_instruction {
-            ReadInstruction::Read => &header_read,
-            ReadInstruction::FastRead => &header_fast,
-        };
-        self.bus.transaction(&mut [Segment::Write(header), Segment::Read(out)])
+        let (h, n) = self.read_header(address);
+        self.bus.transaction(&mut [Segment::Write(&h[..n]), Segment::Read(out)])
+    }
+
+    /// The read instruction and address (and the dummy byte of `FAST READ`): bytes and length.
+    fn read_header(&self, address: u16) -> ([u8; 4], usize) {
+        let [hi, lo] = (address & reg::ADDRESS_MASK).to_be_bytes();
+        match self.read_instruction {
+            ReadInstruction::Read => ([reg::SPI_READ, hi, lo, 0], 3),
+            ReadInstruction::FastRead => ([reg::SPI_FAST_READ, hi, lo, reg::FAST_READ_DUMMY], 4),
+        }
     }
 
     /// One write transaction of whole DWORDs at a fixed address: instruction, address and data
     /// in one buffer, as the stacks send it.
     fn spi_write(&mut self, address: u16, data: &[u8]) -> Result<(), PdiError> {
+        if self.tuning.split_writes {
+            let h = write_header(address);
+            return Ok(self.bus.transaction(&mut [Segment::Write(&h), Segment::Write(data)])?);
+        }
         let a = address & reg::ADDRESS_MASK;
         let mut tx = std::mem::take(&mut self.tx);
         tx.clear();
@@ -403,6 +625,26 @@ impl<S: SpiBus> Lan9252<S> {
         self.tx = tx;
         Ok(r?)
     }
+}
+
+/// Direction of a process RAM command.
+#[derive(Debug, Clone, Copy)]
+enum Way {
+    Read,
+    Write,
+}
+
+/// The write instruction and address.
+fn write_header(address: u16) -> [u8; 3] {
+    let [hi, lo] = (address & reg::ADDRESS_MASK).to_be_bytes();
+    [reg::SPI_WRITE, hi, lo]
+}
+
+/// A whole register write: instruction, address, the DWORD.
+fn write_bytes(address: u16, value: u32) -> [u8; 7] {
+    let [i, hi, lo] = write_header(address);
+    let [a, b, c, d] = value.to_le_bytes();
+    [i, hi, lo, a, b, c, d]
 }
 
 fn fifo_count(cmd: u32) -> usize {

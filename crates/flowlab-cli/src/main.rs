@@ -11,6 +11,7 @@ use std::process::ExitCode;
 mod capture;
 mod master;
 mod pdi_bench;
+mod pdi_slave;
 mod slave;
 
 use clap::{Parser, Subcommand};
@@ -210,8 +211,8 @@ enum Cmd {
         link_mbps: u64,
     },
     /// FlowLab's own EtherCAT master on an isolated lab segment: scan, a cyclic run, mailbox
-    /// transfers measured like the simulator's. Sends frames; needs a build with
-    /// `--features master`.
+    /// transfers measured like the simulator's, and a gateway to a slave's TCP services over
+    /// EoE. Sends frames; needs a build with `--features master`.
     Master(master::MasterArgs),
     /// An emulated EtherCAT slave on a network interface: answers a master's frames like an
     /// ESC with FoE, CoE and EoE behind its mailbox, for testing without EtherCAT hardware.
@@ -242,6 +243,12 @@ enum Cmd {
     /// --allow-writes into an --area of process RAM that nothing uses. --sim times a simulated
     /// LAN9252 instead and marks the samples simulated.
     PdiBench(pdi_bench::PdiBenchArgs),
+    /// FlowLab's slave application on a real ESC (a LAN9252 over Linux spidev), in place of the
+    /// slave's own application: AL Control and the mailbox (FoE, CoE, EoE, FlowLab VoE) served
+    /// through the PDI, with mailboxes up to --max-mailbox-bytes. Writes AL Status and the
+    /// mailbox buffers: stop the slave's own application first and pass
+    /// --replace-slave-application. Needs a build with `--features slave`.
+    PdiSlave(pdi_slave::PdiSlaveArgs),
     /// Read the master's mailbox service pattern from a capture, as a simulator policy.
     Policy {
         /// Capture of the real master serving the mailbox (e.g. during an FoE transfer).
@@ -503,6 +510,7 @@ fn run(cli: Cli) -> Result<()> {
             pdi_bench::fit_samples(&bytes, &samples.display().to_string(), &file_name(&samples), result, lab)?;
         }
         Cmd::PdiBench(args) => pdi_bench::run(args)?,
+        Cmd::PdiSlave(args) => pdi_slave::run(args)?,
         Cmd::Policy { capture, station, mailbox_hints, eni, lab } => {
             let trace = Trace::read(&capture).map_err(|e| format!("{}: {e}", capture.display()))?;
             let name = trace.input.name.clone();

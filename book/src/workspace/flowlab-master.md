@@ -1,8 +1,8 @@
 # flowlab-master
 
 The lab master behind `flowlab master` ([Lab master](../guide/master.md)): a mailbox transfer
-engine without hardware dependencies, a virtual slave to test it, and, behind the cargo feature
-`hardware`, EtherCrab on a network interface ([ADR-036](decisions.md#live-capture-and-hardware)).
+engine without hardware dependencies, an EoE gateway, a virtual slave to test them, and, behind
+the cargo feature `hardware`, EtherCrab on a network interface ([ADR-036](decisions.md#live-capture-and-hardware)).
 
 ## Design
 
@@ -43,6 +43,17 @@ engine without hardware dependencies, a virtual slave to test it, and, behind th
   "mailbox in" triggers the repeat request, a silent slave gets the last message again with a
   new counter, and a repeated counter from the slave is dropped ([Lab
   master](../guide/master.md#retries-and-counters)).
+- **EoE gateway** (`gateway` module): `run_gateway(&bus, slave, &GatewayConfig, log)` runs
+  over the same `MailboxBus` until a stop flag or a time limit. The master's side of the link
+  is a smoltcp `Interface` (Ethernet medium, one IPv4 address) whose device queues are the EoE
+  link: frames from the slave are reassembled with `EoeReassembler`, frames for it fragmented
+  with `eoe_fragments`, one write (if a fragment waits) and one read per pass, back to back or
+  one per `cycle_ns`. Local `TcpListener`s on 127.0.0.1 accept clients; each gets a smoltcp TCP
+  socket connected to the slave's port, and a pass moves bytes between the two without
+  blocking. An optional Set IP Parameter request (`flowlab_mailbox::msg::eoe_set_ip_request`)
+  goes first. When the slave is silent for 3 s with a connection open, the SyncManager 0/1
+  registers, AL status and AL event request are logged. The result, `GatewayResult`, has
+  provenance `measured`, per-connection records and a 100 ms timeline.
 - **`setup_like(&TransferPlan)`** builds the job for a transfer of a simulator spec
   (`SimSpec::transfer_plan(k)`, [flowlab-mailbox](flowlab-mailbox.md)) with the generated
   payload bytes, so measured and simulated SHA-256s match. The crate does not depend on the
@@ -69,7 +80,10 @@ engine without hardware dependencies, a virtual slave to test it, and, behind th
   `flowlab_slave::EmulatedSlave::handle`); nothing reaches a network, so it needs no
   `QuietSegment`, and results name the interface `in-process`. A slave whose EEPROM name is
   `flowlab_core::EMULATED_ESC_NAME` adds `EMULATED_ESC_ASSUMPTION` to the assumptions of `scan`,
-  `run` and `transfer` results.
+  `run` and `transfer` results. `Session::gateway(station, GatewayConfig, mailbox_bytes, log)`
+  runs the gateway in PRE-OP; with `mailbox_bytes` it first takes the slave to INIT, rewrites
+  SyncManagers 0 and 1 (disable, write, enable, read back) and asks for PRE-OP, restoring the
+  original SyncManagers if the slave refuses.
 
 ## API
 
@@ -83,8 +97,9 @@ engine without hardware dependencies, a virtual slave to test it, and, behind th
 | `VirtualSlave`, `VirtualSlaveConfig`, `VirtualSlaveLog` | the simulated slave and what it received |
 | `MeasuredTransfer`, `RunResult`, `ScanResult` (`network_config()` → ENI), `CycleTiming`, `CycleRecord`, `Summary` | results ([reports](../reference/reports.md#lab-master-results)) |
 | `EoeAddresses` | the addresses of the tunnelled UDP frames (re-exported from `flowlab_mailbox::msg`) |
+| `run_gateway(&bus, slave, &GatewayConfig, log)` → `GatewayResult` (`GatewayConnection`, `GatewayBucket`), `PortForward`, `EoeIpParameters` | the EoE gateway ([Lab master § gateway](../guide/master.md#gateway)) |
 | `safety::{check_segment, SegmentCheck, QuietSegment}` | the checks before anything is sent (feature `hardware`) |
-| `hardware::Session::{open, in_process, scan, run, transfer}`, `SessionOptions` | EtherCrab (feature `hardware`); `open` needs a `QuietSegment`, `in_process` takes a function that answers frames |
+| `hardware::Session::{open, in_process, scan, run, transfer, gateway}`, `SessionOptions` | EtherCrab (feature `hardware`); `open` needs a `QuietSegment`, `in_process` takes a function that answers frames |
 
 ## The virtual slave
 
@@ -114,7 +129,9 @@ arrived and answers at that moment.
   segmented SDO download whole at the slave with the expected message counts; an SDO abort ends
   the transfer with its text.
 - EoE: frames reassembled at the slave carry exactly the payload; a slave's EoE stream is
-  reassembled by the master; an EoE receive needs a byte count.
+  reassembled by the master; an EoE receive needs a byte count; an EoE send reads the messages
+  a slave sends meanwhile (ARP, ICMP), so a slave that takes the next message only after its
+  own was read completes the transfer without resends.
 - FlowLab VoE: one ACK per window and DONE verify a write (message counts checked); READY's
   length lets an upload run without a byte count; both directions complete, verified, with every
   7th datagram lost.
@@ -130,6 +147,12 @@ arrived and answers at that moment.
 - A result names its policy as the simulator's does; a scan becomes an ENI that `parse_eni` reads
   back; every mailbox transfer of `SimSpec::example()` set up with `setup_like` moves the bytes
   with the simulated result's SHA-256.
+
+`src/gateway.rs` tests the gateway against a slave with ESC mailbox semantics whose EoE frames
+end in its own smoltcp stack with a TCP echo server: Set IP answered and encoded least
+significant octet first; 50 kB through a forwarded port come back unchanged in fragments of a
+128-byte mailbox, both ways, with nothing lost or broken; a closed port at the slave ends the
+client's connection; mailboxes too small for the Set IP request are refused.
 
 `src/hardware.rs` (feature
 `hardware`) tests the EEPROM protocol word, the WKC mapping and the cycle wait.

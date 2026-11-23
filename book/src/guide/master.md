@@ -10,6 +10,8 @@ labelled **measured**.
 flowlab master scan     -i enp3s0 --isolated-lab-network --eni results/master/lab.eni.xml
 flowlab master run      -i enp3s0 --isolated-lab-network --cycle-us 1000 --duration 10
 flowlab master transfer -i enp3s0 --isolated-lab-network --station 0x1000 --protocol foe --file firmware.bin
+flowlab master gateway  -i enp3s0 --isolated-lab-network --station 0x1002 --slave-ip 10.0.0.2 \
+  --master-ip 10.0.0.1 --set-ip --forward 18080:8080
 ```
 
 > **This sends EtherCAT frames.** Use it only on an isolated lab segment, on a network card
@@ -139,6 +141,7 @@ flowlab master transfer -i enp3s0 --isolated-lab-network --station 0x1000 \
 | `--foe-file NAME`, `--foe-password N` | FoE request (default `flowlab.bin`, 0) |
 | `--sdo INDEX:SUB` | CoE object (default `0x2000:0`) |
 | `--eoe-mtu`, `--eoe-slave-mac`, `--eoe-slave-ip`, `--eoe-master-mac`, `--eoe-master-ip`, `--eoe-port` | the UDP/IPv4 frames EoE carries |
+| `--mailbox-bytes N` | set SyncManagers 0 and 1 to N bytes each before the transfer, as for the [gateway](#gateway); the result's assumptions say so |
 | `--voe-window N` (16) | FlowLab VoE: DATA messages per acknowledgement the master asks for |
 | `--reply-timeout-ms` (1000), `--max-resends` (3), `--max-duration` (600 s), `--first-counter` (1; 0 with `--op`) | retries and limits |
 | `-o FILE` | result JSON (default `results/master/transfer-UNIXTIME.json`) |
@@ -195,7 +198,10 @@ first counter is 1.
   addresses; set `--eoe-slave-mac` and `--eoe-slave-ip` to what the slave's EoE interface accepts.
   From the slave, the master reassembles frames and keeps the payload of UDP datagrams to
   `--eoe-port`; something on the slave must send them (for example a UDP sender bound to its EoE
-  interface), and `--bytes` says when the transfer is complete.
+  interface), and `--bytes` says when the transfer is complete. While it sends, the master also
+  reads "mailbox in": the slave's network stack answers with ARP requests and ICMP messages the
+  transfer does not wait for, and a stack that waits for them to be read takes no further
+  fragments. For TCP, use the [gateway](#gateway).
 - **FlowLab VoE**: FlowLab's own protocol in VoE messages ([reference](../reference/voe.md)).
   DATA messages fill the mailbox after an 8-byte header and are acknowledged once per
   `--voe-window` messages, so the master writes whenever "mailbox out" is free and reads while
@@ -206,6 +212,56 @@ first counter is 1.
   [emulated slave](slave.md) does.
 
 The PDO channel of the simulator is not a mailbox protocol; the lab master does not run it.
+
+## gateway
+
+Gives the master its own network interface on a slave's EoE link and forwards local TCP ports
+to the slave, so ordinary tools (curl, a browser, gRPC clients) reach the slave's services
+through EtherCAT. It needs no host network interface and no root: the master's TCP/IP stack is
+[smoltcp](https://github.com/smoltcp-rs/smoltcp) (0BSD) inside FlowLab, with one IPv4 address
+on the slave's subnet.
+
+```bash
+flowlab master gateway -i en10 --isolated-lab-network --station 0x1002 \
+  --slave-ip 10.0.0.2 --master-ip 10.0.0.1 --prefix 24 \
+  --set-ip --slave-mac 02:00:00:00:00:02 --slave-gateway 10.0.0.1 \
+  --forward 18080:8080 --forward 40051:40051 -o results/master/gateway.json
+curl http://127.0.0.1:18080/            # in another terminal: the slave's port 8080
+```
+
+The slaves stay in PRE-OP. With `--set-ip`, the master first sends an EoE Set IP Parameter
+request with the slave's address, the subnet mask from `--prefix`, and `--slave-mac` and
+`--slave-gateway` if given, as TwinCAT does when it starts EoE; a slave whose stack configures
+its interface only on that request needs it. Then every pass writes the next EoE fragment for
+the slave, if one waits, and reads "mailbox in", the two in flight together. Ctrl-C (or
+`--duration`) stops it, and the result is written.
+
+| Option | Meaning |
+|---|---|
+| `--station`, `--slave-ip`, `--master-ip`, `--prefix` (24) | the slave and both addresses on its subnet |
+| `--set-ip`, `--slave-mac`, `--slave-gateway` | send the Set IP Parameter request first |
+| `--master-mac` (`02:46:4c:00:00:01`) | the master's MAC on the EoE link |
+| `--forward LOCAL:REMOTE` | 127.0.0.1:LOCAL to the slave's port REMOTE (repeatable) |
+| `--mtu` (1500) | the master's IP MTU: its segments, and the segment size it announces, carry up to MTU − 40 bytes |
+| `--ack-delay-ms` (10; 0 = every segment at once) | the master's delayed acknowledgements; with a delay, an acknowledgement still goes out once two segments are unacknowledged |
+| `--tcp-buffer` (65536) | receive and send buffer per connection (the receive window) |
+| `--cycle-us` (0) | one pass per cycle of this length, as a cyclic master serves the mailbox; 0: passes back to back |
+| `--mailbox-bytes N` | set SyncManagers 0 and 1 to N bytes each instead of the EEPROM's sizes (below) |
+| `--duration` (3600 s), `-o FILE` | time limit; result JSON (default `results/master/gateway-UNIXTIME.json`) |
+
+Each connection is logged when it opens and closes, with its bytes and its goodput from the
+slave (bytes between its first and last byte from the slave). If the slave sends nothing for
+3 s while a connection is open, the master reads SyncManager 0 and 1, AL status and the AL
+event request and logs them: a stack that stopped in the middle of writing "mailbox in" shows
+SyncManager 1's write buffer open (status bit 7) and the buffer never full.
+
+`--mailbox-bytes` tries a larger mailbox without changing the EEPROM: the slave goes back to
+INIT, both SyncManagers are disabled, get the new length (SM0 where it was, SM1 right after it)
+and are enabled again, read back, and the slave is asked for PRE-OP. A stack checks the sizes
+against its own limits on that transition: one that refuses (AL status code 0x0016, invalid
+mailbox configuration) gets its original SyncManagers back, and the gateway does not start.
+The next initialisation (any `flowlab master` command, or another master) configures the
+EEPROM's sizes again.
 
 ## Comparing with the simulator
 
@@ -241,7 +297,8 @@ host's timing against the capture tool's.
 
 ## Results
 
-`scan`, `run` and `transfer` write `ScanResult`, `RunResult` and `MeasuredTransfer` JSON with
+`scan`, `run`, `transfer` and `gateway` write `ScanResult`, `RunResult`, `MeasuredTransfer` and
+`GatewayResult` JSON with
 `meta.source = "measured"` and their assumptions (see [Report and result files](../reference/reports.md#lab-master-results)).
 The command prints a summary tagged `[MEASURED]`; a transfer that did not complete still writes
 its result and exits with an error.

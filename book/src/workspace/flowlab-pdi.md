@@ -43,20 +43,31 @@ After every access the AL Event Request (0x0220) is read, as the SOES hardware l
   and `ID_REV` (0x050, chip 0x9252 in bits 31:16), then AL Status (0x0130). Wrong wiring, SPI
   mode or clock fails here, before any access of the ESC core.
 - `run` refuses unless the ESC is in INIT, and discards the run if AL Status changed by the end.
+  With `app_stopped` (the slave application is stopped, no master runs), it accepts the AL
+  state the application left, for reads only, from an explicit area.
 - `Lan9252::read` and `write` refuse the AL Control (0x0120–0x0121) and SyncManager
   (0x0800–0x087F) registers (`PROTECTED`), anything past the 4 KiB process RAM, and ranges
   crossing 0x1000. `write` accepts process RAM only.
+- `SlaveAccess` is the one exception, for a slave application that replaces the ESC's own
+  ([PDI slave](../guide/pdi-slave.md), [ADR-041](decisions.md#live-capture-and-hardware)):
+  `take_over` checks the link; `read` reaches every ESC address below 0x2000, AL Control and the
+  SyncManagers included; `write_al_status` writes AL Status Code (0x0134), then AL Status
+  (0x0130); `write_pdi_control` a SyncManager's PDI Control byte (0x0807 + 8·n); `write_ram`
+  writes process RAM only. Nothing else is written.
 - `plan` checks the options first: writes only with `allow_writes` and an explicit area that
-  starts at 0x1000 or above; every size fits its area.
+  starts at 0x1000 or above; `app_stopped` only without writes and with an explicit area;
+  every size fits its area.
 
 ## API
 
 | Item | Purpose |
 |---|---|
-| `SpiBus`, `Segment` | one transaction with chip select held: write and read segments |
+| `SpiBus`, `Segment` | one transaction with chip select held: write and read segments; `transactions` runs several in one call (spidev: one ioctl, `cs_change` between) |
+| `SpiTuning` | `STACK`, `FAST`, `parse`, `name`: split writes, batched transactions, partial FIFO fills, no abort before a command |
 | `open_spidev(path, clock_hz, mode)` | the Linux backend; elsewhere an error saying it needs Linux spidev |
-| `Lan9252::new(bus)` | `with_read_instruction`, `with_al_event_read`, `check_link`, `read`, `write`, `read_register` |
-| `SimLan9252::new(SimTiming)` | a simulated LAN9252 and its `SimClock`; `accesses()`, `errors()`, `set_byte_test`, `set_id_rev`, `set_al_status` |
+| `Lan9252::new(bus)` | `with_read_instruction`, `with_al_event_read`, `with_tuning`, `tuning`, `check_link`, `read`, `write`, `read_register` |
+| `SimLan9252::new(SimTiming)` | a simulated LAN9252 and its `SimClock`; `accesses()`, `errors()`, `esc()`, `esc_mut()`, `set_byte_test`, `set_id_rev`, `set_al_status` |
+| `SlaveAccess::take_over(lan9252, chip_id)` | a slave application's access: `read`, `write_al_status`, `write_pdi_control`, `write_ram`, `link`, `into_inner` |
 | `BenchOptions`, `plan`, `run` | sizes, repetitions, warm-up, area, writes, seed → `BenchRun` (link, plan, samples) |
 | `to_csv`, `Sample`, `Direction` | the samples file with its provenance marker (re-exported from `flowlab_core::pdi_samples`) |
 | `summarise` | median and p95 per direction and size |
@@ -75,14 +86,17 @@ access and any protocol misuse: FIFO underruns, invalid CSR sizes, partial DWORD
 - CSR reads at every alignment return the ESC's registers, in sizes 1, 2 and 4 only.
 - Writes to registers and accesses of AL Control, SyncManager registers, past 4 KiB or across
   0x1000 are refused before the bus is touched.
+- `SlaveAccess` reads AL Control and a SyncManager, and its only writes are AL Status Code, AL
+  Status and process RAM.
 - Process RAM write/read round trips for sizes that are not DWORD multiples, larger than the
   FIFO, at unaligned addresses; bytes around the range stay unchanged; the whole 4 KiB reads
   back.
 - A broken link (no answer, swapped bytes) and a wrong chip are refused with a hint; so is an
-  ESC outside INIT.
+  ESC outside INIT, unless the application is stopped and the run reads an explicit area.
 - Writes need `allow_writes` and an area in process RAM; without them a run only reads and
   leaves the memory unchanged; with them every write stays inside the area.
 - A run's CSV is parsed and fitted by `flowlab-study`: provenance `simulated`, and the rate equals
   what the simulated bus's per-burst cost implies within 1 %.
 
-The hardware backend has not been run on a LAN9252 yet ([Limitations](../reference/limitations.md)).
+The hardware backend has run on one board, a Verdin iMX8MP with a LAN9252 on SPI, reads only
+([Limitations](../reference/limitations.md#pdi-benchmark)).

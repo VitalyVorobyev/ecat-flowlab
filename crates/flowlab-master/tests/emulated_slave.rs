@@ -69,7 +69,9 @@ fn scan_run_and_transfers_against_the_emulated_slave() {
 
     // FoE write: byte-identical at the slave.
     let file = pattern(5000, 1);
-    let r = session.transfer(0x1000, job(TransferProtocol::foe(), Payload::Send(file.clone())), &o, false).unwrap();
+    let r = session
+        .transfer(0x1000, job(TransferProtocol::foe(), Payload::Send(file.clone())), &o, false, None, &mut |_| {})
+        .unwrap();
     assert!(r.completed, "FoE write: {:?}", r.error);
     assert_eq!(r.delivered_bytes, 5000);
     assert!(r.meta.assumptions.iter().any(|a| a == EMULATED_ESC_ASSUMPTION));
@@ -80,12 +82,16 @@ fn scan_run_and_transfers_against_the_emulated_slave() {
     // dropped as a repeat and sent again after the reply timeout; the start value 0 is not.
     let object = pattern(3000, 2);
     let op = TransferOptions { first_counter: 0, ..o.clone() };
-    let r = session.transfer(0x1000, job(TransferProtocol::coe(), Payload::Send(object.clone())), &op, true).unwrap();
+    let r = session
+        .transfer(0x1000, job(TransferProtocol::coe(), Payload::Send(object.clone())), &op, true, None, &mut |_| {})
+        .unwrap();
     assert!(r.completed, "SDO download: {:?}", r.error);
     assert_eq!(r.resent_messages, 0);
     assert_eq!(slave.lock().unwrap().log().objects, vec![object.clone()]);
     let collide = TransferOptions { first_counter: 1, reply_timeout_ns: 50_000_000, ..o.clone() };
-    let r = session.transfer(0x1000, job(TransferProtocol::coe(), Payload::Send(object)), &collide, true).unwrap();
+    let r = session
+        .transfer(0x1000, job(TransferProtocol::coe(), Payload::Send(object)), &collide, true, None, &mut |_| {})
+        .unwrap();
     assert!(r.completed, "SDO download: {:?}", r.error);
     assert_eq!(r.resent_messages, 1);
 
@@ -94,18 +100,22 @@ fn scan_run_and_transfers_against_the_emulated_slave() {
     let mut cfg = SlaveConfig::default();
     cfg.responder.upload = data.clone();
     replace(cfg.clone());
-    let r = session.transfer(0x1000, job(TransferProtocol::foe(), receive(&data)), &o, false).unwrap();
+    let r =
+        session.transfer(0x1000, job(TransferProtocol::foe(), receive(&data)), &o, false, None, &mut |_| {}).unwrap();
     assert!(r.completed, "FoE read: {:?}", r.error);
     assert_eq!(r.verified, Some(true));
     replace(cfg);
-    let r = session.transfer(0x1000, job(TransferProtocol::coe(), receive(&data)), &o, false).unwrap();
+    let r =
+        session.transfer(0x1000, job(TransferProtocol::coe(), receive(&data)), &o, false, None, &mut |_| {}).unwrap();
     assert!(r.completed, "SDO upload: {:?}", r.error);
     assert_eq!(r.verified, Some(true));
 
     // EoE to the slave: UDP frames reassembled there.
     replace(SlaveConfig::default());
     let payload = pattern(6000, 4);
-    let r = session.transfer(0x1000, job(TransferProtocol::eoe(), Payload::Send(payload.clone())), &o, false).unwrap();
+    let r = session
+        .transfer(0x1000, job(TransferProtocol::eoe(), Payload::Send(payload.clone())), &o, false, None, &mut |_| {})
+        .unwrap();
     assert!(r.completed, "EoE send: {:?}", r.error);
     let port = EoeAddresses::default().destination_port;
     let got: Vec<u8> =
@@ -118,7 +128,9 @@ fn scan_run_and_transfers_against_the_emulated_slave() {
     cfg.responder.upload = payload.clone();
     cfg.responder.eoe_send = true;
     replace(cfg);
-    let r = session.transfer(0x1000, job(TransferProtocol::eoe(), receive(&payload)), &o, false).unwrap();
+    let r = session
+        .transfer(0x1000, job(TransferProtocol::eoe(), receive(&payload)), &o, false, None, &mut |_| {})
+        .unwrap();
     assert!(r.completed, "EoE receive: {:?}", r.error);
     assert_eq!(r.verified, Some(true));
 
@@ -126,24 +138,30 @@ fn scan_run_and_transfers_against_the_emulated_slave() {
     let mut cfg = SlaveConfig::default();
     cfg.responder.upload = payload.clone();
     replace(cfg);
-    let r = session.transfer(0x1000, job(TransferProtocol::voe(), Payload::Send(payload.clone())), &o, false).unwrap();
+    let r = session
+        .transfer(0x1000, job(TransferProtocol::voe(), Payload::Send(payload.clone())), &o, false, None, &mut |_| {})
+        .unwrap();
     assert!(r.completed, "VoE send: {:?}", r.error);
     assert_eq!(r.verified, Some(true));
     assert_eq!(slave.lock().unwrap().log().voe_received, vec![payload.clone()]);
     let unknown_size = Payload::Receive { expected_bytes: None, expected_sha256: Some(sha256(&payload)) };
-    let r = session.transfer(0x1000, job(TransferProtocol::voe(), unknown_size), &o, false).unwrap();
+    let r = session.transfer(0x1000, job(TransferProtocol::voe(), unknown_size), &o, false, None, &mut |_| {}).unwrap();
     assert!(r.completed, "VoE receive: {:?}", r.error);
     assert_eq!((r.payload_bytes, r.verified), (payload.len() as u64, Some(true)));
 
     // A mailbox size written over CoE applies at the next INIT: the next start reads it.
     let setting = TransferProtocol::Coe { index: SETTING_MAILBOX_BYTES.0, subindex: SETTING_MAILBOX_BYTES.1 };
-    let r = session.transfer(0x1000, job(setting, Payload::Send(512u16.to_le_bytes().to_vec())), &o, false).unwrap();
+    let r = session
+        .transfer(0x1000, job(setting, Payload::Send(512u16.to_le_bytes().to_vec())), &o, false, None, &mut |_| {})
+        .unwrap();
     assert!(r.completed, "setting: {:?}", r.error);
     let r = session.scan().unwrap();
     let mailboxes: Vec<_> =
         r.slaves[0].sync_managers.iter().filter(|m| m.mode == "mailbox").map(|m| (m.start, m.length)).collect();
     assert_eq!(mailboxes, [(0x1000, 512), (0x1200, 512)]);
-    let r = session.transfer(0x1000, job(TransferProtocol::voe(), Payload::Send(payload.clone())), &o, false).unwrap();
+    let r = session
+        .transfer(0x1000, job(TransferProtocol::voe(), Payload::Send(payload.clone())), &o, false, None, &mut |_| {})
+        .unwrap();
     assert!(r.completed, "VoE send in 512-byte mailboxes: {:?}", r.error);
     assert_eq!(r.verified, Some(true));
     assert_eq!(r.messages_to_slave, 1 + 6000u64.div_ceil(flowlab_mailbox::voe::capacity(512) as u64));

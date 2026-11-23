@@ -7,7 +7,7 @@ by `flowlab slave` ([Emulated slave](../guide/slave.md)) on a network interface,
 
 | | |
 |---|---|
-| Depends on | `ecat-wire`, `flowlab-core` (the emulator's name), `flowlab-mailbox` (the responder); `pnet_datalink` with the feature `wire` |
+| Depends on | `ecat-wire`, `flowlab-core` (the emulator's name), `flowlab-mailbox` (the responder), `flowlab-pdi` (the ESC access of `pdi`); `pnet_datalink` with the feature `wire` |
 | Used by | `flowlab-cli` (feature `slave`), `flowlab-master` (tests) |
 
 ## Design
@@ -58,6 +58,22 @@ by `flowlab slave` ([Emulated slave](../guide/slave.md)) on a network interface,
   100 ms and drops the first received frame with the same bytes, so a slave behind an ESC does
   not answer itself.
 
+### On a real ESC
+
+`pdi::PdiSlave` is the application without the ESC model: a real ESC answers the frames, and
+`PdiSlave::step` polls it through the PDI ([PDI slave](../guide/pdi-slave.md)). It reads AL
+Event Request (0x0220); on bit 0 it reads AL Control and runs the state machine (INIT, PRE-OP
+when SyncManagers 0 and 1 are mailboxes the master configured, 34 B to `max_mailbox_bytes`,
+in process RAM and apart, then clears their PDI deactivation bit; INIT sets it again; SAFE-OP,
+OP and BOOT refused). In PRE-OP the SyncManager bits of the same AL Event read (8: "mailbox
+out" written, 9: "mailbox in" read) drive the mailbox when the master enabled them, with the
+SyncManager status registers as the fallback (and every 64th poll). It reads a message up to
+its end and then the buffer's last DWORD, and writes an answer the same way (`message_only`;
+whole buffers otherwise). With `answer_set_ip`, EoE Set IP Parameter requests are answered with
+success and kept (`take_set_ip`); `take_eoe_frames` and `send_eoe_frame` move Ethernet frames
+for a bridge (`wire::EthernetPort`, a raw socket without blocking). The ESC is behind the
+`pdi::EscPdi` trait (`flowlab_pdi::SlaveAccess` on hardware).
+
 ## API
 
 | Item | Purpose |
@@ -70,6 +86,8 @@ by `flowlab slave` ([Emulated slave](../guide/slave.md)) on a network interface,
 | `SlaveError` | `Invalid`, `Refused`, `Io` |
 | `EMULATED_ESC_NAME` | the name in its EEPROM (from `flowlab-core`) |
 | `wire::{serve, ServeOptions, Event, interface_names}` | on a network interface (feature `wire`) |
+| `wire::EthernetPort` | `open`, `try_recv`, `send`: raw frames on an interface without blocking, for the PDI slave's EoE bridge (feature `wire`) |
+| `pdi::{PdiSlave, PdiSlaveConfig, EscPdi, Mailboxes, AlChange, PdiSlaveStats}` | the application on a real ESC: `new`, `step`, `stop`, `al_state`, `mailboxes`, `stats`, `drain_log`, `send_eoe_frame`, `take_eoe_frames`, `take_set_ip`, `outbox_len`; config `max_mailbox_bytes`, `answer_set_ip`, `message_only` |
 
 ## Tests
 
@@ -79,5 +97,8 @@ ignored; the EEPROM through the SII interface (identity, mailbox words, protocol
 string, erased words, write protection); AL transitions with their status codes and the error
 acknowledge; the mailbox one-buffer rules, partial reads, the repeat request; the CoE mapping
 objects; LRW/LRD/LWR working counters and the echoed inputs; the EoE send's start and restart;
-layout limits. `src/sii.rs` checks the CRC and the PDO entries. EtherCrab against the slave:
+layout limits. `src/sii.rs` checks the CRC and the PDO entries. `src/pdi.rs`, against an ESC
+memory with the mailbox rules of both sides: PRE-OP with the master's 1 KiB mailboxes, refusal
+until the error is acknowledged, SAFE-OP and BOOT refused, FoE through full 1024-byte messages,
+answers held until the master read the previous one, INIT on stop. EtherCrab against the slave:
 [flowlab-master](flowlab-master.md#tests).

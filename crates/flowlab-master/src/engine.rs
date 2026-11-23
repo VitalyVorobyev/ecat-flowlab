@@ -287,7 +287,8 @@ impl<'a, B: MailboxBus> Engine<'a, B> {
     }
 
     fn want_read(&self) -> bool {
-        self.error.is_none() && (self.ep.wants_input() || self.need_repeat || self.repeat_ack.is_some())
+        self.error.is_none()
+            && (self.ep.wants_input() || self.ep.reads_unsolicited() || self.need_repeat || self.repeat_ack.is_some())
     }
 
     fn finished(&self) -> bool {

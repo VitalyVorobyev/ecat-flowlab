@@ -1,6 +1,6 @@
 [package]
 name = "flowlab-slave"
-description = "An emulated EtherCAT slave controller (ESC) with FoE, CoE and EoE behind its mailbox, for testing a master without EtherCAT hardware; a raw-socket server behind the `wire` feature."
+description = "An emulated EtherCAT slave controller (ESC) with FoE, CoE and EoE behind its mailbox, for testing a master without EtherCAT hardware; a raw-socket server behind the `wire` feature; and the same application on a real ESC over its PDI."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,6 +11,7 @@ repository.workspace = true
 ecat-wire.workspace = true
 flowlab-core.workspace = true
 flowlab-mailbox.workspace = true
+flowlab-pdi.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 pnet_datalink = { workspace = true, optional = true }

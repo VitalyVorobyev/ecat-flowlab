@@ -35,6 +35,10 @@
 //! events, more than one port, and the forwarding delay of an ESC: frames come back when the
 //! host has processed them.
 //!
+//! [`pdi::PdiSlave`] runs the same application on a real ESC instead (a LAN9252 over SPI): the
+//! ESC answers the frames, and the application serves AL Control and the mailbox through the
+//! PDI, in place of the ESC's own application.
+//!
 //! With the feature `wire`, `wire::serve` answers frames on a network interface. It sends
 //! frames, so it needs the interface name and an explicit acknowledgement that the network is
 //! an isolated lab network, as the lab master does.
@@ -55,6 +59,7 @@
 #[cfg(any(feature = "wire", test))]
 mod echo;
 mod esc;
+pub mod pdi;
 mod sii;
 #[cfg(test)]
 mod tests;

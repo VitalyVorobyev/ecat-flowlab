@@ -78,9 +78,13 @@ fn register_writes_and_protected_ranges_are_refused() {
 
 #[test]
 fn process_ram_round_trips_through_the_fifos() {
-    for instruction in [ReadInstruction::Read, ReadInstruction::FastRead] {
+    let tunings = ["stack", "fast", "split", "batch", "fifo", "noabort", "split,batch,fifo,noabort"]
+        .map(|t| SpiTuning::parse(t).unwrap());
+    for (instruction, tuning) in
+        [ReadInstruction::Read, ReadInstruction::FastRead].into_iter().flat_map(|i| tunings.map(|t| (i, t)))
+    {
         let (sim, _) = SimLan9252::new(SimTiming::default());
-        let mut e = Lan9252::new(sim).with_read_instruction(instruction);
+        let mut e = Lan9252::new(sim).with_read_instruction(instruction).with_tuning(tuning);
         // Sizes that are not DWORD multiples, larger than the 64-byte FIFO, unaligned starts.
         for (k, (addr, len)) in
             [(0x1000u16, 1usize), (0x1001, 3), (0x1003, 5), (0x1002, 63), (0x1100, 64), (0x1101, 65), (0x1203, 1000)]
@@ -108,6 +112,29 @@ fn process_ram_round_trips_through_the_fifos() {
 }
 
 #[test]
+fn spi_tuning_parses_and_the_fast_one_needs_fewer_transactions() {
+    assert_eq!(SpiTuning::parse("stack").unwrap(), SpiTuning::STACK);
+    assert_eq!(SpiTuning::parse("split,noabort").unwrap(), SpiTuning::FAST);
+    assert_eq!(SpiTuning::parse("split,batch,fifo,noabort").unwrap().name(), "split,batch,fifo,noabort");
+    assert_eq!(SpiTuning::parse("batch, fifo").unwrap().name(), "batch,fifo");
+    assert!(SpiTuning::parse("dma").is_err());
+    let count = |t: SpiTuning| {
+        let (sim, _) = SimLan9252::new(SimTiming::default());
+        let mut e = Lan9252::new(sim).with_tuning(t).with_al_event_read(false);
+        let data = [0x5Au8; 1024];
+        let mut back = [0u8; 1024];
+        for _ in 0..3 {
+            e.write(0x1400, &data).unwrap();
+            e.read(0x1400, &mut back).unwrap();
+        }
+        assert_eq!(back, data);
+        assert_clean(&e);
+        e.bus().transactions()
+    };
+    assert!(count(SpiTuning::FAST) < count(SpiTuning::STACK));
+}
+
+#[test]
 fn a_broken_link_or_wrong_chip_is_refused_before_any_esc_access() {
     for (byte_test, id_rev, needle) in [
         (0xFFFF_FFFF, 0x9252_0001, "nothing answers"),
@@ -132,6 +159,23 @@ fn an_esc_outside_init_is_refused() {
     let err = run(&mut e, &clock, &BenchOptions::default(), 0x9252).unwrap_err();
     assert!(err.to_string().contains("PREOP, not INIT"), "{err}");
     assert!(e.bus().accesses().iter().all(|a| a.address == reg::ESC_AL_STATUS));
+}
+
+#[test]
+fn a_stopped_application_allows_reads_from_an_explicit_area_in_any_state() {
+    let area = Some("0x1800+256".parse::<Area>().unwrap());
+    let stopped = BenchOptions { app_stopped: true, sizes: vec![4, 128], reps: 3, ..BenchOptions::default() };
+    // Without an area, or with writes, it is refused before any access.
+    assert!(matches!(plan(&stopped), Err(PdiError::Refused(_))));
+    let writes = BenchOptions { allow_writes: true, area, ..stopped.clone() };
+    assert!(matches!(plan(&writes), Err(PdiError::Refused(_))));
+
+    let (mut sim, clock) = SimLan9252::new(SimTiming::default());
+    sim.set_al_status(0x0002);
+    let mut e = Lan9252::new(sim);
+    let r = run(&mut e, &clock, &BenchOptions { area, ..stopped }, 0x9252).expect("reads in PREOP");
+    assert_eq!(r.samples.len(), 6);
+    assert_eq!(r.plan.write_area, None);
 }
 
 #[test]
@@ -166,6 +210,7 @@ fn a_run_with_writes_stays_inside_its_area_and_away_from_protected_registers() {
         warmup: 1,
         area: Some("0x1800+512".parse().unwrap()),
         allow_writes: true,
+        app_stopped: false,
         seed: 9,
     };
     let r = run(&mut e, &clock, &o, 0x9252).unwrap();
@@ -217,4 +262,35 @@ fn samples_fit_back_to_the_simulated_bus() {
     for s in summarise(&r.samples) {
         assert_eq!(s.median_ns, s.p95_ns, "{s:?}");
     }
+}
+
+#[test]
+fn a_slave_application_reads_al_control_and_sync_managers_and_writes_only_al_status_and_ram() {
+    let (mut sim, _clock) = SimLan9252::new(SimTiming::default());
+    sim.esc_mut()[0x0120] = 0x02; // the master asked for PRE-OP
+    sim.esc_mut()[0x0800..0x0808].copy_from_slice(&[0x00, 0x10, 0x00, 0x04, 0x26, 0x08, 0x01, 0x00]);
+    let mut s = SlaveAccess::take_over(Lan9252::new(sim), reg::CHIP_ID_LAN9252).unwrap();
+    let mut control = [0u8; 2];
+    s.read(0x0120, &mut control).unwrap();
+    assert_eq!(control, [0x02, 0x00]);
+    let mut sm0 = [0u8; 8];
+    s.read(0x0800, &mut sm0).unwrap();
+    assert_eq!(sm0[2..4], [0x00, 0x04], "SM0 length 1024");
+    s.write_al_status(0x0012, 0x0016).unwrap();
+    s.write_pdi_control(1, 0x00).unwrap();
+    assert!(s.write_pdi_control(16, 0x00).is_err());
+    s.write_ram(0x13FC, &[1, 2, 3, 4]).unwrap();
+    let mut back = [0u8; 4];
+    s.read(0x13FC, &mut back).unwrap();
+    assert_eq!(back, [1, 2, 3, 4]);
+    assert!(matches!(s.write_ram(0x0120, &[0x08]), Err(PdiError::Refused(_))), "AL Control is never written");
+    assert!(matches!(s.write_ram(0x0800, &[0; 8]), Err(PdiError::Refused(_))), "nor the SyncManagers");
+    assert!(s.read(0x0FFE, &mut [0u8; 4]).is_err(), "no access crosses into process RAM");
+    let esc = s.into_inner();
+    assert_clean(&esc);
+    let mem = esc.bus().esc();
+    assert_eq!(mem[0x0130..0x0132], [0x12, 0x00]);
+    assert_eq!(mem[0x0134..0x0136], [0x16, 0x00]);
+    let writes: Vec<_> = esc.bus().accesses().iter().filter(|a| a.write).map(|a| a.address).collect();
+    assert_eq!(writes, [0x0134, 0x0130, 0x080F, 0x13FC], "only AL Status Code, AL Status, PDI Control and process RAM");
 }

@@ -56,6 +56,12 @@ pub struct VirtualSlaveConfig {
     pub eoe_mtu: usize,
     /// Addresses of the slave's EoE frames.
     pub eoe_addresses: EoeAddresses,
+    /// Answer every n-th EoE frame received with a frame of the slave's own, as a network
+    /// stack behind EoE does (ARP requests, ICMP replies).
+    pub eoe_reply_every: Option<u64>,
+    /// Take a message from "mailbox out" only while "mailbox in" is free and nothing waits to
+    /// go into it: a stack that answers one message at a time.
+    pub one_message_at_a_time: bool,
 }
 
 impl Default for VirtualSlaveConfig {
@@ -75,6 +81,8 @@ impl Default for VirtualSlaveConfig {
             eoe_send: false,
             eoe_mtu: 1500,
             eoe_addresses: EoeAddresses::default(),
+            eoe_reply_every: None,
+            one_message_at_a_time: false,
         }
     }
 }
@@ -192,11 +200,24 @@ impl VirtualSlave {
     fn step(&self, st: &mut State) {
         loop {
             let mut changed = false;
-            if let Some((buf, arrived)) = st.sm0.take() {
+            let busy = self.cfg.one_message_at_a_time && (st.sm1.is_some() || !st.outbox.is_empty());
+            if !busy && let Some((buf, arrived)) = st.sm0.take() {
                 let at = arrived + self.cfg.processing_ns;
                 if at <= st.now {
+                    let frames = self.cfg.eoe_reply_every.map(|_| st.app.log().eoe_frames.len() as u64);
                     for m in st.app.take_message(&buf) {
                         st.outbox.push_back((at, m.kind, m.body));
+                    }
+                    if let Some(n) = self.cfg.eoe_reply_every
+                        && let Some(frames) = frames
+                        && st.app.log().eoe_frames.len() as u64 > frames
+                        && (frames + 1).is_multiple_of(n)
+                    {
+                        let frame = msg::udp_frame(&[0; 32], &self.cfg.eoe_addresses, false);
+                        let capacity = msg::eoe_capacity(self.cfg.mailbox.in_len as usize);
+                        for body in msg::eoe_fragments(&frame, capacity, 1) {
+                            st.outbox.push_back((at, MailboxType::Eoe, body));
+                        }
                     }
                     changed = true;
                 } else {

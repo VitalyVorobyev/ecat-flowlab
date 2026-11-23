@@ -127,7 +127,12 @@ current UI build and `cargo ui-dev` the Vite dev server.
   answer to a real master's frames (the emulated slave). Anything that
   accesses an ESC over its PDI (`flowlab-pdi`) checks the link first, needs the ESC in INIT, never
   touches AL Control or SyncManager registers, and writes only with explicit opt-in into a named
-  area of process RAM. An ordinary
+  area of process RAM. The one exception is the PDI slave (`flowlab pdi-slave`): it replaces the
+  slave's own application, so it starts only with `--replace-slave-application`, reads AL
+  Control and the SyncManagers, and writes nothing but AL Status, AL Status Code, the
+  SyncManagers' PDI Control bytes and process RAM. Its EoE bridge sends only on the local
+  interface it is given (`--eoe-bridge`, one end of a veth pair) and changes only the address
+  of `--eoe-host`. An ordinary
   Ethernet MAC is not an ESC: do not label non-ESC traffic "EtherCAT".
 - **Unknowns** become falsifiable questions in the [design decisions](decisions.md), not silent
   assumptions in code.

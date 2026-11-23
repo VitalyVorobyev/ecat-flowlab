@@ -275,6 +275,20 @@ impl Responder {
         eoe_fragments(&frame, cap, self.eoe_frame_no).into_iter().map(|f| Message::new(MailboxType::Eoe, f)).collect()
     }
 
+    /// Take the Ethernet frames reassembled from EoE fragments since the last call; they no
+    /// longer appear in the log.
+    pub fn take_eoe_frames(&mut self) -> Vec<Vec<u8>> {
+        std::mem::take(&mut self.log.eoe_frames)
+    }
+
+    /// The EoE fragments ("mailbox in" messages) that carry `frame` to the master, with the
+    /// next frame number.
+    pub fn eoe_messages(&mut self, frame: &[u8]) -> Vec<Message> {
+        self.eoe_frame_no = msg::next_eoe_frame_no(self.eoe_frame_no);
+        let cap = msg::eoe_capacity(self.in_len);
+        eoe_fragments(frame, cap, self.eoe_frame_no).into_iter().map(|f| Message::new(MailboxType::Eoe, f)).collect()
+    }
+
     /// Take one "mailbox out" buffer (header and data) and return the answers.
     pub fn take_message(&mut self, buf: &[u8]) -> Vec<Message> {
         let Ok(h) = MailboxHeader::parse(buf) else { return Vec::new() };

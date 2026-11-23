@@ -10,6 +10,9 @@
 //!   opportunistic), so a real run is set up like a simulated one. The result,
 //!   [`MeasuredTransfer`], has provenance `measured` and the simulator's field names wherever
 //!   a field means the same, plus per-cycle timing;
+//! * an **EoE gateway** ([`run_gateway`]): the master's own TCP/IP stack (smoltcp) on a
+//!   slave's EoE link, after an EoE Set IP Parameter request, with local TCP ports forwarded
+//!   to the slave's;
 //! * a **virtual slave** ([`VirtualSlave`]): ESC mailbox semantics (WKC 0 on a full "mailbox
 //!   out" or an empty "mailbox in") with FoE, CoE and EoE responders and optional faults, in
 //!   virtual time. The engine is tested end to end against it;
@@ -39,6 +42,7 @@
 
 mod bus;
 mod engine;
+mod gateway;
 mod protocol;
 mod result;
 mod virtual_slave;
@@ -55,7 +59,8 @@ pub use bus::{
 pub use engine::{
     Payload, PollMode, SimulatedSetup, TransferJob, TransferOptions, TransferProtocol, run_transfer, setup_like,
 };
-pub use flowlab_mailbox::msg::EoeAddresses;
+pub use flowlab_mailbox::msg::{EoeAddresses, EoeIpParameters};
+pub use gateway::{GatewayBucket, GatewayConfig, GatewayConnection, GatewayResult, PortForward, run_gateway};
 pub use result::{CycleRecord, CycleTiming, MeasuredTransfer, RunResult, ScanResult, ScannedSlave, ScannedSm, Summary};
 pub use virtual_slave::{VirtualSlave, VirtualSlaveConfig, VirtualSlaveLog};
 

@@ -28,16 +28,19 @@ What FlowLab does not do, or does only partly. Each item is a property of the cu
 
 ## Lab master
 
-- **Opt-in; not yet run against an ESC.** Only a build with `--features master` sends frames
+- **Opt-in; one real ESC so far.** Only a build with `--features master` sends frames
   ([Lab master](../guide/master.md)). The transfer engine is tested against a virtual ESC, and
   the EtherCrab layer (scan, cyclic run, FoE, CoE and EoE both ways) against the
-  [emulated slave](../guide/slave.md), in one process and over a cable between two computers;
-  it has not run against a real ESC.
+  [emulated slave](../guide/slave.md), in one process and over a cable between two computers.
+  From macOS it has run against one real ESC, a LAN9252 slave behind an EK1100 and EK1122:
+  scan, CoE uploads, EoE both ways and the gateway, in PRE-OP. That slave did not reach SAFE-OP
+  under EtherCrab (`run` and `transfer --op`: state transition timeout).
 - **Host timing.** Cycle starts and round trips are the host's clock around EtherCrab calls,
   including the operating system and the socket, not the wire's.
 - **One slave, one transfer** at a time; with one slave, the round-robin policy serves it every
   cycle. FoE, CoE (SDO normal transfer), EoE carrying UDP and [FlowLab VoE](voe.md); no PDO
-  channel, TCP, SoE or other vendors' VoE.
+  channel, SoE or other vendors' VoE. TCP runs only through the gateway, whose TCP/IP stack is
+  smoltcp's: it is no model of the stack of another master (TwinCAT's is Windows').
 - **Separate frames.** EtherCrab sends each mailbox access as its own Ethernet frame; the
   simulator packs a cycle's write and read into one.
 - **Process data** in `run` and `transfer --op` is whatever EtherCrab maps (zeros are sent);
@@ -74,11 +77,14 @@ What FlowLab does not do, or does only partly. Each item is a property of the cu
 - **LAN9252 over SPI only**, through Linux spidev (`flowlab pdi-bench`); other ESCs, the
   LAN9252's host bus interface, dual/quad SPI and kernel drivers are not covered. On macOS and
   Windows only `--sim` runs.
-- **Untested on hardware.** The protocol follows the data sheet, Microchip's application notes
-  and the SOES hardware layer, and is tested against FlowLab's own simulated LAN9252, not against
-  a real one.
+- **One board.** The protocol follows the data sheet, Microchip's application notes and the
+  SOES hardware layer, and is tested against FlowLab's own simulated LAN9252. It has run on one
+  real board (a Verdin iMX8MP with a LAN9252 on SPI), reads only, up to 25 MHz.
 - **Its own access pattern.** It times one access at a fixed address per size; a stack that
-  splits or merges accesses differently can time differently.
+  splits or merges accesses differently can time differently. On the Verdin rig, the slave
+  application took 1.3–2.3 ms per 128-byte mailbox message, where the benchmark reads 128 bytes
+  in 0.33–0.38 ms at 20 MHz: there, the benchmark bounds what the SPI allows, not what the stack
+  does.
 
 ## Platforms
 
