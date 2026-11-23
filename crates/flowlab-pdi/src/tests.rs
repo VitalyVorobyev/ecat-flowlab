@@ -294,3 +294,37 @@ fn a_slave_application_reads_al_control_and_sync_managers_and_writes_only_al_sta
     let writes: Vec<_> = esc.bus().accesses().iter().filter(|a| a.write).map(|a| a.address).collect();
     assert_eq!(writes, [0x0134, 0x0130, 0x080F, 0x13FC], "only AL Status Code, AL Status, PDI Control and process RAM");
 }
+
+#[test]
+fn phys_are_read_and_written_through_the_mii_interface_only() {
+    let (sim, _) = SimLan9252::new(SimTiming::default());
+    let mut phys = PhyAccess::open(Lan9252::new(sim), 0x9252).unwrap();
+    let p = phys.status(1).unwrap().unwrap();
+    assert!(p.link_up && p.autoneg_enabled && p.autoneg_done && p.speed_100 && p.full_duplex && p.auto_mdix);
+    assert_eq!(p.registers.len(), STATUS_REGISTERS.len());
+    assert!(phys.status(2).unwrap().is_none());
+    // Forced 100 Mbit/s full duplex, fixed MDI-X: as some firmware leaves the PHYs.
+    phys.write(0, 0, 0x2100).unwrap();
+    phys.write(0, 27, 0xA00B).unwrap();
+    let forced = phys.status(0).unwrap().unwrap();
+    assert!(!forced.autoneg_enabled && forced.speed_100 && forced.full_duplex);
+    assert!(forced.mdix_override && forced.mdix && !forced.auto_mdix);
+    assert!(forced.summary().contains("auto-negotiation off, MDI-X (register 27)"), "{}", forced.summary());
+    phys.enable_autoneg(0).unwrap();
+    let esc = phys.into_inner();
+    let sim = esc.bus();
+    assert_eq!((sim.phy_register(0, 0), sim.phy_register(0, 18), sim.phy_register(0, 27)), (0x3300, 0x00E0, 0xE00B));
+    assert!(sim.errors().is_empty(), "{:?}", sim.errors());
+    let written: Vec<u16> = sim.accesses().iter().filter(|a| a.write).map(|a| a.address).collect();
+    assert!(written.iter().all(|a| (0x0510..=0x0517).contains(a)), "{written:x?}");
+    assert_eq!(sim.esc()[0x0517], 0, "the MII interface is given back");
+}
+
+#[test]
+fn the_phys_are_left_alone_while_the_master_claims_them() {
+    let (mut sim, _) = SimLan9252::new(SimTiming::default());
+    sim.esc_mut()[0x0516] = 1;
+    let mut phys = PhyAccess::open(Lan9252::new(sim), 0x9252).unwrap();
+    assert!(matches!(phys.read(0, 1), Err(PdiError::Refused(_))));
+    assert!(phys.into_inner().bus().accesses().iter().all(|a| !a.write));
+}

@@ -36,8 +36,8 @@ mod imp {
     use flowlab_mailbox::msg::EoeIpParameters;
     use flowlab_mailbox::responder::ResponderLog;
     use flowlab_pdi::{Lan9252, ReadInstruction, SlaveAccess, SpiBus, SpiTuning};
-    use flowlab_slave::pdi::{AlChange, MIN_MAILBOX_BYTES, PdiSlave, PdiSlaveConfig, PdiSlaveStats};
     use flowlab_slave::bridge::{BridgeStats, EoeBridge, interface_mac};
+    use flowlab_slave::pdi::{AlChange, MIN_MAILBOX_BYTES, PdiSlave, PdiSlaveConfig, PdiSlaveStats};
     use flowlab_slave::wire::EthernetPort;
 
     use crate::Result;

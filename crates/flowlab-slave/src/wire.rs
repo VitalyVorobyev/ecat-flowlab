@@ -152,7 +152,6 @@ impl EthernetPort {
             Err(e) => Err(SlaveError::Io(format!("{name}: {e}"))),
         }
     }
-
 }
 
 /// Frames this port sent itself come back from it too.

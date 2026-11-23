@@ -54,6 +54,12 @@ After every access the AL Event Request (0x0220) is read, as the SOES hardware l
   SyncManagers included; `write_al_status` writes AL Status Code (0x0134), then AL Status
   (0x0130); `write_pdi_control` a SyncManager's PDI Control byte (0x0807 + 8·n); `write_ram`
   writes process RAM only. Nothing else is written.
+- `PhyAccess` ([PHY registers](../guide/pdi-phy.md)) checks the link and that MII Management
+  Control (0x0510) lets the PDI take the interface; it refuses while the master claims it
+  (0x0516 bit 0). It writes only the MII management registers (0x0510–0x0517): PDI access
+  (0x0517) on, PHY address and register, data for a write, the command; then it polls busy,
+  checks the error bits and gives the interface back. PHY writes (`write`, `enable_autoneg`)
+  run only on request (`--allow-phy-writes`).
 - `plan` checks the options first: writes only with `allow_writes` and an explicit area that
   starts at 0x1000 or above; `app_stopped` only without writes and with an explicit area;
   every size fits its area.
@@ -66,8 +72,10 @@ After every access the AL Event Request (0x0220) is read, as the SOES hardware l
 | `SpiTuning` | `STACK`, `FAST`, `parse`, `name`: split writes, batched transactions, partial FIFO fills, no abort before a command |
 | `open_spidev(path, clock_hz, mode)` | the Linux backend; elsewhere an error saying it needs Linux spidev |
 | `Lan9252::new(bus)` | `with_read_instruction`, `with_al_event_read`, `with_tuning`, `tuning`, `check_link`, `read`, `write`, `read_register` |
-| `SimLan9252::new(SimTiming)` | a simulated LAN9252 and its `SimClock`; `accesses()`, `errors()`, `esc()`, `esc_mut()`, `set_byte_test`, `set_id_rev`, `set_al_status` |
+| `SimLan9252::new(SimTiming)` | a simulated LAN9252 and its `SimClock`; `accesses()`, `errors()`, `esc()`, `esc_mut()`, `set_byte_test`, `set_id_rev`, `set_al_status`, `phy_register`; PHYs at MII addresses 0 and 1 with a link |
 | `SlaveAccess::take_over(lan9252, chip_id)` | a slave application's access: `read`, `write_al_status`, `write_pdi_control`, `write_ram`, `link`, `into_inner` |
+| `PhyAccess::open(lan9252, chip_id)` | `read(phy, reg)`, `write`, `status(phy)` (`None` without a PHY), `enable_autoneg(phy)`, `link`, `into_inner` |
+| `PhyStatus`, `STATUS_REGISTERS`, `mii_reg` | the registers read (0–5, 18, 27, 31) decoded: link, speed, duplex, auto-negotiation, MDI/MDI-X, mode; `summary` |
 | `BenchOptions`, `plan`, `run` | sizes, repetitions, warm-up, area, writes, seed → `BenchRun` (link, plan, samples) |
 | `to_csv`, `Sample`, `Direction` | the samples file with its provenance marker (re-exported from `flowlab_core::pdi_samples`) |
 | `summarise` | median and p95 per direction and size |

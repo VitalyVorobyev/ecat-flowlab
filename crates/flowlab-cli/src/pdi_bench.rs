@@ -95,7 +95,7 @@ fn parse_tuning(s: &str) -> std::result::Result<SpiTuning, String> {
     SpiTuning::parse(s).map_err(|e| e.to_string())
 }
 
-fn parse_hex16(s: &str) -> std::result::Result<u16, String> {
+pub(crate) fn parse_hex16(s: &str) -> std::result::Result<u16, String> {
     let h = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")).unwrap_or(s);
     u16::from_str_radix(h, 16).map_err(|_| format!("`{s}` is not a 16-bit hex number (e.g. 0x9252)"))
 }

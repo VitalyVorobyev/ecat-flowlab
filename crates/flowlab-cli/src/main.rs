@@ -11,6 +11,7 @@ use std::process::ExitCode;
 mod capture;
 mod master;
 mod pdi_bench;
+mod pdi_phy;
 mod pdi_slave;
 mod slave;
 
@@ -243,6 +244,13 @@ enum Cmd {
     /// --allow-writes into an --area of process RAM that nothing uses. --sim times a simulated
     /// LAN9252 instead and marks the samples simulated.
     PdiBench(pdi_bench::PdiBenchArgs),
+    /// Show the LAN9252's PHY registers (link, speed, duplex, auto-negotiation, MDI/MDI-X)
+    /// through the ESC's MII management interface; with --allow-phy-writes, --set a register
+    /// or turn on --autoneg.
+    ///
+    /// Stop the slave's own application first: it shares the SPI. Checks the link first; writes
+    /// only the MII management registers (0x0510–0x0517).
+    PdiPhy(pdi_phy::PdiPhyArgs),
     /// FlowLab's slave application on a real ESC (a LAN9252 over Linux spidev), in place of the
     /// slave's own application: AL Control and the mailbox (FoE, CoE, EoE, FlowLab VoE) served
     /// through the PDI, with mailboxes up to --max-mailbox-bytes. Writes AL Status and the
@@ -510,6 +518,7 @@ fn run(cli: Cli) -> Result<()> {
             pdi_bench::fit_samples(&bytes, &samples.display().to_string(), &file_name(&samples), result, lab)?;
         }
         Cmd::PdiBench(args) => pdi_bench::run(args)?,
+        Cmd::PdiPhy(args) => pdi_phy::run(args)?,
         Cmd::PdiSlave(args) => pdi_slave::run(args)?,
         Cmd::Policy { capture, station, mailbox_hints, eni, lab } => {
             let trace = Trace::read(&capture).map_err(|e| format!("{}: {e}", capture.display()))?;

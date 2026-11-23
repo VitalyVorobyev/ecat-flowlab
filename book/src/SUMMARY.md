@@ -12,6 +12,7 @@
 - [Lab master](guide/master.md)
 - [Emulated slave](guide/slave.md)
 - [PDI slave](guide/pdi-slave.md)
+- [PHY registers](guide/pdi-phy.md)
 - [Mailbox traffic](guide/mailbox.md)
 - [Network configuration and planning](guide/devices.md)
 - [Synthetic captures](guide/synth.md)

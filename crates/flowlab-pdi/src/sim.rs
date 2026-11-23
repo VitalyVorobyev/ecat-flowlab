@@ -83,6 +83,27 @@ pub struct SimLan9252 {
     accesses: Vec<EscAccess>,
     errors: Vec<String>,
     transactions: u64,
+    /// Registers 0–31 of the PHYs at MII addresses 0–3.
+    phys: [[u16; 32]; 4],
+}
+
+/// MII Management Control as the simulated ESC shows it: the PDI may take the interface.
+const SIM_MII_CONTROL: u16 = crate::mii::mii_reg::PDI_POSSIBLE;
+
+/// A LAN9252 PHY after reset with a link partner: auto-negotiation done at 100 Mbit/s full
+/// duplex, auto-MDIX.
+fn sim_phy(address: u16) -> [u16; 32] {
+    let mut r = [0u16; 32];
+    r[0] = 0x3100;
+    r[1] = 0x782D;
+    r[2] = 0x0007;
+    r[3] = 0xC0F1;
+    r[4] = 0x01E1;
+    r[5] = 0x45E1;
+    r[18] = 0x00E0 | address;
+    r[27] = 0x400A;
+    r[31] = 0x1058;
+    r
 }
 
 impl SimLan9252 {
@@ -95,7 +116,7 @@ impl SimLan9252 {
         }
         esc[usize::from(reg::ESC_AL_STATUS)] = 0x01;
         let clock = SimClock::default();
-        let sim = Self {
+        let mut sim = Self {
             timing,
             clock: clock.clone(),
             now_ns: 0,
@@ -113,7 +134,10 @@ impl SimLan9252 {
             accesses: Vec::new(),
             errors: Vec::new(),
             transactions: 0,
+            phys: [sim_phy(0), sim_phy(1), [0xFFFF; 32], [0xFFFF; 32]],
         };
+        let c = usize::from(crate::mii::mii_reg::CONTROL);
+        sim.esc[c..c + 2].copy_from_slice(&SIM_MII_CONTROL.to_le_bytes());
         (sim, clock)
     }
 
@@ -156,6 +180,41 @@ impl SimLan9252 {
     /// SPI transactions so far.
     pub fn transactions(&self) -> u64 {
         self.transactions
+    }
+
+    /// Register `register` of the PHY at MII address `phy` (0–3).
+    pub fn phy_register(&self, phy: u8, register: u8) -> u16 {
+        self.phys[usize::from(phy & 3)][usize::from(register & 31)]
+    }
+
+    /// Run the MII command just written to MII Management Control.
+    fn mii_command(&mut self) {
+        use crate::mii::mii_reg;
+        let at = |a: u16| usize::from(a);
+        let cmd = u16::from_le_bytes([self.esc[at(mii_reg::CONTROL)], self.esc[at(mii_reg::CONTROL) + 1]]);
+        let mut control = SIM_MII_CONTROL;
+        let (phy, register) = (self.esc[at(mii_reg::PHY_ADDRESS)], self.esc[at(mii_reg::PHY_REGISTER)]);
+        let owned = self.esc[at(mii_reg::PDI_ACCESS)] & 1 != 0;
+        match cmd & 0x0300 {
+            0 => {}
+            _ if !owned || register > 31 => {
+                self.errors.push(format!("MII command 0x{cmd:04X} without PDI access or to register {register}"));
+                control |= mii_reg::COMMAND_ERROR;
+            }
+            mii_reg::CMD_READ => {
+                let v = if phy < 4 { self.phys[usize::from(phy)][usize::from(register)] } else { 0xFFFF };
+                self.esc[at(mii_reg::PHY_DATA)..at(mii_reg::PHY_DATA) + 2].copy_from_slice(&v.to_le_bytes());
+            }
+            mii_reg::CMD_WRITE => {
+                let d = at(mii_reg::PHY_DATA);
+                if phy < 4 {
+                    self.phys[usize::from(phy)][usize::from(register)] =
+                        u16::from_le_bytes([self.esc[d], self.esc[d + 1]]);
+                }
+            }
+            _ => control |= mii_reg::COMMAND_ERROR,
+        }
+        self.esc[at(mii_reg::CONTROL)..at(mii_reg::CONTROL) + 2].copy_from_slice(&control.to_le_bytes());
     }
 
     fn read_dword(&mut self, a: u16) -> u32 {
@@ -305,6 +364,9 @@ impl SimLan9252 {
         let write = v & reg::CSR_READ == 0;
         if write {
             self.esc[a..a + n].copy_from_slice(&self.csr_data.to_le_bytes()[..n]);
+            if address == u32::from(crate::mii::mii_reg::CONTROL) {
+                self.mii_command();
+            }
         } else {
             let mut d = [0u8; 4];
             d[..n].copy_from_slice(&self.esc[a..a + n]);
