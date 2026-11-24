@@ -43,6 +43,7 @@ From the module documentation of `crates/flowlab-server/src/lib.rs`:
 | Method | Path | Body / query | Response |
 |---|---|---|---|
 | GET | `/api/health` | | `{ version }` |
+| GET | `/api/capabilities` | | `Capabilities` (platform, default view, security and slave hardware flags/devices) |
 | GET | `/api/captures` | | `CaptureInfo[]` |
 | POST | `/api/captures?name=` | raw file bytes | `CaptureInfo` |
 | POST | `/api/captures/open` | `{ path }` | `CaptureInfo` |
@@ -75,37 +76,61 @@ From the module documentation of `crates/flowlab-server/src/lib.rs`:
 | POST | `/api/live/start` | `LiveStart` | `LiveSnapshot` (403 for an interface without `--live`, 409 while a session runs) |
 | GET | `/api/live` | | `LiveSnapshot` or `null` |
 | POST | `/api/live/stop` | | `LiveStopped` |
+| GET | `/api/slave/status` | | `SlaveStatus` (running state, AL state, SyncManagers, stats, series, AL events, received payloads, EoE bridge stats) |
+| POST | `/api/slave/start` | `SlaveStartRequest` | `SlaveStatus` (403 without `--replace-slave-application` or `--sim-pdi`, 409 if already running) |
+| POST | `/api/slave/stop` | | `SlaveStatus` (stops the worker thread and sets AL Status to `INIT`) |
+| POST | `/api/phy/read` | `PhyReadRequest` | `PhyReport` (403 without `--sim-pdi` when `sim: true`, 409 while the PDI slave holds the SPI bus) |
+| POST | `/api/phy/autoneg` | `PhyAutonegRequest` | `PhyReport` (403 without `--allow-phy-writes`, 409 while slave holds SPI) |
+| POST | `/api/phy/write` | `PhyWriteRequest` | `PhyReport` (403 without `--allow-phy-writes`, 409 while slave holds SPI) |
+| POST | `/api/pdi-bench/run` | `PdiBenchRequest` | `PdiBenchResult` (samples, optional `LineFit`, CSV; 403 for writes without `--allow-writes`, 409 while slave holds SPI) |
+| GET | `/api/bench/ping` | | `{ server_time_ns }` (uncompressed) |
+| GET | `/api/bench/bytes/{bytes}` | `?seed=` | Streamed seeded payload with `X-SHA256` header (`bench::routes`, uncompressed; `/bytes/{bytes}` alias for `tcp-bench` CLI) |
+| POST, PUT | `/api/bench/upload` | raw octet stream | `UploadBenchResult` (`{ bytes, seconds, bytes_per_s, sha256 }`, uncompressed; `/upload` plain-text alias for `tcp-bench` CLI) |
 
 Handler errors are `{ "error": "…" }` with status 400 (bad input, including a spec the simulator
-or study rejects), 404 (unknown capture or frame) or 500. Requests axum rejects before a handler
-runs (malformed query or JSON, wrong content type, unknown fields) get its plain-text 400, 415 or
-422 responses; see the [HTTP API](../reference/api.md). The frame query's filter fields are `command`,
-`direction`, `station`, `stream`, `problems_only`, `include_other` and `mailbox`; `limit` defaults
-to 200 and is capped at 5000. Upload names are reduced to their file name. The full request and
-response shapes are in [HTTP API](../reference/api.md).
+or study rejects), 403 (disabled capability or disallowed host), 404 (unknown capture or frame),
+409 (exclusive SPI lock held by a running PDI slave or active live session), or 500. Requests axum
+rejects before a handler runs (malformed query or JSON, wrong content type, unknown fields) get
+its plain-text 400, 415 or 422 responses; see the [HTTP API](../reference/api.md). The frame
+query's filter fields are `command`, `direction`, `station`, `stream`, `problems_only`,
+`include_other` and `mailbox`; `limit` defaults to 200 and is capped at 5000. Upload names are
+reduced to their file name. The full request and response shapes are in
+[HTTP API](../reference/api.md).
 
 ### Threads and limits
 
-Handlers do no analysis themselves. Parsing and analysing captures, frame queries, the EoE export,
-ENI re-analysis, synthesis, simulation and studies run in `tokio::task::spawn_blocking`; a study
-spreads its runs over its own scoped threads inside that task. Planning and ESI parsing, which are
-arithmetic and a small XML read, run inline.
+Handlers do no blocking work themselves. Parsing and analysing captures, frame queries, the EoE
+export, ENI re-analysis, synthesis, simulation, studies, PHY reads/writes, and SPI benchmarks run
+in `tokio::task::spawn_blocking` (protected by an exclusive `HardwareSlot` mutex so a running
+`pdi-slave` locks out PHY and SPI benchmark access); a study spreads its runs over its own scoped
+threads inside that task, and `pdi-slave` runs in a dedicated `"flowlab-pdi-slave"` OS thread.
+Planning and ESI parsing, which are arithmetic and a small XML read, run inline.
 
 | Limit | Value |
 |---|---|
-| `MAX_UPLOAD_BYTES` (request body limit on every API route) | `2 << 30` = 2,147,483,648 bytes (2 GiB) |
+| `MAX_UPLOAD_BYTES` (request body limit on API routes) | `2 << 30` = 2,147,483,648 bytes (2 GiB) |
 | `MAX_SIM_FRAMES` (frames a UI-started simulation may write) | 500,000; `POST /api/simulate` also forces `capture.enabled` |
 | Frames per page | default 200, at most 5000 |
 
 ### Security and static UI
 
-The server has no authentication and `POST /api/captures/open` reads any file the user can, so it
-belongs on loopback. `flowlab serve` binds 127.0.0.1 by default and logs a warning for any other
-`--host`. `app()` wraps every route, the UI included, in a `Host` check: a host name other than
-`localhost` gets 403, which stops DNS rebinding; a request without `Host` (not a browser) passes. `Ui::find(dir)` picks the UI: `dir` (`--ui-dir`, default `ui/dist`) when it holds an
-`index.html`, else the UI built into the binary (feature `embed-ui`, through `rust-embed`), else
-none. `app(state, Some(&ui))` serves it with `index.html` as the SPA fallback for unknown paths;
-without a UI only the API is served.
+The server has no authentication:
+
+- **Local capture paths (`ServerSecurity.allow_local_paths`)**: `POST /api/captures/open` reads any
+  file the server user can access, so it defaults to enabled only when bound to loopback and returns
+  403 off loopback unless `--allow-local-paths` is passed.
+- **Host check (`host_allowed_for`)**: `app()` wraps every route, the UI included, in a `Host`
+  check: requests with no `Host`, an IP address, or `localhost` are accepted; off loopback, mDNS
+  `.local` hostnames are also accepted, plus any explicit names passed via `--allow-host <HOST>`.
+  Other `Host` headers return 403 to stop DNS rebinding.
+- **Compression & caching**: API JSON routes and UI assets pass through `tower_http`
+  `CompressionLayer` (gzip), while streaming benchmark endpoints (`bench::routes()`) stay outside
+  that layer so payloads arrive uncompressed at line/EoE speed. Hashed `/assets/*` responses carry
+  `Cache-Control: public, max-age=31536000, immutable`; HTML carries `Cache-Control: no-cache`.
+- **Static UI & graceful shutdown**: `Ui::find(dir)` picks `dir` (`--ui-dir`, default `ui/dist`)
+  when it holds `index.html`, else the UI compiled in via `embed-ui` (`rust-embed`), else none.
+  `Ctrl-C` (and Unix `SIGTERM`) invokes `state.shutdown()` to stop any running PDI slave cleanly
+  (`AL Status -> INIT`) before exiting.
 
 ## flowlab-cli
 
@@ -125,7 +150,7 @@ created. Spec arguments that are omitted fall back to the built-in example.
 | `pdi-fit <SAMPLES>` | `--result <JSON>` the fit with residuals; `--lab <JSON>` store the values in a lab-inputs file (measured samples only) |
 | `policy <CAPTURE>` | `--station`, `--mailbox`, `--eni`; `--lab <JSON>` store the policy in a lab-inputs file (measured captures only) |
 | `apply-lab <SPEC>` | `--lab <JSON>`, `--slave <N>`, `-o, --out`: `LabInputs::apply` on a `SimSpec`, validated, written or printed (`tests/apply_lab.rs`) |
-| `serve [CAPTURES]...` | `-p, --port <PORT>` (default 7878); `--host <HOST>` (default 127.0.0.1); `--ui-dir <UI_DIR>` built UI (default `ui/dist`); `--open` open the browser; `--mailbox <STATION=OUT,IN>` repeatable; `--eni <XML>` applied to every capture; `--live` allow live capture from interfaces; `--live-dir <DIR>` where live captures are saved (default `results/live`) |
+| `serve [CAPTURES]...` | `-p, --port <PORT>` (default 7878); `--host <HOST>` (default 127.0.0.1, `0.0.0.0` on a slave device); `--ui-dir <UI_DIR>` built UI (default `ui/dist`); `--open` open the browser; `--mailbox <STATION=OUT,IN>` repeatable; `--eni <XML>` applied to every capture; `--live` allow live capture from interfaces; `--live-dir <DIR>` where live captures are saved (default `results/live`); `--device <PATH>` default LAN9252 spidev path; `--sim-pdi` allow simulated LAN9252 in hardware views; `--replace-slave-application` allow starting real PDI slave; `--allow-writes` allow SPI write benchmarks into process RAM; `--allow-phy-writes` allow PHY Auto-Neg and register writes; `--allow-host <HOST>` (repeatable) allow additional `Host` names; `--allow-local-paths` allow `POST /api/captures/open` off loopback |
 | `capture [INTERFACE]` | live capture through dumpcap or tcpdump ([flowlab-live](flowlab-live.md)): `--list`; `--tool`; `-o, --out`; `--duration`; `--window`; `--all-traffic`; `--replay <FILE>` with `--speed`; `--report <JSON>` the last window's analysis; `--eni`, `--mailbox`, `--link-mbps` |
 | `schema <WHICH>` | One of `synth`, `sim`, `plan`, `study`, `lab`; prints the JSON Schema |
 | `pdi-bench` | timed ESC accesses over a LAN9252's SPI ([flowlab-pdi](flowlab-pdi.md), `src/pdi_bench.rs`): `--device <PATH>` spidev device (Linux) or `--sim` a simulated LAN9252 (samples marked simulated); `-o, --out <CSV>` samples (required); `--clock-hz`; `--mode`; `--read-instruction read\|fast-read`; `--sizes`; `--reps`; `--warmup`; `--area <START+LEN>`; `--allow-writes`; `--no-al-event`; `--chip-id`; `--seed`; `--fit`, `--result <JSON>`, `--lab <JSON>` as `pdi-fit` (lab inputs from hardware runs only); `--sim-transaction-ns` |

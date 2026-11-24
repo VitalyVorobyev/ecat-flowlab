@@ -261,7 +261,7 @@ export function Scenario({
         <p className="text-xs text-fg-muted">
           Every number follows from the setup on the left: link, cycle, mailbox policy, ESC memory,
           PDI rate and overhead, application time. Calibrate the PDI and the policy with lab
-          measurements (Study, and the book's lab plan) before trusting absolute times.
+          measurements (SPI Bench, and the book's lab plan) before trusting absolute times.
         </p>
       </main>
     </div>

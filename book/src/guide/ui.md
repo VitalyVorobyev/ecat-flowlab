@@ -1,58 +1,71 @@
 # The workbench
 
-`flowlab serve` starts a local server on <http://127.0.0.1:7878> that holds captures in memory,
-analyses them, and serves the UI. Start it with captures to load, or empty:
+`flowlab serve` starts the web UI and REST/streaming API:
 
 ```bash
-flowlab serve [CAPTURES…] [--eni network.xml] [--mailbox STATION=OUT,IN] [--open]
+flowlab serve [CAPTURES…] [--eni network.xml] [--mailbox STATION=OUT,IN] \
+    [--host 127.0.0.1] [--port 7878] [--sim-pdi] \
+    [--replace-slave-application] [--allow-writes] [--allow-phy-writes] [--open]
 ```
+
+By default it binds to <http://127.0.0.1:7878> for local capture analysis and simulation. On a
+slave device (see [On a Verdin board](verdin.md#web-workbench-on-the-verdin)), pass
+`--host 0.0.0.0` (and opt-in hardware flags as needed) to use the embedded UI over management LAN
+or an EtherCAT EoE tunnel (`flowlab master gateway`).
 
 ## Layout
 
-The header holds the capture selector, **Generate** (generator form) and **Open capture…**. The
-status bar shows the selected capture's provenance, frame count and span. The navigation rail
-on the left leads to the views:
+The header holds the capture selector, **Open capture…**, a live slave status pill, and a theme
+toggle (light/dark, persisted in `localStorage`). The left navigation rail opens the seven
+workspaces:
 
 | View | Shows |
 |---|---|
-| **Simulate** | Set up a segment and its transfers, see the simulated result after every edit, and which single change (or pair) would shorten it most ([Simulation](simulation.md#the-simulate-view)) |
-| **Study** | Parameter sweeps over the simulator: Pareto scatter, all runs, calibration residuals |
+| **Slave** | Run and monitor FlowLab's PDI slave (`pdi-slave`) on Linux spidev or simulated LAN9252: AL state, SyncManagers, 1 Hz polls/messages/throughput charts, EoE bridge stats, and received payloads |
+| **Throughput** | Browser-to-server streaming HTTP/TCP throughput & RTT latency lab (`tcp-bench`-compatible `/api/bench/*` and `/upload`), with pure-TypeScript SHA-256 verification over plain HTTP and CSV/JSON export |
+| **PHY** | Read LAN9252 PHY 0–3 status cards, decoded registers, Auto-Neg & Auto-MDIX controls, and raw MII register write (`pdi-phy`) |
+| **SPI Bench** | Run timed SPI read/write benchmarks and linear regression (`pdi-bench` + `pdi-fit`), inspect residuals, export CSV/JSON, and click **Apply to Simulate** |
+| **Analysis** | Tabbed capture workspace combining **Captures**, **Live** (with `--live` or replay), **Overview**, **Timing**, **Frames**, **Stations**, **Mailbox**, **Compare**, and **Sim run** |
+| **Simulate** | Set up a segment and its transfers, inspect timing, PDI, and working-counter breakdown after every edit, and see what single change (or pair) would shorten it most ([Simulation](simulation.md#the-simulate-view)) |
 | **Planner** | Frame layout and bus budget of a network; ESI import |
-| **Captures** | Loaded captures with provenance, size and duration; drop files here or open a local path |
-| **Live** | Traffic on an interface (with `--live`) or a replayed capture, analysed every second; Stop saves and loads it ([Live capture](live.md)) |
-| **Overview** | Headline numbers, findings, link load over time, datagrams by command; Attach ENI… |
-| **Timing** | Per cyclic stream: period, phase jitter against the cycle grid, interval distribution, round trip, gaps and missed cycles, working counters per datagram |
-| **Frames** | Every frame, filtered by direction, command, stream, station, mailbox protocol or problems; decoded datagrams next to a hex view |
-| **Stations** | Station addresses, ring positions, reads and writes, no-response counts, AL state over time |
-| **Mailbox** | Mailbox channels and their use, traffic per protocol, SDO transfers, emergencies, FoE transfers, EoE frames |
-| **Compare** | Two captures side by side, each column with its provenance |
-| **Sim run** | For a simulated capture: the setup that was simulated, transfers, PDI and ESC RAM per slave, protocol work; *Edit in Simulate* |
 
-Views that need an analysed capture are disabled until one is selected. **Sim run** is
-available for simulated captures. The UI opens on **Simulate**, or on **Overview** when the
-server was started with captures; the view is kept in the address (`#simulate`, `#frames`, …).
-Light and dark themes follow the system and can be switched in the header.
+When launched without initial captures, hardware builds (Linux or `--sim-pdi`) open on
+**Slave**; otherwise the UI opens on **Simulate** (or **Analysis** when started with captures).
+The active route is kept in the URL hash (`#slave`, `#throughput`, `#phy`, `#spi-bench`,
+`#analysis`, `#simulate`, `#planner`, with legacy hashes such as `#frames` or `#overview` mapped
+into **Analysis**).
 
 ## Reading the views
 
 - **Colours** mark judgements only. *Defect* and *warning* colours appear where a value was
   compared with a declared threshold, such as a working counter that differs from the expected
   value or jitter above 10 % of the period. Magnitudes such as load or duration are neutral.
-- **Assumptions** are listed at the bottom of the Overview, Mailbox, Sim run and Study views.
+- **Assumptions** are listed in the Overview, Mailbox, and Sim run tabs under **Analysis**.
   They are the same list that the JSON report carries.
-- **Provenance badges** (*Measured*, *Simulated*, *Synthetic*) sit next to every capture name.
+- **Provenance badges** (*Measured*, *Simulated*, *Synthetic*) sit next to every readout and
+  capture name.
 
-## Generating captures from the UI
+## Hardware safety gates
 
-**Generate** opens a form generated from the JSON Schema of the [generator](synth.md) spec,
-pre-filled with an example; *Open frames* in **Simulate** writes the
-[simulator](simulation.md)'s frames. The resulting capture is added to the list and analysed
-like a file. **Study** has a schema form for study specs, plus *Simulate this run* for any
-Pareto-optimal or best run.
+Real ESC mutations from the browser are disabled by default and require explicit CLI flags when
+starting `flowlab serve`:
+
+- `--replace-slave-application` to start the PDI slave against a real `/dev/spidev*` device.
+- `--allow-writes` to permit SPI write benchmarks into LAN9252 process RAM (`--area START+LEN`).
+- `--allow-phy-writes` to permit PHY Auto-Neg/Auto-MDIX or raw MII register writes.
+- `--sim-pdi` to allow running the **Slave**, **PHY**, and **SPI Bench** screens against the
+  built-in simulated LAN9252 (`SimLan9252`) without hardware.
+
+Starting the PDI slave holds an exclusive SPI lock on the server: **PHY** and **SPI Bench**
+requests return HTTP `409 Conflict` until the PDI slave is stopped (and pressing `Ctrl-C` or
+sending `SIGTERM` stops the PDI slave cleanly, resetting AL Status to `INIT`).
 
 ## Security
 
-The server has no authentication and can read any file the user can (`Open path`). It binds to
-loopback by default. Do not bind it to a public address with `--host`. It answers only requests
-addressed to an IP address or `localhost`, so open it as <http://127.0.0.1:7878> (a host name
-gets *403*).
+The server has no authentication and binds to loopback (`127.0.0.1`) by default:
+
+- **Local paths**: `POST /api/captures/open` (`Open path` in **Captures**) is only enabled when
+  bound to loopback, unless `--allow-local-paths` is passed.
+- **Host allow-list**: requests are accepted when the `Host` header is an IP address (for EoE or
+  LAN IPs), `localhost`, an mDNS `.local` name when bound off loopback (such as `verdin-imx8mp.local`),
+  or a host explicitly listed via `--allow-host <NAME>`. Other `Host` values return *403*.

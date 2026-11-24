@@ -44,6 +44,15 @@ export function bitRate(bps: number): string {
   return `${bps.toFixed(0)} bit/s`;
 }
 
+/** Byte rate in decimal units: `407.0 kB/s`, `12.40 MB/s`. */
+export function byteRate(bytesPerS: number): string {
+  if (!Number.isFinite(bytesPerS)) return "–";
+  if (bytesPerS >= 1e9) return `${(bytesPerS / 1e9).toFixed(2)} GB/s`;
+  if (bytesPerS >= 1e6) return `${(bytesPerS / 1e6).toFixed(2)} MB/s`;
+  if (bytesPerS >= 1e3) return `${(bytesPerS / 1e3).toFixed(1)} kB/s`;
+  return `${bytesPerS.toFixed(0)} B/s`;
+}
+
 /** Percentage with adaptive precision: `0.042 %`, `1.24 %`, `37.5 %`. */
 export function percent(p: number): string {
   if (!Number.isFinite(p)) return "–";

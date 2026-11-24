@@ -7,7 +7,11 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
-    proxy: { "/api": "http://127.0.0.1:7878" },
+    proxy: {
+      "/api": "http://127.0.0.1:7878",
+      "/bytes": "http://127.0.0.1:7878",
+      "/upload": "http://127.0.0.1:7878",
+    },
   },
   build: { target: ["es2022", "chrome120", "safari17"] },
   test: {

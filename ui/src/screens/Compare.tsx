@@ -70,6 +70,11 @@ const QUANTITIES: Quantity[] = [
     value: (r) => r.mailbox.foe[0]?.goodput_bps ?? null,
     show: bitRate,
   },
+  {
+    name: "FlowLab VoE goodput (first transfer)",
+    value: (r) => r.mailbox.voe[0]?.goodput_bps ?? null,
+    show: bitRate,
+  },
   { name: "EoE frames reassembled", value: (r) => r.mailbox.eoe.frames_total, show: count },
 ];
 

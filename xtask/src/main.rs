@@ -171,13 +171,16 @@ fn ui(args: &[String]) -> Result {
 }
 
 fn ui_dev(args: &[String]) -> Result {
+    let split = args.iter().position(|a| a == "--").unwrap_or(args.len());
+    let (caps, extra) = (&args[..split], args.get(split + 1..).unwrap_or_default());
     ensure_bun_deps()?;
-    let (open, caps) = flags(args)?;
+    let (open, caps) = flags(caps)?;
     // Build the server first so Vite does not proxy to a port that is still compiling.
     run(cargo().args(["build", "--quiet", "-p", "flowlab-cli"]))?;
     let mut server = cargo()
         .args(["run", "--quiet", "-p", "flowlab-cli", "--", "serve", "--ui-dir", "ui/no-dist"])
         .args(&caps)
+        .args(extra)
         .spawn()
         .map_err(|e| format!("server: {e}"))?;
     eprintln!("xtask: API on http://127.0.0.1:7878, UI with hot reload on http://localhost:5173");

@@ -1,13 +1,15 @@
-//! Local HTTP server: loads captures, runs analysis, answers the UI's queries and serves the
-//! built UI. Binds to the address it is given (`flowlab serve` defaults to loopback); it has no authentication and can read any file
-//! the user can (`POST /api/captures/open`), so it must not be exposed to a network.
+//! HTTP server: loads captures, runs analysis, drives the slave communication lab (PDI slave,
+//! LAN9252 PHY inspector, SPI PDI bench, streaming throughput bench), and serves the built UI.
+//! Binds to the address it is given (`flowlab serve` defaults to loopback); hardware-mutating
+//! operations and arbitrary host file reads require explicit CLI opt-ins.
 //!
 //! | Method | Path | Body / query | Response |
 //! |---|---|---|---|
 //! | GET | `/api/health` | | `{ version }` |
+//! | GET | `/api/capabilities` | | `Capabilities` |
 //! | GET | `/api/captures` | | `CaptureInfo[]` |
 //! | POST | `/api/captures?name=` | raw file bytes | `CaptureInfo` |
-//! | POST | `/api/captures/open` | `{ path }` | `CaptureInfo` |
+//! | POST | `/api/captures/open` | `{ path }` | `CaptureInfo` (disabled off-loopback unless allowed) |
 //! | DELETE | `/api/captures/{id}` | | 204 |
 //! | GET | `/api/captures/{id}/report` | | `CaptureReport` |
 //! | GET | `/api/captures/{id}/frames` | `FrameFilter` + `offset`, `limit` | `FramePage` |
@@ -37,6 +39,18 @@
 //! | POST | `/api/live/start` | `LiveStart` | `LiveSnapshot` (interfaces need `flowlab serve --live`) |
 //! | GET | `/api/live` | | `LiveSnapshot` of the running or last session, or `null` |
 //! | POST | `/api/live/stop` | | `LiveStopped`: final state and the saved capture, loaded |
+//! | GET | `/api/slave/status` | | `SlaveStatus`: live or last PDI slave status |
+//! | POST | `/api/slave/start` | `SlaveStartRequest` | `SlaveStatus` |
+//! | POST | `/api/slave/stop` | | `SlaveStatus` |
+//! | POST | `/api/phy/read` | `PhyReadRequest` | `PhyReport` |
+//! | POST | `/api/phy/autoneg` | `PhyAutonegRequest` | `PhyReport` |
+//! | POST | `/api/phy/write` | `PhyWriteRequest` | `PhyReport` |
+//! | POST | `/api/pdi-bench/run` | `PdiBenchRequest` | `PdiBenchResult` |
+//! | GET | `/api/bench/ping` | | `PingResponse` |
+//! | GET | `/api/bench/bytes/{n}?seed=` | | raw deterministic stream + `X-SHA256` (uncompressed) |
+//! | POST | `/api/bench/upload` | raw payload bytes | `UploadBenchResult` |
+//! | GET | `/bytes/{n}?seed=` | | `tcp-bench` download endpoint (uncompressed) |
+//! | PUT | `/upload` | raw payload bytes | `tcp-bench` plain-text upload result |
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -55,10 +69,20 @@ use flowlab_devices::{EsiFile, NetworkConfig, PlanResult, PlanSlave, PlanSpec};
 use flowlab_sim::{SimResult, SimSpec};
 use flowlab_synth::SynthSpec;
 use serde::{Deserialize, Serialize};
+use tower_http::compression::CompressionLayer;
 use tower_http::services::{ServeDir, ServeFile};
 use ts_rs::TS;
 
+mod bench;
+mod hardware;
 mod live;
+pub use bench::{MAX_BENCH_BYTES, PingResponse, UploadBenchResult};
+pub use hardware::{
+    BenchSizeSummaryView, BridgeStatsView, HardwareCapabilities, HardwareConfig, LinkInfoView, MailboxesView,
+    PdiBenchRequest, PdiBenchResult, PdiFitView, PdiLineFitView, PdiSizeResidualView, PdiValuesView, PhyAutonegRequest,
+    PhyPortView, PhyReadRequest, PhyRegisterView, PhyReport, PhyWriteRequest, ReceivedPayload, SlaveAlEvent,
+    SlaveRatePoint, SlaveReadInstruction, SlaveRunState, SlaveStartRequest, SlaveStatsView, SlaveStatus,
+};
 pub use live::{LiveConfig, LiveInterfaces, LiveSourceSpec, LiveStart, LiveStopped};
 
 /// Largest accepted upload.
@@ -117,13 +141,63 @@ struct Entry {
     simulation: Option<SimResult>,
 }
 
-/// Server state: loaded captures.
+/// Host header and local-file-access rules for the HTTP server.
+#[derive(Debug, Clone)]
+pub struct ServerSecurity {
+    /// Permit `POST /api/captures/open` (reads files by path on the server host).
+    pub local_paths: bool,
+    /// Permit `.local` mDNS hostnames in the `Host` header (for LAN access to a slave device).
+    pub allow_mdns: bool,
+    /// Additional hostnames (without port) permitted in the `Host` header.
+    pub allow_hosts: Vec<String>,
+}
+
+impl Default for ServerSecurity {
+    fn default() -> Self {
+        Self { local_paths: true, allow_mdns: false, allow_hosts: Vec::new() }
+    }
+}
+
+/// Host operating system and architecture reported by `GET /api/capabilities`.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct PlatformInfo {
+    /// Target operating system (`linux`, `macos`, `windows`, etc.).
+    pub os: String,
+    /// Target CPU architecture (`aarch64`, `x86_64`, etc.).
+    pub arch: String,
+    /// Host name of the machine running `flowlab serve`, if known.
+    pub hostname: Option<String>,
+}
+
+/// Server capabilities and discovered hardware reported by `GET /api/capabilities`.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct Capabilities {
+    /// Server crate version.
+    pub version: String,
+    /// Host platform details.
+    pub platform: PlatformInfo,
+    /// Initial workspace suggested by the server flags (`"slave"` or `"analysis"`).
+    pub default_view: String,
+    /// Whether `POST /api/captures/open` is enabled.
+    pub local_paths: bool,
+    /// Whether live capture from interfaces (`--live`) is enabled.
+    pub live_interfaces: bool,
+    /// Hardware PDI capabilities and discovered interfaces.
+    pub slave: HardwareCapabilities,
+}
+
+/// Server state: loaded captures, live capture slot, and exclusive hardware lab slot.
 #[derive(Clone, Default)]
 pub struct AppState {
     inner: Arc<RwLock<Store>>,
     options: Arc<AnalysisOptions>,
     live: live::LiveSlot,
     live_config: Arc<LiveConfig>,
+    hardware: hardware::HardwareSlot,
+    hardware_config: Arc<HardwareConfig>,
+    security: Arc<ServerSecurity>,
 }
 
 #[derive(Default)]
@@ -142,6 +216,23 @@ impl AppState {
     pub fn with_live(mut self, config: LiveConfig) -> Self {
         self.live_config = Arc::new(config);
         self
+    }
+
+    /// The same state with these hardware PDI settings.
+    pub fn with_hardware(mut self, config: HardwareConfig) -> Self {
+        self.hardware_config = Arc::new(config);
+        self
+    }
+
+    /// The same state with these security rules.
+    pub fn with_security(mut self, security: ServerSecurity) -> Self {
+        self.security = Arc::new(security);
+        self
+    }
+
+    /// Stop any active PDI slave session cleanly so AL Status returns to `INIT`.
+    pub fn shutdown(&self) {
+        self.hardware.shutdown();
     }
 
     fn get(&self, id: u32) -> Result<Arc<Entry>, ApiError> {
@@ -251,13 +342,22 @@ pub struct ApiError {
 }
 
 impl ApiError {
-    fn bad_request(m: impl Into<String>) -> Self {
+    pub(crate) fn with_status(status: StatusCode, m: impl Into<String>) -> Self {
+        Self { status, message: m.into() }
+    }
+    pub(crate) fn bad_request(m: impl Into<String>) -> Self {
         Self { status: StatusCode::BAD_REQUEST, message: m.into() }
     }
-    fn not_found(m: impl Into<String>) -> Self {
+    pub(crate) fn forbidden(m: impl Into<String>) -> Self {
+        Self { status: StatusCode::FORBIDDEN, message: m.into() }
+    }
+    pub(crate) fn not_found(m: impl Into<String>) -> Self {
         Self { status: StatusCode::NOT_FOUND, message: m.into() }
     }
-    fn internal(m: impl Into<String>) -> Self {
+    pub(crate) fn conflict(m: impl Into<String>) -> Self {
+        Self { status: StatusCode::CONFLICT, message: m.into() }
+    }
+    pub(crate) fn internal(m: impl Into<String>) -> Self {
         Self { status: StatusCode::INTERNAL_SERVER_ERROR, message: m.into() }
     }
 }
@@ -282,6 +382,50 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, ApiError> + S
 
 async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "version": env!("CARGO_PKG_VERSION") }))
+}
+
+fn read_hostname() -> Option<String> {
+    for path in ["/proc/sys/kernel/hostname", "/etc/hostname"] {
+        if let Ok(text) = std::fs::read_to_string(path) {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_owned());
+            }
+        }
+    }
+    for key in ["HOSTNAME", "COMPUTERNAME"] {
+        if let Ok(val) = std::env::var(key) {
+            let trimmed = val.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_owned());
+            }
+        }
+    }
+    None
+}
+
+async fn capabilities(State(s): State<AppState>) -> Result<Json<Capabilities>, ApiError> {
+    let hw_cfg = Arc::clone(&s.hardware_config);
+    let live_interfaces = s.live_config.interfaces;
+    let local_paths = s.security.local_paths;
+    let caps = blocking(move || {
+        let slave = hw_cfg.capabilities();
+        let default_view = if slave.pdi_enabled { "slave" } else { "analysis" };
+        Ok(Capabilities {
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+            platform: PlatformInfo {
+                os: std::env::consts::OS.to_owned(),
+                arch: std::env::consts::ARCH.to_owned(),
+                hostname: read_hostname(),
+            },
+            default_view: default_view.to_owned(),
+            local_paths,
+            live_interfaces,
+            slave,
+        })
+    })
+    .await?;
+    Ok(Json(caps))
 }
 
 async fn list(State(s): State<AppState>) -> Result<Json<Vec<CaptureInfo>>, ApiError> {
@@ -310,6 +454,11 @@ struct OpenBody {
 }
 
 async fn open_path(State(s): State<AppState>, Json(b): Json<OpenBody>) -> Result<Json<CaptureInfo>, ApiError> {
+    if !s.security.local_paths {
+        return Err(ApiError::forbidden(
+            "opening local files by path is disabled when bound off loopback (upload captures or pass `--allow-local-paths`)",
+        ));
+    }
     Ok(Json(blocking(move || s.load_path(&b.path)).await?))
 }
 
@@ -553,10 +702,10 @@ async fn synth(State(s): State<AppState>, Json(spec): Json<SynthSpec>) -> Result
     ))
 }
 
-/// The API router (no static files).
-pub fn api(state: AppState) -> Router {
+fn json_api() -> Router<AppState> {
     Router::new()
         .route("/api/health", get(health))
+        .route("/api/capabilities", get(capabilities))
         .route("/api/captures", get(list).post(upload))
         .route("/api/captures/open", post(open_path))
         .route("/api/captures/{id}", delete(remove))
@@ -587,11 +736,21 @@ pub fn api(state: AppState) -> Router {
         .route("/api/live/interfaces", get(live::interfaces))
         .route("/api/live/start", post(live::start))
         .route("/api/live/stop", post(live::stop))
+        .route("/api/slave/status", get(hardware::slave_status))
+        .route("/api/slave/start", post(hardware::slave_start))
+        .route("/api/slave/stop", post(hardware::slave_stop))
+        .route("/api/phy/read", post(hardware::phy_read))
+        .route("/api/phy/autoneg", post(hardware::phy_autoneg))
+        .route("/api/phy/write", post(hardware::phy_write))
+        .route("/api/pdi-bench/run", post(hardware::pdi_bench_run))
         // Unknown API paths get a JSON 404, not the UI's index.html.
         .route("/api", any(api_not_found))
         .route("/api/{*rest}", any(api_not_found))
-        .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES))
-        .with_state(state)
+}
+
+/// The API router (no static files).
+pub fn api(state: AppState) -> Router {
+    json_api().merge(bench::routes()).layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES)).with_state(state)
 }
 
 /// Where the built UI's files come from.
@@ -618,21 +777,47 @@ impl Ui {
     }
 }
 
-/// Whether a request's `Host` names this machine by address or as `localhost`. A browser sends
-/// the name it resolved, so a page that rebinds its own domain name to 127.0.0.1 (DNS
-/// rebinding) is refused: the API reads local files and has no authentication.
-fn host_allowed(host: &str) -> bool {
-    let name = match host.strip_prefix('[') {
-        Some(rest) => return rest.split_once(']').is_some_and(|(ip, _)| ip.parse::<std::net::Ipv6Addr>().is_ok()),
-        None => {
-            host.rsplit_once(':').filter(|(_, port)| port.bytes().all(|b| b.is_ascii_digit())).map_or(host, |(n, _)| n)
-        }
-    };
-    name.eq_ignore_ascii_case("localhost") || name.parse::<std::net::Ipv4Addr>().is_ok()
+fn strip_port(host: &str) -> &str {
+    host.rsplit_once(':')
+        .filter(|(_, port)| !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()))
+        .map_or(host, |(n, _)| n)
 }
 
-async fn check_host(req: axum::extract::Request, next: axum::middleware::Next) -> Response {
-    match req.headers().get(axum::http::header::HOST).map(|h| h.to_str().map(host_allowed)) {
+fn is_valid_hostname(name: &str) -> bool {
+    !name.is_empty()
+        && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'.')
+        && !name.starts_with('.')
+        && !name.ends_with('.')
+}
+
+/// Whether a request's `Host` is allowed under `sec`. By default only IP literals and
+/// `localhost` pass (stopping DNS rebinding); off-loopback binds may additionally permit `.local`
+/// mDNS hostnames and explicit `--allow-host` names.
+fn host_allowed_for(host: &str, sec: &ServerSecurity) -> bool {
+    let name = match host.strip_prefix('[') {
+        Some(rest) => {
+            return rest.split_once(']').is_some_and(|(ip, after)| {
+                (after.is_empty() || after.starts_with(':')) && ip.parse::<std::net::Ipv6Addr>().is_ok()
+            });
+        }
+        None => strip_port(host),
+    };
+    if name.eq_ignore_ascii_case("localhost") || name.parse::<std::net::Ipv4Addr>().is_ok() {
+        return true;
+    }
+    if sec.allow_mdns && name.to_ascii_lowercase().ends_with(".local") && is_valid_hostname(name) {
+        return true;
+    }
+    sec.allow_hosts.iter().any(|allowed| name.eq_ignore_ascii_case(strip_port(allowed.trim())))
+}
+
+#[cfg(test)]
+fn host_allowed(host: &str) -> bool {
+    host_allowed_for(host, &ServerSecurity::default())
+}
+
+async fn check_host(State(s): State<AppState>, req: axum::extract::Request, next: axum::middleware::Next) -> Response {
+    match req.headers().get(axum::http::header::HOST).map(|h| h.to_str().map(|v| host_allowed_for(v, &s.security))) {
         // Clients other than browsers may omit it; a browser always sends it.
         None | Some(Ok(true)) => next.run(req).await,
         Some(_) => (
@@ -645,32 +830,78 @@ async fn check_host(req: axum::extract::Request, next: axum::middleware::Next) -
     }
 }
 
-/// API plus the built UI, with `index.html` as the SPA fallback. Without `ui`, or with
-/// [`Ui::Embedded`] in a binary built without it, only the API. Requests whose `Host` is
-/// neither an IP address nor `localhost` are refused (403).
-pub fn app(state: AppState, ui: Option<&Ui>) -> Router {
-    let router = api(state);
-    let router = match ui {
-        Some(Ui::Dir(dir)) => {
-            let index = dir.join("index.html");
-            router.fallback_service(ServeDir::new(dir).fallback(ServeFile::new(index)))
+async fn ui_cache_headers(req: axum::extract::Request, next: axum::middleware::Next) -> Response {
+    let path = req.uri().path().to_owned();
+    let mut res = next.run(req).await;
+    if !path.starts_with("/api") && !res.headers().contains_key(axum::http::header::CACHE_CONTROL) {
+        let val = if path.starts_with("/assets/") && res.status().is_success() {
+            "public, max-age=31536000, immutable"
+        } else {
+            "no-cache"
+        };
+        if let Ok(hv) = axum::http::HeaderValue::from_str(val) {
+            res.headers_mut().insert(axum::http::header::CACHE_CONTROL, hv);
         }
-        #[cfg(feature = "embed-ui")]
-        Some(Ui::Embedded) => router.fallback(embedded::serve),
-        #[cfg(not(feature = "embed-ui"))]
-        Some(Ui::Embedded) => router,
-        None => router,
-    };
-    router.layer(axum::middleware::from_fn(check_host))
+    }
+    res
 }
 
-/// Bind and serve until Ctrl-C.
+/// API plus the built UI, with `index.html` as the SPA fallback. Without `ui`, or with
+/// [`Ui::Embedded`] in a binary built without it, only the API. JSON API and static UI routes
+/// use gzip compression; throughput benchmark streams under `/api/bench/*`, `/bytes/*` and
+/// `/upload` stay uncompressed so measured byte rates match the wire.
+pub fn app(state: AppState, ui: Option<&Ui>) -> Router {
+    let ui_and_json = json_api();
+    let ui_and_json = match ui {
+        Some(Ui::Dir(dir)) => {
+            let index = dir.join("index.html");
+            ui_and_json.fallback_service(ServeDir::new(dir).fallback(ServeFile::new(index)))
+        }
+        #[cfg(feature = "embed-ui")]
+        Some(Ui::Embedded) => ui_and_json.fallback(embedded::serve),
+        #[cfg(not(feature = "embed-ui"))]
+        Some(Ui::Embedded) => ui_and_json,
+        None => ui_and_json,
+    };
+    let compressed = ui_and_json.layer(axum::middleware::from_fn(ui_cache_headers)).layer(CompressionLayer::new());
+    compressed
+        .merge(bench::routes())
+        .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES))
+        .with_state(state.clone())
+        .layer(axum::middleware::from_fn_with_state(state, check_host))
+}
+
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        let mut term = signal(SignalKind::terminate()).ok();
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = async {
+                if let Some(ref mut s) = term {
+                    s.recv().await;
+                } else {
+                    std::future::pending::<()>().await;
+                }
+            } => {}
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
+}
+
+/// Bind and serve until Ctrl-C or SIGTERM, cleanly stopping any active PDI slave on exit.
 pub async fn serve(state: AppState, addr: SocketAddr, ui: Option<Ui>) -> std::io::Result<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("listening on http://{}", listener.local_addr()?);
+    let shutdown_state = state.clone();
     axum::serve(listener, app(state, ui.as_ref()))
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
+        .with_graceful_shutdown(async move {
+            shutdown_signal().await;
+            tokio::task::spawn_blocking(move || shutdown_state.shutdown()).await.ok();
         })
         .await
 }
@@ -689,9 +920,20 @@ mod embedded {
     /// The file at the request's path, else `index.html` (the UI routes in the browser).
     pub(crate) async fn serve(uri: Uri) -> Response {
         let path = uri.path().trim_start_matches('/');
-        let file = Some(path).filter(|p| !p.is_empty()).and_then(Assets::get).or_else(|| Assets::get("index.html"));
-        match file {
-            Some(f) => ([(header::CONTENT_TYPE, f.metadata.mimetype().to_owned())], f.data).into_response(),
+        let exact = Some(path).filter(|p| !p.is_empty()).and_then(Assets::get);
+        let is_asset = exact.is_some() && path.starts_with("assets/");
+        match exact.or_else(|| Assets::get("index.html")) {
+            Some(f) => {
+                let cache = if is_asset { "public, max-age=31536000, immutable" } else { "no-cache" };
+                (
+                    [
+                        (header::CONTENT_TYPE, f.metadata.mimetype().to_owned()),
+                        (header::CACHE_CONTROL, cache.to_owned()),
+                    ],
+                    f.data,
+                )
+                    .into_response()
+            }
             None => (StatusCode::NOT_FOUND, "this binary was built without a UI").into_response(),
         }
     }
@@ -1040,5 +1282,223 @@ mod tests {
                 .await;
         assert_eq!(st, StatusCode::BAD_REQUEST);
         assert!(err["error"].is_string());
+    }
+
+    #[tokio::test]
+    async fn capabilities_and_local_paths_gating() {
+        let state = AppState::default()
+            .with_hardware(HardwareConfig { sim_pdi: true, allow_writes: true, ..HardwareConfig::default() })
+            .with_security(ServerSecurity {
+                local_paths: false,
+                allow_mdns: true,
+                allow_hosts: vec!["lab-box".into()],
+            });
+        let app = api(state);
+        let (st, caps) = call(&app, Request::get("/api/capabilities").body(Body::empty()).unwrap()).await;
+        assert_eq!(st, StatusCode::OK, "{caps}");
+        assert_eq!(caps["default_view"], "slave");
+        assert_eq!(caps["local_paths"], false);
+        assert_eq!(caps["slave"]["sim_pdi"], true);
+        assert_eq!(caps["slave"]["allow_writes"], true);
+
+        let (st, err) = call(&app, json_post("/api/captures/open", &serde_json::json!({ "path": "/etc/hosts" }))).await;
+        assert_eq!(st, StatusCode::FORBIDDEN, "{err}");
+    }
+
+    #[tokio::test]
+    async fn slave_sim_lifecycle_and_spi_conflict() {
+        let state = AppState::default().with_hardware(HardwareConfig { sim_pdi: true, ..HardwareConfig::default() });
+        let app = api(state.clone());
+
+        // Real hardware start without --replace-slave-application is refused.
+        let (st, err) = call(&app, json_post("/api/slave/start", &serde_json::json!({ "sim": false }))).await;
+        assert_eq!(st, StatusCode::FORBIDDEN, "{err}");
+
+        // Start simulated PDI slave.
+        let (st, started) =
+            call(&app, json_post("/api/slave/start", &serde_json::json!({ "sim": true, "clock_hz": 20_000_000 })))
+                .await;
+        assert_eq!(st, StatusCode::OK, "{started}");
+        assert_eq!(started["state"], "running");
+        assert_eq!(started["provenance"], "simulated");
+
+        // While running, PHY read and SPI bench conflict on the SPI bus.
+        let (st, err) = call(&app, json_post("/api/phy/read", &serde_json::json!({ "sim": true }))).await;
+        assert_eq!(st, StatusCode::CONFLICT, "{err}");
+        let (st, err) = call(&app, json_post("/api/pdi-bench/run", &serde_json::json!({ "sim": true }))).await;
+        assert_eq!(st, StatusCode::CONFLICT, "{err}");
+
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        let (st, live) = call(&app, Request::get("/api/slave/status").body(Body::empty()).unwrap()).await;
+        assert_eq!(st, StatusCode::OK);
+        assert_eq!(live["state"], "running");
+        assert!(live["stats"]["polls"].as_u64().unwrap() > 0, "{live}");
+
+        // Stop cleanly.
+        let (st, stopped) = call(&app, Request::post("/api/slave/stop").body(Body::empty()).unwrap()).await;
+        assert_eq!(st, StatusCode::OK, "{stopped}");
+        assert_eq!(stopped["state"], "stopped");
+
+        // Stopping again is a 409 conflict.
+        let (st, _) = call(&app, Request::post("/api/slave/stop").body(Body::empty()).unwrap()).await;
+        assert_eq!(st, StatusCode::CONFLICT);
+        state.shutdown();
+    }
+
+    #[tokio::test]
+    async fn phy_sim_read_and_write_gating() {
+        let state = AppState::default().with_hardware(HardwareConfig { sim_pdi: true, ..HardwareConfig::default() });
+        let app = api(state);
+
+        let (st, r) = call(&app, json_post("/api/phy/read", &serde_json::json!({ "sim": true }))).await;
+        assert_eq!(st, StatusCode::OK, "{r}");
+        let ports = r["ports"].as_array().unwrap();
+        assert_eq!(ports.len(), 4);
+        assert_eq!(ports[0]["present"], true);
+        assert_eq!(ports[0]["link_up"], true);
+        assert_eq!(ports[2]["present"], false);
+
+        // Real PHY writes require --allow-phy-writes.
+        let (st, err) =
+            call(&app, json_post("/api/phy/autoneg", &serde_json::json!({ "sim": false, "target_phys": [0] }))).await;
+        assert_eq!(st, StatusCode::FORBIDDEN, "{err}");
+
+        // Simulated PHY autoneg and write succeed.
+        let (st, r) =
+            call(&app, json_post("/api/phy/autoneg", &serde_json::json!({ "sim": true, "target_phys": [0] }))).await;
+        assert_eq!(st, StatusCode::OK, "{r}");
+        let (st, r) = call(
+            &app,
+            json_post("/api/phy/write", &serde_json::json!({ "sim": true, "phy": 0, "reg": 0, "value": 0x3300 })),
+        )
+        .await;
+        assert_eq!(st, StatusCode::OK, "{r}");
+    }
+
+    #[tokio::test]
+    async fn pdi_bench_sim_runs_and_fits() {
+        let state = AppState::default().with_hardware(HardwareConfig { sim_pdi: true, ..HardwareConfig::default() });
+        let app = api(state);
+
+        // Real writes require --allow-writes.
+        let (st, err) = call(
+            &app,
+            json_post(
+                "/api/pdi-bench/run",
+                &serde_json::json!({ "sim": false, "allow_writes": true, "area": "0x1800+1024" }),
+            ),
+        )
+        .await;
+        assert_eq!(st, StatusCode::FORBIDDEN, "{err}");
+
+        let (st, res) = call(
+            &app,
+            json_post(
+                "/api/pdi-bench/run",
+                &serde_json::json!({
+                    "sim": true,
+                    "sizes": [64, 256, 1024],
+                    "reps": 5,
+                    "warmup": 1,
+                    "allow_writes": true,
+                    "area": "0x1800+1024"
+                }),
+            ),
+        )
+        .await;
+        assert_eq!(st, StatusCode::OK, "{res}");
+        assert_eq!(res["provenance"], "simulated");
+        assert_eq!(res["summaries"].as_array().unwrap().len(), 6);
+        assert!(res["fit"]["pdi"]["read_bps"].as_u64().unwrap() > 0);
+        assert!(res["fit"]["pdi"]["write_bps"].as_u64().unwrap() > 0);
+        assert!(res["csv"].as_str().unwrap().contains("flowlab:provenance=simulated"));
+    }
+
+    #[tokio::test]
+    async fn bench_streaming_download_upload_and_compression_bypass() {
+        let dir = std::env::temp_dir().join(format!("flowlab-gzip-ui-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("assets")).unwrap();
+        let big_html =
+            "<!doctype html><html><title>ECAT FlowLab</title><body>".to_owned() + &"x".repeat(2048) + "</body></html>";
+        std::fs::write(dir.join("index.html"), &big_html).unwrap();
+        std::fs::write(dir.join("assets/app-abc.js"), "console.log('".to_owned() + &"a".repeat(2048) + "');").unwrap();
+        let ui = Ui::find(&dir).unwrap();
+        let app = app(AppState::default(), Some(&ui));
+
+        // 1. UI HTML and assets are gzip-compressed when requested and carry proper Cache-Control.
+        let res = app
+            .clone()
+            .oneshot(Request::get("/").header("accept-encoding", "gzip").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(res.headers().get("content-encoding").and_then(|v| v.to_str().ok()), Some("gzip"));
+        assert_eq!(res.headers().get("cache-control").and_then(|v| v.to_str().ok()), Some("no-cache"));
+
+        let res = app
+            .clone()
+            .oneshot(Request::get("/assets/app-abc.js").header("accept-encoding", "gzip").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(
+            res.headers().get("cache-control").and_then(|v| v.to_str().ok()),
+            Some("public, max-age=31536000, immutable")
+        );
+
+        // 2. Benchmark payload stream is NEVER gzip-compressed and matches flowlab_mailbox SHA-256.
+        let res = app
+            .clone()
+            .oneshot(
+                Request::get("/api/bench/bytes/131072?seed=5")
+                    .header("accept-encoding", "gzip")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert!(res.headers().get("content-encoding").is_none());
+        let expected_sha = flowlab_mailbox::payload_sha256(5, 131_072);
+        assert_eq!(res.headers().get("x-sha256").and_then(|v| v.to_str().ok()), Some(expected_sha.as_str()));
+        let downloaded = res.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(downloaded.len(), 131_072);
+        assert_eq!(flowlab_core::sha256_hex(&downloaded), expected_sha);
+
+        // 3. Streaming upload JSON and tcp-bench plain-text /upload both verify SHA-256.
+        let (st, up) =
+            call(&app, Request::post("/api/bench/upload").body(Body::from(downloaded.clone())).unwrap()).await;
+        assert_eq!(st, StatusCode::OK, "{up}");
+        assert_eq!(up["bytes"], 131_072);
+        assert_eq!(up["sha256"], expected_sha);
+
+        let res = app.clone().oneshot(Request::put("/upload").body(Body::from(downloaded)).unwrap()).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let text = String::from_utf8(res.into_body().collect().await.unwrap().to_bytes().to_vec()).unwrap();
+        let parts: Vec<_> = text.split_whitespace().collect();
+        assert_eq!(parts.len(), 3, "{text}");
+        assert_eq!(parts[0], "131072");
+        assert_eq!(parts[1], expected_sha);
+
+        // 4. Ping works uncompressed.
+        let (st, ping) = call(&app, Request::get("/api/bench/ping").body(Body::empty()).unwrap()).await;
+        assert_eq!(st, StatusCode::OK, "{ping}");
+        assert!(ping["server_time_ns"].is_number());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn host_header_allows_mdns_and_custom_hosts_when_configured() {
+        let sec = ServerSecurity { local_paths: false, allow_mdns: true, allow_hosts: vec!["verdin-lab:8080".into()] };
+        let app = app(AppState::default().with_security(sec), None);
+        for ok in ["verdin-imx8mp.local:8080", "verdin-lab:8080", "192.168.10.2:8080", "localhost:8080"] {
+            let (st, _) = call(&app, Request::get("/api/health").header("host", ok).body(Body::empty()).unwrap()).await;
+            assert_eq!(st, StatusCode::OK, "{ok}");
+        }
+        let (st, _) =
+            call(&app, Request::get("/api/health").header("host", "evil.example:8080").body(Body::empty()).unwrap())
+                .await;
+        assert_eq!(st, StatusCode::FORBIDDEN);
     }
 }

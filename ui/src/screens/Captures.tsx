@@ -1,6 +1,6 @@
 import { FileDrop } from "@vitavision/workbench";
 import { Button, CountRun, Input, PageHeader, Panel, Table, type Column } from "@vitavision/ui";
-import { FolderOpen, Sparkles, Trash } from "lucide-react";
+import { FolderOpen, Trash } from "lucide-react";
 import { useState } from "react";
 
 import type { CaptureInfo } from "../api";
@@ -82,26 +82,26 @@ export function Captures({
   captures,
   selectedId,
   busy,
+  localPathsEnabled = true,
   onSelect,
   onRemove,
   onFiles,
   onOpenPath,
-  onGenerate,
 }: {
   captures: CaptureInfo[];
   selectedId: number | null;
   busy: boolean;
+  localPathsEnabled?: boolean;
   onSelect: (id: number) => void;
   onRemove: (id: number) => void;
   onFiles: (files: File[]) => void;
   onOpenPath: (path: string) => void;
-  onGenerate: () => void;
 }) {
   const [path, setPath] = useState("");
 
   const open = (
-    <div className="grid gap-4 lg:grid-cols-3">
-      <Panel title="Drop a capture">
+    <div className={localPathsEnabled ? "grid gap-4 lg:grid-cols-2" : "grid gap-4"}>
+      <Panel title="Drop or upload a capture">
         <FileDrop
           accept={CAPTURE_ACCEPT}
           onFiles={onFiles}
@@ -111,55 +111,38 @@ export function Captures({
           pcap or pcapng from Wireshark, tcpdump or a master's capture tool — drop here, or
         </FileDrop>
       </Panel>
-      <Panel title="Open a file on this machine">
-        <form
-          className="flex flex-col gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (path.trim()) onOpenPath(path.trim());
-          }}
-        >
-          <Input
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
-            placeholder="/path/to/capture.pcapng"
-            aria-label="Capture path"
-            className="font-mono"
-          />
-          <p className="text-xs text-fg-muted">
-            Read by the local FlowLab server — no upload, so large captures open faster.
-          </p>
-          <div>
-            <Button
-              type="submit"
-              variant="secondary"
-              icon={<FolderOpen className="size-4" />}
-              disabled={busy || !path.trim()}
-            >
-              Open path
-            </Button>
-          </div>
-        </form>
-      </Panel>
-      <Panel title="No capture at hand?">
-        <div className="flex flex-col gap-3">
-          <p className="text-sm text-fg-muted">
-            Generate a synthetic capture of a master and six slaves, with start-up, CoE SDO uploads,
-            a 1 ms cycle and rare injected faults. Its ground truth is known, so you can see what
-            each view finds.
-          </p>
-          <div>
-            <Button
-              variant="primary"
-              icon={<Sparkles className="size-4" />}
-              onClick={onGenerate}
-              disabled={busy}
-            >
-              Generate demo capture…
-            </Button>
-          </div>
-        </div>
-      </Panel>
+      {localPathsEnabled ? (
+        <Panel title="Open a file on the server host">
+          <form
+            className="flex flex-col gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (path.trim()) onOpenPath(path.trim());
+            }}
+          >
+            <Input
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              placeholder="/path/to/capture.pcapng"
+              aria-label="Capture path"
+              className="font-mono"
+            />
+            <p className="text-xs text-fg-muted">
+              Read directly by the FlowLab server — no upload, so large captures open faster.
+            </p>
+            <div>
+              <Button
+                type="submit"
+                variant="secondary"
+                icon={<FolderOpen className="size-4" />}
+                disabled={busy || !path.trim()}
+              >
+                Open path
+              </Button>
+            </div>
+          </form>
+        </Panel>
+      ) : null}
     </div>
   );
 
@@ -167,7 +150,7 @@ export function Captures({
     <div className="mx-auto flex max-w-7xl flex-col gap-6 p-6">
       <PageHeader
         title="Captures"
-        meta="Load EtherCAT traffic captured at the master, or generate a synthetic one."
+        meta="Load EtherCAT traffic captures from Wireshark, tcpdump, or a FlowLab run."
       />
       {open}
       {captures.length > 0 ? (

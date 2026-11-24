@@ -132,15 +132,14 @@ enum Cmd {
         #[arg(long, default_value_t = 1.0)]
         no_effect_percent: f64,
     },
-    /// Serve the web UI and API on localhost.
+    /// Serve the web UI and API (on loopback by default, or on a slave device's LAN/EoE interface).
     Serve {
         /// Captures to load at start.
         captures: Vec<PathBuf>,
         /// Port.
         #[arg(short, long, default_value_t = 7878)]
         port: u16,
-        /// Address to bind. The API reads local files and has no authentication:
-        /// keep the default loopback address.
+        /// Address to bind. Keep 127.0.0.1 for local use, or pass 0.0.0.0 on a slave device.
         #[arg(long, default_value = "127.0.0.1")]
         host: IpAddr,
         /// Directory of the built UI. A binary built with the `embed-ui` feature (the release
@@ -164,6 +163,27 @@ enum Cmd {
         /// Where live captures are saved.
         #[arg(long, default_value = "results/live", value_name = "DIR")]
         live_dir: PathBuf,
+        /// Default LAN9252 spidev path (Linux), e.g. `/dev/spidev1.0`.
+        #[arg(long, value_name = "PATH")]
+        device: Option<PathBuf>,
+        /// Allow simulated LAN9252 mode in the UI (for dev and demos without spidev hardware).
+        #[arg(long)]
+        sim_pdi: bool,
+        /// Allow starting the PDI slave from the UI, replacing the product's slave application.
+        #[arg(long)]
+        replace_slave_application: bool,
+        /// Allow SPI write benchmarks into process RAM from the UI.
+        #[arg(long)]
+        allow_writes: bool,
+        /// Allow PHY auto-negotiation and register writes from the UI.
+        #[arg(long)]
+        allow_phy_writes: bool,
+        /// Additional `Host` header names permitted when opening the UI (repeatable).
+        #[arg(long = "allow-host", value_name = "HOST")]
+        allow_hosts: Vec<String>,
+        /// Allow `POST /api/captures/open` (reads local file paths) even when bound off loopback.
+        #[arg(long)]
+        allow_local_paths: bool,
     },
     /// Capture EtherCAT traffic live and analyse it as it arrives.
     ///
@@ -396,13 +416,45 @@ fn run(cli: Cli) -> Result<()> {
                 print_summary(&a.report);
             }
         }
-        Cmd::Serve { captures, port, host, ui_dir, open, mailbox_hints, eni, live, live_dir } => {
+        Cmd::Serve {
+            captures,
+            port,
+            host,
+            ui_dir,
+            open,
+            mailbox_hints,
+            eni,
+            live,
+            live_dir,
+            device,
+            sim_pdi,
+            replace_slave_application,
+            allow_writes,
+            allow_phy_writes,
+            allow_hosts,
+            allow_local_paths,
+        } => {
+            let local_paths = host.is_loopback() || allow_local_paths;
             if !host.is_loopback() {
-                tracing::warn!("binding to {host}: the API can read local files and has no authentication");
+                tracing::warn!(
+                    "binding to {host}: no HTTP authentication; local file path reads are {}",
+                    if local_paths { "ENABLED (--allow-local-paths)" } else { "disabled" }
+                );
             }
             let network = eni.as_deref().map(read_eni).transpose()?;
+            let hw = flowlab_server::HardwareConfig {
+                device,
+                sim_pdi,
+                allow_replace_app: replace_slave_application,
+                allow_writes,
+                allow_phy_writes,
+                ..flowlab_server::HardwareConfig::default()
+            };
+            let sec = flowlab_server::ServerSecurity { local_paths, allow_mdns: !host.is_loopback(), allow_hosts };
             let state = flowlab_server::AppState::new(AnalysisOptions { mailbox_hints, network, ..Default::default() })
-                .with_live(flowlab_server::LiveConfig { interfaces: live, dir: live_dir });
+                .with_live(flowlab_server::LiveConfig { interfaces: live, dir: live_dir })
+                .with_hardware(hw)
+                .with_security(sec);
             for c in &captures {
                 let info = state.load_path(c).map_err(|e| format!("{}: {e}", c.display()))?;
                 tracing::info!("loaded {} ({} frames)", info.name, info.frames);

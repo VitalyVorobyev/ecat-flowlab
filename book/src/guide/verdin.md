@@ -122,3 +122,32 @@ flowlab tcp-bench run --to 127.0.0.1:18000 --download 1M --upload 1M
 ip link del fleoe0
 docker start NAME
 ```
+
+
+## Web workbench on the Verdin
+
+When built with `--features embed-ui,slave`, `flowlab` bundles the entire frontend inside the
+single static binary so no Node/Bun runtime or separate asset folder is required on the board:
+
+```bash
+# On the development host (cross-compile UI + binary):
+cd ui && bun run build && cd ..
+cargo zigbuild --release --target aarch64-unknown-linux-musl -p flowlab-cli --features embed-ui,slave
+```
+
+On the Verdin (after stopping any product slave stack before enabling write/takeover flags):
+
+```bash
+# Management LAN or mDNS (<hostname>.local:7878), plus EtherCAT EoE forwarding:
+./flowlab serve --host 0.0.0.0 --port 7878 \
+    --device /dev/spidev1.0 \
+    --replace-slave-application --allow-writes --allow-phy-writes
+```
+
+Open `http://<verdin-ip>:7878` or `http://<verdin-hostname>.local:7878` directly over management
+LAN, or forward port `7878` over EtherCAT EoE via `flowlab master gateway --forward 17878:7878`
+and open `http://127.0.0.1:17878`. Use the **Throughput** workspace to measure browser-to-Verdin
+HTTP/TCP speed and RTT over either path without HTTPS/WebCrypto (SHA-256 runs in pure TypeScript),
+and use **SPI Bench** -> **Apply to Simulate** to calibrate the workbench simulator directly from
+hardware measurements. Pass `--sim-pdi` if you only want to rehearse the UI without touching the
+LAN9252.

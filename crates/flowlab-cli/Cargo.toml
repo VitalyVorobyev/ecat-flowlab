@@ -42,7 +42,7 @@ embed-ui = ["flowlab-server/embed-ui"]
 master = ["dep:flowlab-master", "flowlab-master/hardware"]
 # `flowlab slave`: an emulated EtherCAT slave on a network interface (raw socket, Linux and
 # macOS). It sends frames, so it is opt-in.
-slave = ["dep:flowlab-slave", "flowlab-slave/wire"]
+slave = ["dep:flowlab-slave", "flowlab-slave/wire", "flowlab-server/slave-wire"]
 
 [lints]
 workspace = true

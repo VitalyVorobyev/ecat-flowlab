@@ -245,7 +245,7 @@ export function Live({
       {running ? null : (
         <Panel title="Start">
           <div className="flex flex-wrap items-end gap-3">
-            <Field label="Source">
+            <Field label="Source" as="group">
               <SegmentedControl
                 aria-label="Source"
                 value={source}

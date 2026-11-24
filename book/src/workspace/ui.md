@@ -36,14 +36,17 @@ calls `initTheme()` and wraps the app in `TooltipProvider` with a `Toaster`.
 
 `src/app/App.tsx` composes an `AppShell`:
 
-- **Header**: a capture `Select` (each option noted with its provenance), a `ProvenanceBadge`,
-  a *Generate* button (the synth dialog), a `FileDrop` overlay ("Open capture…", `.pcap`,
-  `.pcapng`, `.cap`) and the `ThemeToggle`.
-- **NavRail**: Simulate, Study, Planner, Captures, Overview, Timing, Frames, Stations, Mailbox
-  (need a selected capture), Compare (needs two captures), Sim run (needs a simulated capture
-  with a result). The view is mirrored in the URL hash (`#simulate`, `#frames`, …).
-- **Scenario state** (`src/scenario/useScenario.ts`) lives in the shell, so the Simulate view
-  keeps its setup, result and baseline while other views are open.
+- **Header**: a capture `Select` (each option noted with its provenance), a `ProvenanceBadge`, a
+  `FileDrop` overlay ("Open capture…", `.pcap`, `.pcapng`, `.cap`), a live PDI slave status
+  pill (`StatusDot`), and the `ThemeToggle`.
+- **NavRail**: seven always-enabled workspaces — **Slave**, **Throughput**, **PHY**, **SPI Bench**,
+  **Analysis**, **Simulate**, and **Planner**. The active route is mirrored in the URL hash
+  (`#slave`, `#throughput`, `#phy`, `#spi-bench`, `#analysis`, `#simulate`, `#planner`, with
+  legacy capture hashes such as `#frames` and `#overview` opening the matching tab inside
+  **Analysis**).
+- **Shell state**: `src/scenario/useScenario.ts` keeps the **Simulate** setup, result, and pinned
+  baseline across workspace switches; `App.tsx` polls `GET /api/slave/status` every 1 s while the
+  slave runs (or while on **Slave**) and wires **Apply to Simulate** from **SPI Bench**.
 - **StatusBar**: provenance, capture name, frame count, span, direction mode, server version (or
   "server offline").
 
@@ -53,18 +56,13 @@ calls `initTheme()` and wraps the app in `TooltipProvider` with a `Toaster`.
 
 | Screen | Shows |
 |---|---|
-| `Scenario` (*Simulate*) | `SetupEditor` (master, slaves, transfers, run options in display units; a new slave starts from `GET /api/sim/slave`), presets, open/save/undo; after each edit (350 ms debounce, older requests aborted) `POST /api/sim/run` and `POST /api/sim/what-if`; `ScenarioResult` (readout line, transfers with a timeline column, slaves), `WhatIfPanel` (single changes and pairs ranked for the run or the selected transfer, *Apply*), a pinned baseline with the changed parameters, *Open frames* |
-| `Captures` | Drop or open a capture by path, generate one, the loaded captures with provenance |
-| `Live` | Start a capture on an interface or a replay of a loaded capture (`POST /api/live/start`), poll `GET /api/live` every second while it runs: readouts of the latest second and the totals, jitter and round trip per second, problems per second, findings and stations of the window, assumptions; *Stop* loads the saved capture |
-| `Overview` | Headline numbers (cycle period, send jitter, round trip, lost frames, WKC mismatches, missed cycles, link load, slaves responding), findings, link utilization over time, cycle-interval histogram, datagrams by command, attach/remove an ENI, how the numbers were computed |
-| `Timing` | One cyclic stream: interval and phase-jitter histograms, interval over time, round trip histogram and over time, statistics table, working counters per datagram with their expectation basis |
-| `Frames` | Server-side filtered frame list (pages of 1000) in a `SplitPane` beside `FrameDetailView`: header facts, decoded datagrams and the `HexView` |
-| `Stations` | Stations addressed in the capture and the AL state over time (`StateTimeline`), with an event table |
-| `Mailbox` | Channels with their address source, traffic by protocol, SDO transfers and durations, FoE transfers, EoE frames (with the reassembled-pcapng download), emergencies and mailbox errors |
-| `Simulation` (*Sim run*) | A `SimResult`: the setup that was simulated (`SystemSummary`), the same result layout as Simulate, protocol work and the TCP reference, the model's assumptions; *Edit in Simulate*, result JSON download |
+| `SlaveControl` (*Slave*) | Configure, launch, monitor, and stop FlowLab's PDI slave (`flowlab pdi-slave`) on Linux `/dev/spidev*` or simulated LAN9252: AL state, SyncManagers, 1 Hz polls/msg/throughput charts, EoE bridge stats, and received payloads |
+| `ThroughputLab` (*Throughput*) | Browser-to-server streaming HTTP/TCP download/upload (`fetch` + `XMLHttpRequest`) and RTT probe against `/api/bench/*` with pure-TS SHA-256 verification and CSV/JSON export |
+| `PhyInspector` (*PHY*) | Read LAN9252 PHY 0–3 port cards, decoded registers, Auto-Neg & Auto-MDIX action, and raw MII register writes |
+| `SpiBench` (*SPI Bench*) | Timed SPI read/write benchmarks and linear regression (`pdi-bench` + `pdi-fit`), residual table, CSV/JSON export, and one-click **Apply to Simulate** |
+| `Analysis` (*Analysis*) | Consolidated 9-tab workspace wrapping `Captures`, `Live`, `Overview`, `Timing`, `Frames` (+ `FrameDetailView`), `Stations`, `Mailbox`, `Compare` (including FlowLab VoE goodput), and `Simulation` (*Sim run*) |
+| `Scenario` (*Simulate*) | `SetupEditor` (master, slaves, transfers, run options in display units; a new slave starts from `GET /api/sim/slave`), presets, open/save/undo; after each edit (350 ms debounce, older requests aborted) `POST /api/sim/run` and `POST /api/sim/what-if`; `ScenarioResult`, `WhatIfPanel`, a pinned baseline, *Open frames* |
 | `Planner` | A `PlanSpec` form (recomputed 250 ms after the last edit), ESI import adding devices to the plan, cyclic frames, idle time, mailbox headroom, checks, assumptions |
-| `Study` | A `StudySpec` form, optional capture to calibrate against, runs table, `ScatterPlot` of the frontier, residuals; a frontier run can be simulated again with frames, which loads it as a capture |
-| `Compare` | Two captures side by side, each column with its provenance badge, a fixed list of quantities and their ratio |
 
 ## Components built here
 
@@ -74,8 +72,6 @@ calls `initTheme()` and wraps the app in `TooltipProvider` with a `Toaster`.
 |---|---|
 | `HexView` (+ `hexLayout.ts`) | Hex dump with labelled byte ranges; hovering names the range, one datagram can be emphasized |
 | `StateTimeline` | One lane per station with the AL state it reported, ticks where the master requested a state |
-| `ScatterPlot` | Two-dimensional points from the charts primitives, highlighted ones in the first series colour |
-| `SpecDialog` | Load a JSON Schema and example from the server, render them with `SchemaValueForm`, run the spec; `SynthDialog` is built on it |
 | `Metric`, `MetricGrid` | Headline numbers with an optional `verdict` |
 | `ProvenanceBadge` | `Measured` / `Simulated` / `Synthetic` badge with a hint on what that means |
 | `TimeHistogram`, `TimeSeries` (`charts.tsx`) | ns distributions and series in a readable unit |
@@ -85,22 +81,26 @@ calls `initTheme()` and wraps the app in `TooltipProvider` with a `Toaster`.
 edits, spec diffs), `useScenario.ts`, `SetupEditor`, `ScenarioResult`, `WhatIfPanel` (and its
 `rank`), `SystemSummary`.
 
-`HexView`, `StateTimeline` and `ScatterPlot` are candidates to upstream into lab-ui.
+`HexView` and `StateTimeline` are candidates to upstream into lab-ui.
 `src/lib/` holds `format.ts` (units always shown, decimal and binary units never mixed),
-`useAsync.ts` and `download.ts`.
+`useAsync.ts`, `download.ts` (`downloadJson`, `downloadText`), and `sha256.ts` (pure-TS streaming
+SHA-256 and `xorshift64` pattern generator for plain HTTP origins without `crypto.subtle`).
 
 ## API client and generated types
 
-`src/api/index.ts` is a typed client (`api.report`, `api.frames`, `api.simulate`, `api.study`
-…) over `fetch`; a non-2xx answer becomes an `ApiError` carrying the server's `error` text, and a
+`src/api/index.ts` is a typed client (`api.capabilities`, `api.report`, `api.frames`,
+`api.simulate`, `api.slaveStatus`, `api.slaveStart`, `api.slaveStop`, `api.phyRead`, `api.phyAutoneg`,
+`api.phyWrite`, `api.pdiBenchRun`, `api.benchPing`, `api.benchDownload`, `api.benchUploadUrl` …)
+over `fetch`; a non-2xx answer becomes an `ApiError` carrying the server's `error` text, and a
 transport failure says that `flowlab serve` is unreachable.
 
 The types under `src/api/gen/` are generated from the Rust types marked `#[ts(export)]`
-(`CaptureReport`, `FrameDetail`, `SimResult`, `PlanResult`, `StudyResult` and the rest) by ts-rs
-during `cargo test`. `.cargo/config.toml` sets `TS_RS_EXPORT_DIR = ui/src/api/gen` and
-`TS_RS_LARGE_INT = "number"`: u64 values become `number`, which is exact because times sent to
-the UI are relative to capture start and below 2⁵³ ns. The directory is generated — do not edit
-it; oxlint ignores it and CI fails if `cargo test` changes it.
+(`Capabilities`, `CaptureReport`, `FrameDetail`, `SimResult`, `PlanResult`, `SlaveStatus`,
+`PhyReport`, `PdiBenchResult`, `UploadBenchResult` and the rest) by ts-rs during `cargo test`.
+`.cargo/config.toml` sets `TS_RS_EXPORT_DIR = ui/src/api/gen` and `TS_RS_LARGE_INT = "number"`:
+u64 values become `number`, which is exact because times sent to the UI are relative to capture
+start and below 2⁵³ ns. The directory is generated — do not edit it; oxlint ignores it and CI
+fails if `cargo test` changes it.
 
 ## Fixtures
 
@@ -113,10 +113,10 @@ it; oxlint ignores it and CI fails if `cargo test` changes it.
 | `sim.fixture.json` | `flowlab simulate` of the example spec with 8 kB per transfer |
 | `whatif.fixture.json` | `flowlab what-if` of the same spec |
 | `plan.fixture.json` | `flowlab plan --json` (built-in example) |
-| `study.fixture.json` | `flowlab study` of `foe-sweep.json` without its PDI-rate parameter (8 runs) |
 
-The screen tests (`Overview`, `Compare`, `Mailbox`, `Planner`, `Scenario`, `Simulation`, `Study`) render
-against these files, so a report schema change that breaks a screen fails a test.
+The screen tests (`Overview`, `Compare`, `Mailbox`, `Planner`, `Scenario`, `Simulation`, `Live`,
+`SlaveControl`, `ThroughputLab`, `PhyInspector`, `SpiBench`) render against these fixtures or typed
+API mocks, so a report or API schema change that breaks a screen fails a test.
 
 ## Design rules
 
@@ -135,9 +135,9 @@ against these files, so a report schema change that breaks a screen fails a test
 
 ```bash
 cd ui && bun install
-# terminal 1: the API (and a capture to look at)
-cargo run -p flowlab-cli -- serve results/demo.pcapng
-# terminal 2: Vite on :5173, proxying /api to http://127.0.0.1:7878
+# terminal 1: the API (with simulated LAN9252 hardware views enabled)
+cargo run -p flowlab-cli -- serve --sim-pdi results/demo.pcapng
+# terminal 2: Vite on :5173, proxying /api, /bytes and /upload to http://127.0.0.1:7878
 cd ui && bun run dev
 ```
 

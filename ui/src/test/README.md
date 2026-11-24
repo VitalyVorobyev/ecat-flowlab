@@ -22,11 +22,6 @@ cargo run --release -p flowlab-cli -- what-if results/sim-fixture-spec.json --re
 
 `plan.fixture.json` is `flowlab plan --json` (the built-in example).
 
-`study.fixture.json` is `flowlab study` output for `configs/studies/bulk-transfer/foe-sweep.json`
-without its PDI-rate parameter (mailbox size × policy, 8 runs).
-
 ```bash
 cargo run -p flowlab-cli -- plan --json > ui/src/test/plan.fixture.json
-python3 -c "import json; s=json.load(open('configs/studies/bulk-transfer/foe-sweep.json')); s['parameters']=[p for p in s['parameters'] if 'pdi' not in p['path']]; json.dump(s,open('results/study-fixture-spec.json','w'))"
-cargo run --release -p flowlab-cli -- study results/study-fixture-spec.json --result ui/src/test/study.fixture.json
 ```
